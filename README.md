@@ -20,7 +20,7 @@ This project explores how far AI agents can assist in low-level system developme
 
 This project is primarily intended to share development results and experiments.
 
-It is not intended for production use or active adoption.
+It is **not intended for production use or active adoption**.
 
 ---
 
@@ -187,9 +187,17 @@ The maintainer is responsible for confirming:
 
 This project is intended for educational and experimental purposes only.
 
-This project does not intentionally include encryption, military, or dual-use controlled technology.
+This project does not intentionally include:
 
-Users are responsible for complying with applicable laws and regulations in their jurisdiction.
+* Cryptographic functionality
+* Military-related features
+* Dual-use technologies requiring export control assessment
+
+The project does not perform formal export classification.
+
+This notice does not constitute legal advice.
+
+Users are responsible for complying with applicable laws and regulations in their jurisdiction when using, modifying, or redistributing this software.
 
 ---
 
@@ -253,17 +261,26 @@ Development process and design decisions are documented in Zenn articles.
 
 Articles and source code versions are linked by Git tags.
 
-| Part | Topic | Git Tag | Status |
-|---|---|---|---|
-| Part 1 | Project concept and target selection | - | Draft |
-| Part 2 | Development environment setup | - | Draft |
-| Part 3 | Publication policy and preparation | `v0.3.02-policy` | Draft |
-| Part 4 | Initial QEMU boot and `kernel_main` | `v0.4.00-boot`  | Planned |
+| Part   | Topic                                | Git Tag       | Status  |
+| ------ | ------------------------------------ | ------------- | ------- |
+| Part 1 | Project concept and target selection | -             | Draft   |
+| Part 2 | Development environment setup        | -             | Draft   |
+| Part 3 | Publication policy and preparation   | `v0.3.03-policy` | Ready   |
+| Part 4 | Initial QEMU boot and `kernel_main`  | `v0.4.00-boot`   | Planned |
+
+### Status Definition
+
+* **Planned**: Not started
+* **Draft**: Writing in progress (not published)
+* **Ready**: Ready for publication
+* **Published**: Already published
 
 Note:
-- The `main` branch may change over time.
-- Article-specific code will be linked using Git tags.
-- Links will be added after the repository and articles are published.
+
+* The `main` branch may change over time.
+* Article-specific code will be linked using Git tags.
+* Links will be added after the repository and articles are published.
+
 ---
 
 ## Author
