@@ -251,8 +251,19 @@ The source code will be made public after the initial working kernel is implemen
 
 Development process and design decisions are documented in Zenn articles.
 
-(Links will be added here)
+Articles and source code versions are linked by Git tags.
 
+| Part | Topic | Git Tag | Status |
+|---|---|---|---|
+| Part 1 | Project concept and target selection | - | Draft |
+| Part 2 | Development environment setup | - | Draft |
+| Part 3 | Publication policy and preparation | `v0.3.00-policy` | Draft |
+| Part 4 | Initial QEMU boot and `kernel_main` | `v0.4.00-boot`  | Planned |
+
+Note:
+- The `main` branch may change over time.
+- Article-specific code will be linked using Git tags.
+- Links will be added after the repository and articles are published.
 ---
 
 ## Author
