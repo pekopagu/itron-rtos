@@ -58,6 +58,7 @@ The project is developed using the following tools:
   * Git
   * Node.js / npm
   * Codex CLI
+  * cc-sdd (Spec-Driven Development toolkit)
   * ChatGPT
 
 This project is developed and tested on Windows 11.
@@ -91,6 +92,7 @@ This project has been tested in the following environment:
   * Git
   * Node.js / npm
   * Codex CLI
+  * cc-sdd
   * ChatGPT
 
 ※ Only the above environment is tested. Compatibility with other environments is not guaranteed.
@@ -114,8 +116,23 @@ itron-rtos/
 ├─ include/
 ├─ build/
 ├─ docs/
+├─ spec/
 └─ Makefile
 ```
+
+---
+
+## Spec-Driven Development (SDD)
+
+This project uses cc-sdd for Spec-Driven Development.
+
+```text
+spec/spec.md   : Requirements
+spec/plan.md   : Design
+spec/tasks.md  : Implementation tasks
+```
+
+Specifications are used as the single source of truth for development.
 
 ---
 
@@ -265,21 +282,8 @@ Articles and source code versions are linked by Git tags.
 | ------ | ------------------------------------ | ------------- | ------- |
 | Part 1 | Project concept and target selection | -             | Draft   |
 | Part 2 | Development environment setup        | -             | Draft   |
-| Part 3 | Publication policy and preparation   | `v0.3.03-policy` | Ready   |
-| Part 4 | Initial QEMU boot and `kernel_main`  | `v0.4.00-boot`   | Planned |
-
-### Status Definition
-
-* **Planned**: Not started
-* **Draft**: Writing in progress (not published)
-* **Ready**: Ready for publication
-* **Published**: Already published
-
-Note:
-
-* The `main` branch may change over time.
-* Article-specific code will be linked using Git tags.
-* Links will be added after the repository and articles are published.
+| Part 3 | Publication policy and preparation   | v0.3.04-policy | Ready   |
+| Part 4 | Initial QEMU boot and `kernel_main`  | v0.4.00-boot   | Planned |
 
 ---
 
