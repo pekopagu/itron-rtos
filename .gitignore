@@ -1,0 +1,32 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.bin
+*.elf
+*.out
+*.map
+
+# Temporary files
+*.tmp
+
+# Listing / debug
+*.lst
+*.sym
+*.dump
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug / dump
+*.dmp
+
+# Optional (enable if needed)
+*.log
