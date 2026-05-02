@@ -101,7 +101,50 @@ This project has been tested in the following environment:
 
 ## Build & Run
 
-Not implemented yet (planned in Part 4).
+Part 4 provides the first minimal boot path.
+
+The current image is a small Multiboot ELF that boots on `qemu-system-x86_64`
+and reaches the freestanding C entry point `kernel_main`.
+
+### Build
+
+Run from Windows PowerShell:
+
+```powershell
+make
+```
+
+Expected output:
+
+```text
+build/kernel.elf
+```
+
+### Run on QEMU
+
+Run from Windows PowerShell:
+
+```powershell
+make run
+```
+
+The run target starts QEMU briefly, captures serial output, and stores it in:
+
+```text
+docs/logs/qemu-serial.log
+```
+
+Successful output includes:
+
+```text
+kernel_main reached
+```
+
+### Clean
+
+```powershell
+make clean
+```
 
 ---
 
@@ -111,12 +154,13 @@ Not implemented yet (planned in Part 4).
 itron-rtos/
 ├─ README.md
 ├─ LICENSE
+├─ boot/
 ├─ kernel/
 ├─ arch/
-├─ include/
 ├─ build/
 ├─ docs/
-├─ spec/
+├─ .kiro/
+├─ linker.ld
 └─ Makefile
 ```
 
@@ -234,8 +278,8 @@ The following items are currently prepared:
 * [x] Development environment documented
 * [x] Tested environment documented
 * [ ] Source code implemented
-* [ ] Initial build verified
-* [ ] QEMU boot verified
+* [x] Initial build verified
+* [x] QEMU boot verified
 * [ ] AI-generated code fully reviewed
 
 Detailed review records will be maintained in `docs/` as development progresses.
@@ -255,8 +299,8 @@ See the LICENSE file for details.
 * [x] Define project policy
 * [x] Setup development environment
 * [x] Define publication policy
-* [ ] Boot on QEMU
-* [ ] Kernel entry (`kernel_main`)
+* [x] Boot on QEMU
+* [x] Kernel entry (`kernel_main`)
 * [ ] Task management
 * [ ] Scheduler
 * [ ] Semaphore

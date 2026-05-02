@@ -1,4 +1,6 @@
+# =========================
 # Build artifacts
+# =========================
 build/
 *.o
 *.obj
@@ -7,26 +9,60 @@ build/
 *.out
 *.map
 
-# Temporary files
+# =========================
+# Debug / dump
+# =========================
+*.dmp
+*.dump
+*.sym
+*.lst
+
+# =========================
+# Logs
+# =========================
+docs/logs/*
+!docs/logs/
+!docs/logs/qemu-serial.log   # 第4回の実行ログのみ許可
+
+# =========================
+# Temporary
+# =========================
 *.tmp
 
-# Listing / debug
-*.lst
-*.sym
-*.dump
-
-# Editor files
+# =========================
+# Editor / IDE
+# =========================
 .vscode/
 .idea/
 *.swp
 *~
 
-# OS files
+# =========================
+# OS
+# =========================
 .DS_Store
 Thumbs.db
 
-# Debug / dump
-*.dmp
+# =========================
+# Local-only (not for GitHub)
+# =========================
+.agents/
+.codex/
+.kiro/settings/
 
-# Optional (enable if needed)
-*.log
+AGENTS.md
+checkList/
+prompts/
+articles/
+
+# =========================
+# kiro generated (不要)
+# =========================
+.kiro/specs/**/research.md
+.kiro/specs/**/brief.md
+.kiro/specs/**/spec.json
+
+# =========================
+# logs folder control
+# =========================
+docs/logs/.gitkeep
