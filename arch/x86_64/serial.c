@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "serial.h"
 
 #define COM1_PORT 0x3F8

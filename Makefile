@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 NASM ?= $(USERPROFILE)/AppData/Local/bin/NASM/nasm.exe
 CLANG ?= clang
 LD_LLD ?= ld.lld

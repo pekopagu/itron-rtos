@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
 OUTPUT_FORMAT(elf32-i386)
 ENTRY(_start)
 

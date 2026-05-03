@@ -1,3 +1,5 @@
+; SPDX-License-Identifier: MIT
+
 ; Minimal Multiboot entry for qemu-system-x86_64 -kernel.
 ; QEMU enters this image in 32-bit protected mode and this code
 ; only sets a stack, calls kernel_main, then halts.

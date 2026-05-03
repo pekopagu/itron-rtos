@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "../arch/x86_64/serial.h"
 
 void kernel_main(void)
