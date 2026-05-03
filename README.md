@@ -134,9 +134,16 @@ The run target starts QEMU briefly, captures serial output, and stores it in:
 docs/logs/qemu-serial.log
 ```
 
+To inspect the serial console directly with QEMU stdio:
+
+```powershell
+qemu-system-x86_64 -kernel build/kernel.elf -serial stdio -display none -no-reboot
+```
+
 Successful output includes:
 
 ```text
+itron-rtos booting...
 kernel_main reached
 ```
 

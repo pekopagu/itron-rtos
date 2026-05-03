@@ -6,7 +6,9 @@
 
 void kernel_main(void)
 {
-    serial_write_string("kernel_main reached\r\n");
+    serial_init();
+    serial_write("itron-rtos booting...\n");
+    serial_write("kernel_main reached\n");
 
     for (;;) {
         __asm__ volatile ("hlt");
