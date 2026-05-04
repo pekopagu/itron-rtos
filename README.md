@@ -35,6 +35,30 @@ It is **not intended for production use or active adoption**.
 
 ---
 
+## Development Progress
+
+The current implementation covers the following milestones:
+
+* Part 4: Minimal x86_64 + QEMU boot path and `kernel_main`
+* Part 5: Serial console API cleanup for COM1 output
+* Part 6: HAL boundary for console output
+* Part 7: Initial task management
+
+Part 7 adds the first task-management layer:
+
+* TCB (`Task Control Block`) definition
+* `task_state_t` definition
+* Static task table
+* `task_init()`
+* `task_register()`
+* `task_dump()`
+
+This is a registration and inspection layer only. Task execution, scheduler,
+context switching, timer interrupts, and stack frame initialization are not
+implemented yet.
+
+---
+
 ## Development Environment
 
 The project is developed using the following tools:
@@ -111,6 +135,15 @@ includes `hal/console.h` and no longer includes `arch/x86_64/serial.h`
 directly; the x86_64 HAL implementation delegates to the existing serial
 driver.
 
+The current runtime path is:
+
+```text
+kernel -> HAL -> arch(x86_64) -> serial -> COM1
+```
+
+Part 7 also registers sample tasks during boot and dumps the registered task
+table to the serial log.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -150,7 +183,18 @@ Successful output includes:
 ```text
 itron-rtos booting...
 kernel_main reached
+[kernel] task init
+[task] registered: id=1 name=task_a state=READY prio=1 ...
+[kernel] task_register task_a returned 1
+[task] registered: id=2 name=task_b state=READY prio=2 ...
+[kernel] task_register task_b returned 2
+[task] dump start
+[task] id=1 name=task_a prio=1 state=READY ...
+[task] id=2 name=task_b prio=2 state=READY ...
+[task] dump end
 ```
+
+The `task_a` and `task_b` entry functions are registered but are not executed.
 
 ### Clean
 
@@ -168,13 +212,66 @@ itron-rtos/
 ├─ LICENSE
 ├─ boot/
 ├─ kernel/
+│  ├─ kernel.c
+│  ├─ task.c
+│  └─ include/
+│     ├─ task.h
+│     └─ hal/
+│        └─ console.h
 ├─ arch/
+│  └─ x86_64/
+│     ├─ hal_console.c
+│     ├─ serial.c
+│     └─ serial.h
 ├─ build/
 ├─ docs/
 ├─ .kiro/
 ├─ linker.ld
 └─ Makefile
 ```
+
+---
+
+## Implemented Features
+
+The current kernel includes:
+
+* Minimal QEMU boot to `kernel_main`
+* COM1 serial output for QEMU `-serial stdio`
+* HAL console boundary
+* TCB definition
+* `task_state_t` definition
+* Static `task_table` with `MAX_TASKS = 256`
+* `task_init()`
+* `task_register()`
+* `task_dump()`
+* Monotonically increasing task IDs
+* Stack information storage (`stack_base`, `stack_size`)
+* Boot-time task registration and dump confirmation
+
+---
+
+## Not Implemented Yet
+
+The following features are intentionally not implemented yet:
+
+* Task execution
+* Scheduler
+* Context switch
+* Timer interrupt
+* Dynamic memory allocation
+* Stack frame initialization
+* Interrupt-driven task management
+
+---
+
+## Documentation
+
+Source files now include Doxygen-style comments for the current low-level
+kernel, serial, HAL, and initial task-management APIs.
+
+Doxygen generation tooling and a `Doxyfile` are not included yet. They are
+planned for a future documentation step.
 
 ---
 
@@ -313,7 +410,7 @@ See the LICENSE file for details.
 * [x] Define publication policy
 * [x] Boot on QEMU
 * [x] Kernel entry (`kernel_main`)
-* [ ] Task management
+* [x] Initial task management
 * [ ] Scheduler
 * [ ] Semaphore
 * [ ] Timer / interrupt
@@ -336,12 +433,13 @@ Articles and source code versions are linked by Git tags when tags are created.
 
 | Part   | Topic                                      | Git Tag        | Status |
 | ------ | ------------------------------------------ | -------------- | ------ |
-| Part 1 | Project concept and target selection       | -              | Draft  |
-| Part 2 | Development environment setup              | -              | Draft  |
-| Part 3 | Publication policy and preparation         | v0.3.04-policy | Ready  |
-| Part 4 | Initial QEMU boot and `kernel_main`        | v0.4.00-boot   | Ready  |
-| Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial | Ready  |
-| Part 6 | HAL boundary for console output            | v0.6.00-hal    | Draft  |
+| Part 1 | Project concept and target selection       | -                         | Draft  |
+| Part 2 | Development environment setup              | -                         | Draft  |
+| Part 3 | Publication policy and preparation         | v0.3.04-policy            | Ready  |
+| Part 4 | Initial QEMU boot and `kernel_main`        | v0.4.00-boot              | Ready  |
+| Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial            | Ready  |
+| Part 6 | HAL boundary for console output            | v0.6.00-hal               | Draft  |
+| Part 7 | Initial task management                    | v0.6.00-task_management   | Draft  |
 
 ---
 
