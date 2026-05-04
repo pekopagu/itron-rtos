@@ -106,6 +106,11 @@ Part 4 provides the first minimal boot path.
 The current image is a small Multiboot ELF that boots on `qemu-system-x86_64`
 and reaches the freestanding C entry point `kernel_main`.
 
+Console output is routed through a minimal HAL boundary. The common kernel code
+includes `hal/console.h` and no longer includes `arch/x86_64/serial.h`
+directly; the x86_64 HAL implementation delegates to the existing serial
+driver.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -336,6 +341,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | Part 3 | Publication policy and preparation         | v0.3.04-policy | Ready  |
 | Part 4 | Initial QEMU boot and `kernel_main`        | v0.4.00-boot   | Ready  |
 | Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial | Ready  |
+| Part 6 | HAL boundary for console output            | v0.6.00-hal    | Draft  |
 
 ---
 

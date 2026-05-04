@@ -2,13 +2,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "../arch/x86_64/serial.h"
+#include "hal/console.h"
 
 void kernel_main(void)
 {
-    serial_init();
-    serial_write("itron-rtos booting...\n");
-    serial_write("kernel_main reached\n");
+    hal_console_init();
+    hal_console_write("itron-rtos booting...\n");
+    hal_console_write("kernel_main reached\n");
 
     for (;;) {
         __asm__ volatile ("hlt");
