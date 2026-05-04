@@ -439,7 +439,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | Part 4 | Initial QEMU boot and `kernel_main`        | v0.4.00-boot              | Ready  |
 | Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial            | Ready  |
 | Part 6 | HAL boundary for console output            | v0.6.00-hal               | Draft  |
-| Part 7 | Initial task management                    | v0.6.00-task_management   | Draft  |
+| Part 7 | Initial task management                    | v0.7.00-task-management   | Draft  |
 
 ---
 
