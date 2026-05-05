@@ -39,13 +39,18 @@ It is **not intended for production use or active adoption**.
 
 The current implementation covers the following milestones:
 
-* Part 4: Minimal x86_64 + QEMU boot path and `kernel_main`
-* Part 5: Serial console API cleanup for COM1 output
-* Part 6: HAL boundary for console output
-* Part 7: Initial task management
-* Part 8: Simple priority scheduler
+| Chapter | Section | Topic                                      | Tag                         |
+| ------- | ------- | ------------------------------------------ | --------------------------- |
+| 1       | 1.1     | Project concept and target selection       | -                           |
+| 1       | 1.2     | Development environment setup              | -                           |
+| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     |
+| 2       | 2.1     | Minimal x86_64 + QEMU boot path and `kernel_main` | v2.1-qemu-boot             |
+| 2       | 2.2     | Serial console API cleanup for COM1 output | v2.2-serial-console         |
+| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           |
+| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               |
+| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     |
 
-Part 7 adds the first task-management layer:
+Chapter 3 Section 3.1 adds the first task-management layer:
 
 * TCB (`Task Control Block`) definition
 * `task_state_t` definition
@@ -54,7 +59,7 @@ Part 7 adds the first task-management layer:
 * `task_register()`
 * `task_dump()`
 
-Part 8 adds a simple priority scheduler:
+Chapter 3 Section 3.2 adds a simple priority scheduler:
 
 * `scheduler_init()`
 * `scheduler_select_next()`
@@ -137,7 +142,7 @@ This project has been tested in the following environment:
 
 ## Build & Run
 
-Part 4 provides the first minimal boot path.
+Chapter 2 Section 2.1 provides the first minimal boot path.
 
 The current image is a small Multiboot ELF that boots on `qemu-system-x86_64`
 and reaches the freestanding C entry point `kernel_main`.
@@ -153,10 +158,10 @@ The current runtime path is:
 kernel -> HAL -> arch(x86_64) -> serial -> COM1
 ```
 
-Part 7 registers sample tasks during boot and dumps the registered task table
+Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
 to the serial log.
 
-Part 8 initializes the simple scheduler and logs which READY task would be
+Chapter 3 Section 3.2 initializes the simple scheduler and logs which READY task would be
 selected next. The selected task entry function is not called.
 
 ### Build
@@ -457,7 +462,7 @@ See the LICENSE file for details.
 
 This repository is currently private and under active development.
 
-The source code will be made public after the initial working kernel is implemented (planned in Part 4).
+The source code will be made public after the initial working kernel is implemented.
 
 ---
 
@@ -467,16 +472,16 @@ Development process and design decisions are documented in Zenn articles.
 
 Articles and source code versions are linked by Git tags when tags are created.
 
-| Part   | Topic                                      | Git Tag        | Status |
-| ------ | ------------------------------------------ | -------------- | ------ |
-| Part 1 | Project concept and target selection       | -                         | Draft  |
-| Part 2 | Development environment setup              | -                         | Draft  |
-| Part 3 | Publication policy and preparation         | v0.3.04-policy            | Ready  |
-| Part 4 | Initial QEMU boot and `kernel_main`        | v0.4.00-boot              | Ready  |
-| Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial            | Ready  |
-| Part 6 | HAL boundary for console output            | v0.6.00-hal               | Draft  |
-| Part 7 | Initial task management                    | v0.7.00-task-management   | Draft  |
-| Part 8 | Simple priority scheduler                  | v0.8.00-simple-scheduler  | Draft  |
+| Chapter | Section | Topic                                      | Git Tag                     | Status |
+| ------- | ------- | ------------------------------------------ | --------------------------- | ------ |
+| 1       | 1.1     | Project concept and target selection       | -                           | Draft  |
+| 1       | 1.2     | Development environment setup              | -                           | Draft  |
+| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     | Ready  |
+| 2       | 2.1     | Initial QEMU boot and `kernel_main`        | v2.1-qemu-boot              | Ready  |
+| 2       | 2.2     | Serial console API cleanup                 | v2.2-serial-console         | Ready  |
+| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Draft  |
+| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Draft  |
+| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
 
 ---
 
