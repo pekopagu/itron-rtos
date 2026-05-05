@@ -43,6 +43,7 @@ The current implementation covers the following milestones:
 * Part 5: Serial console API cleanup for COM1 output
 * Part 6: HAL boundary for console output
 * Part 7: Initial task management
+* Part 8: Simple priority scheduler
 
 Part 7 adds the first task-management layer:
 
@@ -53,8 +54,19 @@ Part 7 adds the first task-management layer:
 * `task_register()`
 * `task_dump()`
 
-This is a registration and inspection layer only. Task execution, scheduler,
-context switching, timer interrupts, and stack frame initialization are not
+Part 8 adds a simple priority scheduler:
+
+* `scheduler_init()`
+* `scheduler_select_next()`
+* READY task selection
+* Priority-based selection
+* Lower numeric `priority` means higher priority
+* Same-priority tasks are selected by task table registration order
+* Boot-time scheduler selection logs
+* NULL-safe kernel-side scheduler selection log
+
+This is still a selection-only scheduler. Task execution, RUNNING transition,
+context switching, stack switching, timer interrupts, and preemption are not
 implemented yet.
 
 ---
@@ -141,8 +153,11 @@ The current runtime path is:
 kernel -> HAL -> arch(x86_64) -> serial -> COM1
 ```
 
-Part 7 also registers sample tasks during boot and dumps the registered task
-table to the serial log.
+Part 7 registers sample tasks during boot and dumps the registered task table
+to the serial log.
+
+Part 8 initializes the simple scheduler and logs which READY task would be
+selected next. The selected task entry function is not called.
 
 ### Build
 
@@ -184,17 +199,26 @@ Successful output includes:
 itron-rtos booting...
 kernel_main reached
 [kernel] task init
-[task] registered: id=1 name=task_a state=READY prio=1 ...
+[scheduler] before_register selected: none
+[task] registered: id=1 name=task_a state=READY prio=5 ...
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY prio=2 ...
+[task] registered: id=2 name=task_b state=READY prio=1 ...
 [kernel] task_register task_b returned 2
+[task] registered: id=3 name=task_c state=READY prio=1 ...
+[kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=1 state=READY ...
-[task] id=2 name=task_b prio=2 state=READY ...
+[task] id=1 name=task_a prio=5 state=READY ...
+[task] id=2 name=task_b prio=1 state=READY ...
+[task] id=3 name=task_c prio=1 state=READY ...
 [task] dump end
+[scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 ```
 
-The `task_a` and `task_b` entry functions are registered but are not executed.
+The `task_a`, `task_b`, and `task_c` entry functions are registered but are not
+executed. `task_b` is selected because it has the highest priority under the
+current rule: a smaller numeric priority is higher. `task_b` and `task_c`
+have the same priority, so the task table registration order selects `task_b`
+first.
 
 ### Clean
 
@@ -214,8 +238,10 @@ itron-rtos/
 ├─ kernel/
 │  ├─ kernel.c
 │  ├─ task.c
+│  ├─ scheduler.c
 │  └─ include/
 │     ├─ task.h
+│     ├─ scheduler.h
 │     └─ hal/
 │        └─ console.h
 ├─ arch/
@@ -245,9 +271,17 @@ The current kernel includes:
 * `task_init()`
 * `task_register()`
 * `task_dump()`
+* Simple priority scheduler
+* `scheduler_init()`
+* `scheduler_select_next()`
+* READY task selection
+* Priority-based selection
+* Same-priority first-match selection
+* Kernel-side scheduler selection log
+* NULL-safe scheduler selection log
 * Monotonically increasing task IDs
 * Stack information storage (`stack_base`, `stack_size`)
-* Boot-time task registration and dump confirmation
+* Boot-time task registration, dump, and scheduler selection confirmation
 
 ---
 
@@ -256,10 +290,12 @@ The current kernel includes:
 The following features are intentionally not implemented yet:
 
 * Task execution
-* Scheduler
+* RUNNING transition
 * Context switch
 * Timer interrupt
+* Preemption
 * Dynamic memory allocation
+* Stack switching
 * Stack frame initialization
 * Interrupt-driven task management
 
@@ -411,7 +447,7 @@ See the LICENSE file for details.
 * [x] Boot on QEMU
 * [x] Kernel entry (`kernel_main`)
 * [x] Initial task management
-* [ ] Scheduler
+* [x] Scheduler
 * [ ] Semaphore
 * [ ] Timer / interrupt
 
@@ -440,6 +476,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | Part 5 | SPDX and serial console API cleanup        | v0.5.00-serial            | Ready  |
 | Part 6 | HAL boundary for console output            | v0.6.00-hal               | Draft  |
 | Part 7 | Initial task management                    | v0.7.00-task-management   | Draft  |
+| Part 8 | Simple priority scheduler                  | v0.8.00-simple-scheduler  | Draft  |
 
 ---
 

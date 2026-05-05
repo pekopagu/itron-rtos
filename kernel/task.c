@@ -4,12 +4,13 @@
 
 /**
  * @file task.c
- * @brief 初期タスク管理実装（第7回）
+ * @brief 初期タスク管理実装（第7回、第8回）
  *
  * @details
  * 最大256件の静的タスクテーブルを持ち、タスク情報の初期化、登録、dumpを提供する。
  * タスクは実行せず、entry関数呼び出し、コンテキスト作成、スタック初期化、
- * スケジューラ、割り込み、タイマは追加しない。
+ * 割り込み、タイマは追加しない。第8回ではschedulerが読み取りアクセサ経由で
+ * READYタスクを選べるようにする。
  *
  * このファイルはkernel層に属するが、ログ出力は第6回のHAL console APIだけを使う。
  * 依存方向は kernel → HAL → arch(x86_64) → serial → COM1 である。
@@ -182,6 +183,8 @@ static const char *task_state_to_string(task_state_t state)
         return "READY";
     case TASK_STATE_RUNNING:
         return "RUNNING";
+    case TASK_STATE_WAITING:
+        return "WAITING";
     default:
         return "UNKNOWN";
     }
@@ -232,7 +235,7 @@ void task_init(void)
  * @param stack_base スタック基底アドレス。NULLの場合はTASK_ERR_INVALだが初期化しない。
  * @param stack_size スタックサイズ。0の場合はTASK_ERR_INVAL。
  * @return 成功時は1以上のタスクID。失敗時はTASK_ERR_*。
- * @note スケジューラ、コンテキストスイッチ、割り込み、タイマは未実装である。
+ * @note この関数は登録のみを行う。task_start、コンテキストスイッチ、割り込み、タイマは未実装である。
  */
 int task_register(
     const char *name,
@@ -338,4 +341,40 @@ void task_dump(void)
     }
 
     hal_console_write("[task] dump end\n");
+}
+
+/**
+ * @brief schedulerが走査できるタスクスロット数を返す。
+ *
+ * @details
+ * 第8回のschedulerはtask_tableを直接extern参照せず、このAPIで固定長テーブルの
+ * 走査範囲だけを取得する。task_tableの所有権はこのファイルに閉じたままにする。
+ *
+ * @param なし。
+ * @return 走査可能なスロット数。常にMAX_TASKS。
+ * @note task_tableの内容やタスク状態は変更しない。
+ */
+int task_get_count(void)
+{
+    return MAX_TASKS;
+}
+
+/**
+ * @brief 指定indexのTCBを読み取り専用で返す。
+ *
+ * @details
+ * schedulerがREADYタスクを選択するための読み取り専用アクセサである。
+ * 範囲外indexはNULLとして扱い、呼び出し側が安全に無視できるようにする。
+ *
+ * @param index 参照するtask_table上のindex。
+ * @return 範囲内ならTCBへの読み取り専用ポインタ。範囲外ならNULL。
+ * @note 返したTCBのentryを呼び出さず、状態変更や実行制御も行わない。
+ */
+const tcb_t *task_get_by_index(int index)
+{
+    if (index < 0 || index >= MAX_TASKS) {
+        return NULL;
+    }
+
+    return &task_table[index];
 }
