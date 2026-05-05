@@ -39,16 +39,17 @@ It is **not intended for production use or active adoption**.
 
 The current implementation covers the following milestones:
 
-| Chapter | Section | Topic                                      | Tag                         |
-| ------- | ------- | ------------------------------------------ | --------------------------- |
-| 1       | 1.1     | Project concept and target selection       | -                           |
-| 1       | 1.2     | Development environment setup              | -                           |
-| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     |
-| 2       | 2.1     | Minimal x86_64 + QEMU boot path and `kernel_main` | v2.1-qemu-boot             |
-| 2       | 2.2     | Serial console API cleanup for COM1 output | v2.2-serial-console         |
-| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           |
-| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               |
-| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     |
+| Chapter | Section | Topic                                      | Tag                         | Status    |
+| ------- | ------- | ------------------------------------------ | --------------------------- | --------- |
+| 1       | 1.1     | Project concept and target selection       | -                           | Completed |
+| 1       | 1.2     | Development environment setup              | -                           | Completed |
+| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     | Completed |
+| 2       | 2.1     | Minimal x86_64 + QEMU boot path and `kernel_main` | v2.1-qemu-boot             | Completed |
+| 2       | 2.2     | Serial console API cleanup for COM1 output | v2.2-serial-console         | Completed |
+| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Completed |
+| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Completed |
+| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Completed |
+| 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -73,6 +74,14 @@ Chapter 3 Section 3.2 adds a simple priority scheduler:
 This is still a selection-only scheduler. Task execution, RUNNING transition,
 context switching, stack switching, timer interrupts, and preemption are not
 implemented yet.
+
+Chapter 3 Section 3.3 adds the current task commit boundary:
+
+* `scheduler_select_next()` still only selects a READY task
+* `dispatcher_commit_current()` commits the selected task as the current task
+* `RUNNING` means a logical state adopted as current, not CPU execution
+* Task entry functions, context switching, and stack switching are still not performed
+* Chapter 4 will use the current task as the next step toward handling entry functions
 
 ---
 
@@ -164,6 +173,11 @@ to the serial log.
 Chapter 3 Section 3.2 initializes the simple scheduler and logs which READY task would be
 selected next. The selected task entry function is not called.
 
+Chapter 3 Section 3.3 commits the selected task through the dispatcher boundary.
+The committed task becomes the current task and transitions from READY to RUNNING
+as a logical state. This still does not execute the task entry function, perform
+a context switch, or switch stacks.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -217,13 +231,19 @@ kernel_main reached
 [task] id=3 name=task_c prio=1 state=READY ...
 [task] dump end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
+[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[task] dump start
+[task] id=2 name=task_b prio=1 state=RUNNING ...
+[task] dump end
 ```
 
 The `task_a`, `task_b`, and `task_c` entry functions are registered but are not
 executed. `task_b` is selected because it has the highest priority under the
 current rule: a smaller numeric priority is higher. `task_b` and `task_c`
 have the same priority, so the task table registration order selects `task_b`
-first.
+first. The dispatcher then commits the selected task as current. `RUNNING` in
+this log is a logical current-task state, not proof that the task is executing
+on the CPU.
 
 ### Clean
 
@@ -284,9 +304,14 @@ The current kernel includes:
 * Same-priority first-match selection
 * Kernel-side scheduler selection log
 * NULL-safe scheduler selection log
+* Dispatcher current task boundary
+* `dispatcher_init()`
+* `dispatcher_commit_current()`
+* `dispatcher_get_current()`
+* Logical READY to RUNNING transition for the committed current task
 * Monotonically increasing task IDs
 * Stack information storage (`stack_base`, `stack_size`)
-* Boot-time task registration, dump, and scheduler selection confirmation
+* Boot-time task registration, dump, scheduler selection, and current commit confirmation
 
 ---
 
@@ -295,7 +320,7 @@ The current kernel includes:
 The following features are intentionally not implemented yet:
 
 * Task execution
-* RUNNING transition
+* RUNNING as CPU execution state
 * Context switch
 * Timer interrupt
 * Preemption
@@ -482,6 +507,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Draft  |
 | 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Draft  |
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
+| 3       | 3.3     | currentタスクとRUNNING状態                | v3.3-current-running        | Completed |
 
 ---
 

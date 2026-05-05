@@ -19,6 +19,7 @@
  */
 
 #include "hal/console.h"
+#include "dispatcher.h"
 #include "scheduler.h"
 #include "task.h"
 
@@ -173,6 +174,54 @@ static void kernel_log_scheduler_selection(const char *label, const tcb_t *task)
 }
 
 /**
+ * @brief dispatcherの現在タスク確定結果をHAL consoleへ出力する。
+ *
+ * @details
+ * dispatcher.cはHAL consoleへ依存しないため、起動時検証ログはkernel.cから出力する。
+ * 確定成功はcurrent/RUNNING committedとして出力し、失敗はcommit failedとして
+ * selectedログと区別できるようにする。
+ *
+ * @param result dispatcher_commit_current()の戻り値。
+ * @return なし。
+ * @note 表示専用の処理であり、入口関数呼び出し、コンテキストスイッチ、
+ * スタック切り替え、レジスタ保存・復元は行わない。
+ */
+static void kernel_log_dispatcher_commit_result(int result)
+{
+    const tcb_t *current;
+    const char *safe_name;
+    const char *state_name;
+    const char *safe_state;
+
+    if (result != DISPATCHER_OK) {
+        hal_console_write("[dispatcher] commit failed: err=");
+        kernel_write_int(result);
+        hal_console_write("\n");
+        return;
+    }
+
+    current = dispatcher_get_current();
+    if (current == NULL) {
+        hal_console_write("[dispatcher] committed current: none\n");
+        return;
+    }
+
+    safe_name = (current->name != NULL) ? current->name : "(null)";
+    state_name = kernel_task_state_to_string(current->state);
+    safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    hal_console_write("[dispatcher] committed current: id=");
+    kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(current->priority);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+    hal_console_write("\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -246,6 +295,7 @@ void kernel_main(void)
     int task_b_id;
     int task_c_id;
     const tcb_t *selected_task;
+    int commit_result;
 
     hal_console_init();
     hal_console_write("itron-rtos booting...\n");
@@ -254,10 +304,12 @@ void kernel_main(void)
     /* タスク管理台帳だけを初期化し、スケジューラや実行コンテキストは作らない。 */
     task_init();
     scheduler_init();
+    dispatcher_init();
 
     /*
      * READYタスクがまだ存在しない段階での選択結果を確認する。
      * NULLはエラーではなく、選択対象なしを表す通常の結果である。
+     * この時点でcurrentへcommitしないことで、選択と確定を別の段階として観測できる。
      */
     selected_task = scheduler_select_next();
     kernel_log_scheduler_selection("before_register", selected_task);
@@ -306,6 +358,20 @@ void kernel_main(void)
      */
     selected_task = scheduler_select_next();
     kernel_log_scheduler_selection("after_register", selected_task);
+
+    /*
+     * 第3章3.3では選択候補タスクを現在タスクとして確定し、READYからRUNNINGへの
+     * 論理状態遷移だけを行う。タスク入口関数実行やコンテキストスイッチはまだ行わない。
+     * ログ出力をkernel側に置くのは、dispatcherを状態確定だけのモジュールに保ち、
+     * 将来の実行制御やHAL以外の観測手段を追加しやすくするためである。
+     */
+    commit_result = dispatcher_commit_current(selected_task);
+    kernel_log_dispatcher_commit_result(commit_result);
+    /*
+     * commit後にdumpすることで、selectedログとRUNNING状態を同じ起動ログ上で
+     * 比較できる。第4章で実行モデルを追加した後も、実行前状態の確認点として使える。
+     */
+    task_dump();
 
     for (;;) {
         __asm__ volatile ("hlt");

@@ -14,9 +14,10 @@ BOOT_OBJ := $(BUILD_DIR)/boot.o
 KERNEL_OBJ := $(BUILD_DIR)/kernel.o
 TASK_OBJ := $(BUILD_DIR)/task.o
 SCHEDULER_OBJ := $(BUILD_DIR)/scheduler.o
+DISPATCHER_OBJ := $(BUILD_DIR)/dispatcher.o
 HAL_CONSOLE_OBJ := $(BUILD_DIR)/arch/x86_64/hal_console.o
 SERIAL_OBJ := $(BUILD_DIR)/arch/x86_64/serial.o
-OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SCHEDULER_OBJ) $(HAL_CONSOLE_OBJ) $(SERIAL_OBJ)
+OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(HAL_CONSOLE_OBJ) $(SERIAL_OBJ)
 
 CFLAGS := -target i386-elf -ffreestanding -fno-stack-protector -fno-pic -fno-pie -Wall -Wextra -I. -Ikernel/include
 LDFLAGS := -nostdlib -T linker.ld
@@ -33,7 +34,7 @@ dirs:
 $(BOOT_OBJ): boot/boot.asm | dirs
 	$(NASM) -f elf32 boot/boot.asm -o $(BOOT_OBJ)
 
-$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/task.h kernel/include/scheduler.h | dirs
+$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/kernel.c -o $(KERNEL_OBJ)
 
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs
@@ -41,6 +42,9 @@ $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | 
 
 $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/task.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/scheduler.c -o $(SCHEDULER_OBJ)
+
+$(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/include/task.h | dirs
+	$(CLANG) $(CFLAGS) -c kernel/dispatcher.c -o $(DISPATCHER_OBJ)
 
 $(HAL_CONSOLE_OBJ): arch/x86_64/hal_console.c kernel/include/hal/console.h arch/x86_64/serial.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/hal_console.c -o $(HAL_CONSOLE_OBJ)

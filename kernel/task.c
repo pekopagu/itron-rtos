@@ -378,3 +378,65 @@ const tcb_t *task_get_by_index(int index)
 
     return &task_table[index];
 }
+
+/**
+ * @brief 登録済みREADYタスクを論理的なRUNNING状態へ変更する。
+ *
+ * @details
+ * dispatcherの現在タスク確定経路から利用される状態変更処理である。
+ * task_tableの所有権はtask.cに残したまま、タスクIDから有効なTCBを探し、
+ * TASK_STATE_READYだけをTASK_STATE_RUNNINGへ変更する。
+ * この章ではタスク入口関数の呼び出し、コンテキストスイッチ、スタック切り替え、
+ * レジスタ保存・復元は行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_running(int task_id)
+{
+    int index;
+
+    /*
+     * 0以下のIDはTCB登録で発行しない。
+     * 不正IDを早期に拒否しておくことで、将来API経由でtask_idが渡される場合も
+     * task_table走査前に入力エラーとして扱える。
+     */
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        /*
+         * UNUSEDスロットは未登録領域なので状態変更対象にしない。
+         * task_tableをstaticに保ちながら内部でだけ走査することで、
+         * 将来TCB配置を変えても外部APIの契約を保てる。
+         */
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        if (task->id != task_id) {
+            continue;
+        }
+
+        /*
+         * RUNNINGへ進める入口をREADYに限定する。
+         * これにより、schedulerの選択結果だけがdispatcher経由でcurrent化される
+         * という第3章3.3の状態モデルを保てる。
+         */
+        if (task->state != TASK_STATE_READY) {
+            return TASK_ERR_BAD_STATE;
+        }
+
+        /*
+         * 第3章3.3の論理状態確定だけを行う。
+         * 入口関数呼び出し、スタック切り替え、レジスタ保存、コンテキストスイッチは行わない。
+         */
+        task->state = TASK_STATE_RUNNING;
+        return 0;
+    }
+
+    return TASK_ERR_NOT_FOUND;
+}

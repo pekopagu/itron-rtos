@@ -25,6 +25,8 @@
 #define TASK_ERR_FULL        (-1)
 #define TASK_ERR_INVAL       (-2)
 #define TASK_ERR_ID_OVERFLOW (-3)
+#define TASK_ERR_NOT_FOUND   (-4)
+#define TASK_ERR_BAD_STATE   (-5)
 
 typedef void (*task_entry_t)(void);
 
@@ -34,14 +36,18 @@ typedef void (*task_entry_t)(void);
  *
  * @details
  * μITRON風RTOSの学習用として、将来のタスクライフサイクルを表す状態を定義する。
- * 第8回でスケジューラが選択対象にするのはREADYのみであり、RUNNINGへの遷移、
- * WAITINGへの待ち入り、コンテキストスイッチはまだ行わない。
+ * スケジューラが選択対象にするのはREADYのみであり、RUNNINGはdispatcherで
+ * currentとして確定された論理状態として扱う。
+ *
+ * RUNNINGをCPU実行中と直結させないのは、状態確定と実際のタスク実行を分離し、
+ * 第4章で入口関数実行やコンテキスト管理を追加しやすくするためである。
+ * WAITINGへの待ち入り、コンテキストスイッチ、割り込み連動は将来拡張として残す。
  */
 typedef enum {
     TASK_STATE_UNUSED = 0, /**< 未使用スロット。空き判定はこの値だけで行う内部管理状態。 */
     TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第8回では将来拡張用に定義のみ行う。 */
     TASK_STATE_READY,      /**< 実行可能な状態。第8回のscheduler_select_next()が唯一の選択対象にする。 */
-    TASK_STATE_RUNNING,    /**< 実行中状態。第8回ではコンテキストスイッチを行わないため設定しない。 */
+    TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。CPUでentry実行中であることは意味しない。 */
     TASK_STATE_WAITING,    /**< 待ち状態。第8回では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
 } task_state_t;
 
@@ -51,18 +57,22 @@ typedef enum {
  *
  * @details
  * タスクを実行するためではなく、kernel内部で登録済みタスクを管理・表示し、
- * 第8回の簡易スケジューラがREADYタスクを選択するための最小情報を保持する。
- * スタック情報とentryは将来拡張に備えて保持するだけで、第8回では呼び出し、
- * スタック切り替え、コンテキスト作成を行わない。
+ * 簡易スケジューラがREADYタスクを選択し、dispatcherが現在タスクを確定するための
+ * 最小情報を保持する。
+ *
+ * entryとstack情報をこの段階から持たせているのは、第4章以降で入口関数実行や
+ * スタック管理へ接続するときにTCBの役割を作り直さずに済むようにするためである。
+ * ただし第3章3.3では、これらのフィールドは観測用・将来接続用であり、
+ * 入口関数呼び出し、スタック切り替え、コンテキスト作成には使わない。
  */
 typedef struct {
-    int id;                    /**< 登録後に割り当てられるタスクID。0は未使用または無効ID。 */
-    const char *name;          /**< dump時に識別しやすくするためのタスク名。 */
-    task_entry_t entry;        /**< 将来の実行開始で使う入口関数。第8回では呼び出さない。 */
-    int priority;              /**< scheduler選択用優先度。数値が小さいほど高優先度として扱う。 */
-    task_state_t state;        /**< 空き判定とscheduler候補判定の根拠。READYだけが第8回の選択対象。 */
-    void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。第8回では保持のみ。 */
-    unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。第8回では保持と表示のみ。 */
+    int id;                    /**< 登録後に割り当てられるタスクID。0は未使用または無効IDとして扱い、将来のAPI境界でも不正ID判定に使える。 */
+    const char *name;          /**< dump時に識別しやすくするためのタスク名。ログで状態遷移を追うために保持する。 */
+    task_entry_t entry;        /**< 将来の実行開始で使う入口関数。現段階では呼び出さず、実行モデル導入時の接続点として保持する。 */
+    int priority;              /**< scheduler選択用優先度。数値が小さいほど高優先度として扱い、将来の優先度制御の基礎にする。 */
+    task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
+    void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */
+    unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。将来のスタック検証に使えるよう、現段階からTCBに含める。 */
 } tcb_t;
 
 /**
@@ -140,5 +150,22 @@ int task_get_count(void);
  * @note task_tableをextern公開しないための境界APIであり、タスク実行は行わない。
  */
 const tcb_t *task_get_by_index(int index);
+
+/**
+ * @brief 登録済みREADYタスクを論理的なRUNNING状態へ変更する。
+ *
+ * @details
+ * dispatcherが使用するタスク管理の状態変更APIである。task_tableの所有権はtask.cに残し、
+ * 現在状態がTASK_STATE_READYである有効な登録済みタスクだけを変更する。
+ * UNUSEDスロットとREADY以外のタスクは失敗として扱う。
+ *
+ * この関数が行うのはREADYからRUNNINGへの論理状態遷移だけである。
+ * タスク入口関数は呼び出さず、コンテキストスイッチ、スタック切り替え、
+ * レジスタ保存・復元も行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_running(int task_id);
 
 #endif
