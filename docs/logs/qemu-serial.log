@@ -1,2 +1,25 @@
 itron-rtos booting...
 kernel_main reached
+[kernel] task init
+[scheduler] before_register selected: none
+[task] registered: id=1 name=task_a state=READY prio=5 entry=0x1012d0 stack_base=0x109000 stack_size=1024
+[kernel] task_register task_a returned 1
+[task] registered: id=2 name=task_b state=READY prio=1 entry=0x101340 stack_base=0x109400 stack_size=1024
+[kernel] task_register task_b returned 2
+[task] registered: id=3 name=task_c state=READY prio=1 entry=0x101360 stack_base=0x109800 stack_size=1024
+[kernel] task_register task_c returned 3
+[task] dump start
+[task] id=1 name=task_a prio=5 state=READY entry=0x1012d0 stack_base=0x109000 stack_size=1024
+[task] id=2 name=task_b prio=1 state=READY entry=0x101340 stack_base=0x109400 stack_size=1024
+[task] id=3 name=task_c prio=1 state=READY entry=0x101360 stack_base=0x109800 stack_size=1024
+[task] dump end
+[scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
+[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[task] dump start
+[task] id=1 name=task_a prio=5 state=READY entry=0x1012d0 stack_base=0x109000 stack_size=1024
+[task] id=2 name=task_b prio=1 state=RUNNING entry=0x101340 stack_base=0x109400 stack_size=1024
+[task] id=3 name=task_c prio=1 state=READY entry=0x101360 stack_base=0x109800 stack_size=1024
+[task] dump end
+[entry] calling current: id=2 name=task_b prio=1 state=RUNNING
+[task_b] executed
+[entry] returned current: id=2 name=task_b prio=1 state=RUNNING

@@ -50,6 +50,7 @@ The current implementation covers the following milestones:
 | 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Completed |
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Completed |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
+| 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -80,8 +81,18 @@ Chapter 3 Section 3.3 adds the current task commit boundary:
 * `scheduler_select_next()` still only selects a READY task
 * `dispatcher_commit_current()` commits the selected task as the current task
 * `RUNNING` means a logical state adopted as current, not CPU execution
-* Task entry functions, context switching, and stack switching are still not performed
-* Chapter 4 will use the current task as the next step toward handling entry functions
+* Task entry functions are still not called in the dispatcher
+* Context switching and stack switching are still not performed
+* Chapter 4 uses the committed current task as the input for entry handling
+
+Chapter 4 Section 4.1 adds boot-time task entry handling:
+
+* The committed current task entry is called once as a normal C function call
+* The entry call target is the current task returned by `dispatcher_get_current()`, not the selected task directly
+* Before calling entry, the kernel checks `current != NULL`, `state == TASK_STATE_RUNNING`, and `entry != NULL`
+* Entry call, task entry body, and entry return are observable in the QEMU serial log
+* After entry returns, the kernel does not create a formal task termination state and proceeds to the halt loop
+* This is a boot-time verification model, not a real context switch
 
 ---
 
@@ -145,7 +156,7 @@ This project has been tested in the following environment:
   * cc-sdd
   * ChatGPT
 
-※ Only the above environment is tested. Compatibility with other environments is not guaranteed.
+Only the above environment is tested. Compatibility with other environments is not guaranteed.
 
 ---
 
@@ -175,8 +186,12 @@ selected next. The selected task entry function is not called.
 
 Chapter 3 Section 3.3 commits the selected task through the dispatcher boundary.
 The committed task becomes the current task and transitions from READY to RUNNING
-as a logical state. This still does not execute the task entry function, perform
-a context switch, or switch stacks.
+as a logical state. The dispatcher itself still does not execute the task entry
+function, perform a context switch, or switch stacks.
+
+Chapter 4 Section 4.1 directly calls the committed current task entry once.
+This is still not a real context switch, and the task does not run on an
+independent task stack.
 
 ### Build
 
@@ -235,15 +250,18 @@ kernel_main reached
 [task] dump start
 [task] id=2 name=task_b prio=1 state=RUNNING ...
 [task] dump end
+[entry] calling current: id=2 name=task_b prio=1 state=RUNNING
+[task_b] executed
+[entry] returned current: id=2 name=task_b prio=1 state=RUNNING
 ```
 
-The `task_a`, `task_b`, and `task_c` entry functions are registered but are not
-executed. `task_b` is selected because it has the highest priority under the
-current rule: a smaller numeric priority is higher. `task_b` and `task_c`
-have the same priority, so the task table registration order selects `task_b`
-first. The dispatcher then commits the selected task as current. `RUNNING` in
-this log is a logical current-task state, not proof that the task is executing
-on the CPU.
+`task_b` is selected because it has the highest priority under the current rule:
+a smaller numeric priority is higher. `task_b` and `task_c` have the same
+priority, so the task table registration order selects `task_b` first. The
+dispatcher then commits the selected task as current, and Chapter 4 Section 4.1
+calls `task_b` entry once as a normal C function. `RUNNING` in this log is still
+a logical current-task state. It does not mean CPU context restoration, stack
+switching, or preemptive execution.
 
 ### Clean
 
@@ -309,6 +327,11 @@ The current kernel includes:
 * `dispatcher_commit_current()`
 * `dispatcher_get_current()`
 * Logical READY to RUNNING transition for the committed current task
+* Boot-time current task entry execution model
+* Current task entry precondition checks
+* Entry call / entry return serial logs
+* Direct normal C function call of `current->entry()` for Chapter 4.1
+* Return-after-entry halt behavior for temporary verification
 * Monotonically increasing task IDs
 * Stack information storage (`stack_base`, `stack_size`)
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
@@ -319,14 +342,16 @@ The current kernel includes:
 
 The following features are intentionally not implemented yet:
 
-* Task execution
+* Real task execution by context switching
 * RUNNING as CPU execution state
+* Independent task stack execution
 * Context switch
 * Timer interrupt
 * Preemption
 * Dynamic memory allocation
 * Stack switching
 * Stack frame initialization
+* Formal task termination state
 * Interrupt-driven task management
 
 ---
@@ -478,6 +503,7 @@ See the LICENSE file for details.
 * [x] Kernel entry (`kernel_main`)
 * [x] Initial task management
 * [x] Scheduler
+* [x] Task entry handling
 * [ ] Semaphore
 * [ ] Timer / interrupt
 
@@ -507,7 +533,8 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Draft  |
 | 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Draft  |
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
-| 3       | 3.3     | currentタスクとRUNNING状態                | v3.3-current-running        | Completed |
+| 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
+| 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
 
 ---
 

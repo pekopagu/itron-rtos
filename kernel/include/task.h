@@ -40,14 +40,17 @@ typedef void (*task_entry_t)(void);
  * currentとして確定された論理状態として扱う。
  *
  * RUNNINGをCPU実行中と直結させないのは、状態確定と実際のタスク実行を分離し、
- * 第4章で入口関数実行やコンテキスト管理を追加しやすくするためである。
+ * 第4章4.1のboot-time verification modelや第5章のコンテキスト管理へ
+ * 段階的に接続しやすくするためである。
+ * 第4章4.1ではRUNNINGのcurrent taskだけがentry直接呼び出し対象になるが、
+ * 独立stack実行、CPU context復元、継続的なCPU実行中状態は意味しない。
  * WAITINGへの待ち入り、コンテキストスイッチ、割り込み連動は将来拡張として残す。
  */
 typedef enum {
     TASK_STATE_UNUSED = 0, /**< 未使用スロット。空き判定はこの値だけで行う内部管理状態。 */
     TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第8回では将来拡張用に定義のみ行う。 */
     TASK_STATE_READY,      /**< 実行可能な状態。第8回のscheduler_select_next()が唯一の選択対象にする。 */
-    TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。CPUでentry実行中であることは意味しない。 */
+    TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。4.1ではentry直接呼び出し対象だが、独立stack実行やCPU context復元は意味しない。 */
     TASK_STATE_WAITING,    /**< 待ち状態。第8回では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
 } task_state_t;
 
@@ -62,13 +65,16 @@ typedef enum {
  *
  * entryとstack情報をこの段階から持たせているのは、第4章以降で入口関数実行や
  * スタック管理へ接続するときにTCBの役割を作り直さずに済むようにするためである。
+ * 第4章4.1では、current taskのentryだけを通常のC関数呼び出しで直接呼ぶ。
+ * この直接呼び出しは一時的なboot-time verification modelであり、
+ * 第5章ではcontext-switch-based executionへ置き換える前提である。
  * ただし第3章3.3では、これらのフィールドは観測用・将来接続用であり、
  * 入口関数呼び出し、スタック切り替え、コンテキスト作成には使わない。
  */
 typedef struct {
     int id;                    /**< 登録後に割り当てられるタスクID。0は未使用または無効IDとして扱い、将来のAPI境界でも不正ID判定に使える。 */
     const char *name;          /**< dump時に識別しやすくするためのタスク名。ログで状態遷移を追うために保持する。 */
-    task_entry_t entry;        /**< 将来の実行開始で使う入口関数。現段階では呼び出さず、実行モデル導入時の接続点として保持する。 */
+    task_entry_t entry;        /**< 将来の実行開始で使う入口関数。4.1ではcurrent/RUNNING確認後に直接呼ぶが、将来のcontext switch置換点として保持する。 */
     int priority;              /**< scheduler選択用優先度。数値が小さいほど高優先度として扱い、将来の優先度制御の基礎にする。 */
     task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
     void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */

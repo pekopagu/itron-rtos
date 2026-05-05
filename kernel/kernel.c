@@ -13,6 +13,10 @@
  * `task_dump()` を呼び出し、QEMUシリアルログで登録状態を確認する。
  * 第8回では `scheduler_select_next()` でREADYタスクを1つ選択し、
  * 選択結果だけをHAL console経由で表示する。entry関数は呼び出さない。
+ * 第4章4.1では、dispatcherでcurrentとしてcommit済みのタスクについて、
+ * entryを通常のC関数呼び出しとして1回だけ直接呼び出す。
+ * これは一時的なboot-time verification modelであり、第5章では
+ * context-switch-based executionへ置き換える前提である。
  *
  * kernel層はarch依存コードを直接呼ばず、依存方向は
  * kernel → HAL → arch(x86_64) → serial → COM1 である。
@@ -222,21 +226,178 @@ static void kernel_log_dispatcher_commit_result(int result)
 }
 
 /**
+ * @brief entry呼び出し前のcurrent task情報をHAL consoleへ出力する。
+ *
+ * @details
+ * 第4章4.1のboot-time verification modelとして、current taskのentryを
+ * 通常のC関数呼び出しで直接呼ぶ直前に観測点を作る。
+ * このログはkernel runtime側に置き、scheduler、dispatcher、task管理へ
+ * entry実行責務やログ責務を移さない。
+ *
+ * @param current entry呼び出し対象のcurrent task。
+ * @return なし。
+ * @note 表示専用であり、TCB状態やcurrent taskを変更しない。
+ */
+static void kernel_log_entry_call(const tcb_t *current)
+{
+    const char *safe_name = (current->name != NULL) ? current->name : "(null)";
+    const char *state_name = kernel_task_state_to_string(current->state);
+    const char *safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    hal_console_write("[entry] calling current: id=");
+    kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(current->priority);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+    hal_console_write("\n");
+}
+
+/**
+ * @brief entry return後のcurrent task情報をHAL consoleへ出力する。
+ *
+ * @details
+ * 4.1ではentryがreturnしても正式なtask終了状態を導入しない。
+ * RUNNINGからDORMANT、WAITING、終了状態へは遷移させず、returnは
+ * 起動時検証ログで観測するだけに留める。
+ *
+ * @param current returnしたentryを持つcurrent task。
+ * @return なし。
+ * @note return後にschedulerを再実行せず、entryも再度呼び出さない。
+ */
+static void kernel_log_entry_return(const tcb_t *current)
+{
+    const char *safe_name = (current->name != NULL) ? current->name : "(null)";
+    const char *state_name = kernel_task_state_to_string(current->state);
+    const char *safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    hal_console_write("[entry] returned current: id=");
+    kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(current->priority);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+    hal_console_write("\n");
+}
+
+/**
+ * @brief entryを呼ばない理由をHAL consoleへ出力する。
+ *
+ * @details
+ * current未設定、RUNNING以外、entry未設定のいずれかを検出した場合、
+ * 不正なTCBを実行対象にせず、skip理由だけを観測可能にする。
+ *
+ * @param reason skip理由を表す静的文字列。
+ * @param current 判定対象のcurrent task。NULLも許容する。
+ * @return なし。
+ * @note skip時もTCB状態やcurrent taskを変更しない。
+ */
+static void kernel_log_entry_skip(const char *reason, const tcb_t *current)
+{
+    const char *safe_reason = (reason != NULL) ? reason : "unknown";
+
+    hal_console_write("[entry] skipped: reason=");
+    hal_console_write(safe_reason);
+
+    if (current == NULL) {
+        hal_console_write(" current=none\n");
+        return;
+    }
+
+    hal_console_write(" id=");
+    kernel_write_int(current->id);
+    hal_console_write(" state=");
+    hal_console_write(kernel_task_state_to_string(current->state));
+    hal_console_write("\n");
+}
+
+/**
+ * @brief entry return後またはskip後の暫定停止点。
+ *
+ * @details
+ * 第4章4.1では正式なtask終了状態や再スケジュールを導入しない。
+ * このhelperは停止へ進む設計意図を明示するための境界であり、
+ * 実際のHLTループは既存のkernel_main末尾で共有する。
+ *
+ * @param なし。
+ * @return なし。
+ */
+static void kernel_halt_after_entry_return(void)
+{
+}
+
+/**
+ * @brief current taskのentryを4.1の最小モデルとして1回だけ直接呼び出す。
+ *
+ * @details
+ * dispatcherでcommit済みのcurrent taskを取得し、`current != NULL`、
+ * `current->state == TASK_STATE_RUNNING`、`current->entry != NULL` を満たす場合だけ
+ * `current->entry()` を通常のC関数呼び出しとして実行する。
+ *
+ * この直接呼び出しは一時的なboot-time verification modelである。
+ * RUNNINGはcurrentとして採用済みでentry呼び出し対象になったことを示すが、
+ * CPUで継続実行中、独立stack上で実行中、CPU context復元済みであることは意味しない。
+ *
+ * dispatcherでentryを呼ばないのは、dispatcherをcurrent commitだけの境界に保つためである。
+ * schedulerの責務を変更しないのは、READY task選択だけに限定するためである。
+ * task_runner専用層を導入しないのは、4.1ではboot-time verificationとして1回呼ぶだけで、
+ * 新規public APIやMakefile変更を伴う抽象化が不要だからである。
+ * kernel.cで直接呼ぶのは、既存の起動時検証ログと同じ文脈でentry call/returnを観測し、
+ * 第5章でこの呼び出し箇所をcontext-switch-based executionへ置き換えやすくするためである。
+ *
+ * @param なし。
+ * @return なし。
+ * @note TCB状態変更、コンテキストスイッチ、スタック切り替え、レジスタ保存・復元は行わない。
+ */
+static void kernel_run_current_entry_once(void)
+{
+    const tcb_t *current = dispatcher_get_current();
+
+    if (current == NULL) {
+        kernel_log_entry_skip("current-null", current);
+        kernel_halt_after_entry_return();
+        return;
+    }
+
+    if (current->state != TASK_STATE_RUNNING) {
+        kernel_log_entry_skip("current-not-running", current);
+        kernel_halt_after_entry_return();
+        return;
+    }
+
+    if (current->entry == NULL) {
+        kernel_log_entry_skip("entry-null", current);
+        kernel_halt_after_entry_return();
+        return;
+    }
+
+    kernel_log_entry_call(current);
+    current->entry();
+    kernel_log_entry_return(current);
+    kernel_halt_after_entry_return();
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
  * 第7回ではentry関数を登録するだけで呼び出さない。
- * このログが出た場合は、タスク実行禁止の制約に反していることを示す。
+ * 第4章4.1ではcurrentとしてcommitされた場合だけ、boot-time verification modelとして
+ * 通常のC関数呼び出しで実行される。
  *
  * @param なし。
  * @return なし。
- * @note スケジューラ未実装のため通常は実行されない。
+ * @note 独立stack実行やCPU context復元を伴うものではない。
  */
 static void task_a(void)
 {
     /*
-     * このログはentryが誤って呼ばれた場合だけ出る。
-     * 第7回では登録確認のみなので、通常のQEMUログには出てはいけない。
+     * 第4章4.1では、このログがcurrent entryの直接呼び出しを確認する観測点になる。
+     * 独立stackや復元済みCPU context上での実行ではなく、通常のC関数呼び出しである。
      */
     hal_console_write("[task_a] executed\n");
 }
@@ -246,17 +407,18 @@ static void task_a(void)
  *
  * @details
  * 第7回ではentry関数を登録するだけで呼び出さない。
- * 将来のタスク実行フェーズで初めて実行対象になる想定である。
+ * 第4章4.1では、優先度選択とcurrent commit後にboot-time verification modelとして
+ * 通常のC関数呼び出しで1回だけ実行対象になる。
  *
  * @param なし。
  * @return なし。
- * @note コンテキストスイッチ未実装のため通常は実行されない。
+ * @note コンテキストスイッチ、スタック切り替え、レジスタ保存・復元は伴わない。
  */
 static void task_b(void)
 {
     /*
-     * task_aと同じく、将来のタスク実行フェーズまで呼び出さない。
-     * 登録APIがentryを保持するだけであることをログ上で確認するために残す。
+     * 4.1ではこのログが、current taskのentryが通常のC関数として
+     * 1回だけ直接呼ばれたことを示す。
      */
     hal_console_write("[task_b] executed\n");
 }
@@ -267,6 +429,8 @@ static void task_b(void)
  * @details
  * 第8回の同一priority確認用に登録するだけの関数である。
  * schedulerはTCBを選択するだけで、このentryを呼び出さない。
+ * 第4章4.1でも、schedulerが選択しdispatcherがcommitしたcurrentだけが
+ * kernel.cのboot-time verification helperから直接呼ばれる。
  *
  * @param なし。
  * @return なし。
@@ -283,11 +447,12 @@ static void task_c(void)
  * @details
  * HAL consoleを初期化し、起動ログと初期タスク管理の確認ログを出力する。
  * タスク登録後は `task_dump()` で一覧を表示し、簡易schedulerの選択結果を表示してから
- * 従来どおりHLTループに入る。
+ * dispatcherでcurrentをcommitする。第4章4.1では、commit済みcurrent taskのentryを
+ * 通常のC関数呼び出しで1回だけ直接呼んでから、従来どおりHLTループに入る。
  *
  * @param なし。
  * @return なし。
- * @note task_start、context_switch、割り込み、タイマ、プリエンプションは追加しない。
+ * @note task_start、context_switch、stack switch、割り込み、タイマ、プリエンプションは追加しない。
  */
 void kernel_main(void)
 {
@@ -372,6 +537,17 @@ void kernel_main(void)
      * 比較できる。第4章で実行モデルを追加した後も、実行前状態の確認点として使える。
      */
     task_dump();
+
+    /*
+     * 第4章4.1では、dispatcherがcommitしたcurrent taskのentryを
+     * kernel.cの起動時検証フローで直接呼び出す。
+     * dispatcherはentryを呼ばずcurrent commitだけを維持し、schedulerはREADY選択だけを維持する。
+     * 専用task_runner層は第5章前の段階では導入せず、この直接呼び出し箇所を
+     * 将来のcontext-switch-based executionへの置き換え点として残す。
+     */
+    if (commit_result == DISPATCHER_OK) {
+        kernel_run_current_entry_once();
+    }
 
     for (;;) {
         __asm__ volatile ("hlt");
