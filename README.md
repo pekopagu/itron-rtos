@@ -51,6 +51,7 @@ The current implementation covers the following milestones:
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Completed |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
+| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Planned   |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -93,6 +94,12 @@ Chapter 4 Section 4.1 adds boot-time task entry handling:
 * Entry call, task entry body, and entry return are observable in the QEMU serial log
 * After entry returns, the kernel does not create a formal task termination state and proceeds to the halt loop
 * This is a boot-time verification model, not a real context switch
+
+Chapter 4 Section 4.2 defines entry return observation in the current
+boot-time verification model. At this stage, an entry return is not treated as
+formal task termination. The current task is preserved, `TASK_STATE_RUNNING`
+remains unchanged, and the scheduler is not re-run. This temporary behavior
+will be replaced by a context-switch-based execution model in Chapter 5.
 
 ---
 
@@ -535,6 +542,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
+| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Planned |
 
 ---
 

@@ -15,6 +15,8 @@
  * 選択結果だけをHAL console経由で表示する。entry関数は呼び出さない。
  * 第4章4.1では、dispatcherでcurrentとしてcommit済みのタスクについて、
  * entryを通常のC関数呼び出しとして1回だけ直接呼び出す。
+ * 第4章4.2では、entry returnを正式なtask終了ではなく、
+ * 観測可能な起動時検証イベントとして扱う。
  * これは一時的なboot-time verification modelであり、第5章では
  * context-switch-based executionへ置き換える前提である。
  *
@@ -259,12 +261,13 @@ static void kernel_log_entry_call(const tcb_t *current)
  * @brief entry return後のcurrent task情報をHAL consoleへ出力する。
  *
  * @details
- * 4.1ではentryがreturnしても正式なtask終了状態を導入しない。
- * RUNNINGからDORMANT、WAITING、終了状態へは遷移させず、returnは
- * 起動時検証ログで観測するだけに留める。
+ * 4.2ではentryがreturnしても正式なtask終了状態を導入しない。
+ * RUNNINGからDORMANT、READY、WAITING、EXITED相当の状態へは遷移させず、
+ * returnは起動時検証ログで観測するだけに留める。
  *
  * @param current returnしたentryを持つcurrent task。
  * @return なし。
+ * @note return後もcurrent taskとTASK_STATE_RUNNINGは保持する。
  * @note return後にschedulerを再実行せず、entryも再度呼び出さない。
  */
 static void kernel_log_entry_return(const tcb_t *current)
@@ -299,6 +302,9 @@ static void kernel_log_entry_return(const tcb_t *current)
 static void kernel_log_entry_skip(const char *reason, const tcb_t *current)
 {
     const char *safe_reason = (reason != NULL) ? reason : "unknown";
+    const char *safe_name;
+    const char *state_name;
+    const char *safe_state;
 
     hal_console_write("[entry] skipped: reason=");
     hal_console_write(safe_reason);
@@ -308,10 +314,18 @@ static void kernel_log_entry_skip(const char *reason, const tcb_t *current)
         return;
     }
 
+    safe_name = (current->name != NULL) ? current->name : "(null)";
+    state_name = kernel_task_state_to_string(current->state);
+    safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
     hal_console_write(" id=");
     kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(current->priority);
     hal_console_write(" state=");
-    hal_console_write(kernel_task_state_to_string(current->state));
+    hal_console_write(safe_state);
     hal_console_write("\n");
 }
 
@@ -319,19 +333,20 @@ static void kernel_log_entry_skip(const char *reason, const tcb_t *current)
  * @brief entry return後またはskip後の暫定停止点。
  *
  * @details
- * 第4章4.1では正式なtask終了状態や再スケジュールを導入しない。
+ * 第4章4.2では正式なtask終了状態や再スケジュールを導入しない。
  * このhelperは停止へ進む設計意図を明示するための境界であり、
  * 実際のHLTループは既存のkernel_main末尾で共有する。
  *
  * @param なし。
  * @return なし。
+ * @note current taskの解除、TASK_STATE_RUNNINGからの状態遷移、scheduler再実行は行わない。
  */
 static void kernel_halt_after_entry_return(void)
 {
 }
 
 /**
- * @brief current taskのentryを4.1の最小モデルとして1回だけ直接呼び出す。
+ * @brief current taskのentryを4.1/4.2の最小モデルとして1回だけ直接呼び出す。
  *
  * @details
  * dispatcherでcommit済みのcurrent taskを取得し、`current != NULL`、
@@ -341,6 +356,7 @@ static void kernel_halt_after_entry_return(void)
  * この直接呼び出しは一時的なboot-time verification modelである。
  * RUNNINGはcurrentとして採用済みでentry呼び出し対象になったことを示すが、
  * CPUで継続実行中、独立stack上で実行中、CPU context復元済みであることは意味しない。
+ * entryがreturnしても正式なtask終了ではなく、RUNNINGの意味も変更しない。
  *
  * dispatcherでentryを呼ばないのは、dispatcherをcurrent commitだけの境界に保つためである。
  * schedulerの責務を変更しないのは、READY task選択だけに限定するためである。
@@ -351,7 +367,8 @@ static void kernel_halt_after_entry_return(void)
  *
  * @param なし。
  * @return なし。
- * @note TCB状態変更、コンテキストスイッチ、スタック切り替え、レジスタ保存・復元は行わない。
+ * @note TCB状態変更、current解除、scheduler再実行、コンテキストスイッチ、
+ * スタック切り替え、レジスタ保存・復元は行わない。
  */
 static void kernel_run_current_entry_once(void)
 {
@@ -377,6 +394,10 @@ static void kernel_run_current_entry_once(void)
 
     kernel_log_entry_call(current);
     current->entry();
+    /*
+     * ここに制御が戻ったことだけをentry returnとして観測する。
+     * これはtask終了ではなく、RUNNINGからDORMANT/READY/WAITING等への遷移も行わない。
+     */
     kernel_log_entry_return(current);
     kernel_halt_after_entry_return();
 }
@@ -448,7 +469,8 @@ static void task_c(void)
  * HAL consoleを初期化し、起動ログと初期タスク管理の確認ログを出力する。
  * タスク登録後は `task_dump()` で一覧を表示し、簡易schedulerの選択結果を表示してから
  * dispatcherでcurrentをcommitする。第4章4.1では、commit済みcurrent taskのentryを
- * 通常のC関数呼び出しで1回だけ直接呼んでから、従来どおりHLTループに入る。
+ * 通常のC関数呼び出しで1回だけ直接呼ぶ。第4章4.2ではentry returnを
+ * 正式なtask終了ではなく観測イベントとしてログに残し、従来どおりHLTループに入る。
  *
  * @param なし。
  * @return なし。
