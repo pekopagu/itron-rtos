@@ -1,16 +1,16 @@
 # Requirements Document
 
 ## Introduction
-この feature は、μITRON風RTOSの第4章 4.1「entry関数の扱い」として、dispatcherでcurrentとしてcommit済みのタスクについて、TCBに保持されたentry関数を最小モデルで呼び出すための要求を定義する。
+この feature は、μITRON風RTOSの第4章 4.1「entry関数の扱い」および第4章 4.2「タスク終了時の状態遷移」として、dispatcherでcurrentとしてcommit済みのタスクについて、TCBに保持されたentry関数を最小モデルで呼び出し、entry関数がreturnした場合の扱いを定義する。
 
 既存の `task-management-initial` はTCBとentry保持を扱うが、entry実行は扱わない。既存の `simple-priority-scheduler` はREADYタスク選択のみを扱い、実行や状態変更は行わない。既存の `current-task-running-state` はselected taskをcurrentとしてcommitし、READYからRUNNINGへの論理状態遷移を扱うが、entry関数は呼び出さない。
 
-本 feature は、それらの責務境界を維持したまま、起動時検証フローで `scheduler_select_next()`、`dispatcher_commit_current(selected)`、`dispatcher_get_current()`、`current->entry()` の順に最小実行モデルを観測可能にする。4.1のRUNNINGは「currentとして採用済みの論理状態」に加えて「entry呼び出し対象になったcurrent task」を意味するが、CPUで継続実行中、独立スタック上で実行中、コンテキスト復元済みという意味は持たない。
+本 feature は、それらの責務境界を維持したまま、起動時検証フローで `scheduler_select_next()`、`dispatcher_commit_current(selected)`、`dispatcher_get_current()`、`current->entry()`、entry return観測の順に最小実行モデルを観測可能にする。4.1/4.2のRUNNINGは「currentとして採用済みの論理状態」に加えて「entry呼び出し対象になったcurrent task」を意味するが、CPUで継続実行中、独立スタック上で実行中、コンテキスト復元済みという意味は持たない。entry returnは正式なtask終了ではなく、4.2時点では観測可能な起動時検証イベントとして扱う。
 
 ## Boundary Context
-- **In scope**: current taskのentry直接呼び出し、entry呼び出し前提条件の確認、entry呼び出し前ログ、entry returnログ、return後の暫定停止ループ、QEMUシリアルログでのentry実行観測、Doxygen形式コメント、既存責務分離の維持、第5章への接続条件。
-- **Out of scope**: `task_runner.c` / `task_runner.h` の追加、コンテキストスイッチ、アセンブラ、レジスタ保存・復元、スタック切り替え、独立タスクスタック上での実行、割り込み、タイマ、プリエンプション、複数タスクの交互実行、正式なtask終了状態、μITRON互換API、既存RTOS実装の参照・コピー・流用。
-- **Adjacent expectations**: schedulerはREADYタスク選択のみを維持する。dispatcherはcurrent commitのみを維持する。task管理はTCBと状態管理のみを維持する。第5章では4.1の直接entry呼び出しをコンテキストスイッチ境界へ置き換える。
+- **In scope**: current taskのentry直接呼び出し、entry呼び出し前提条件の確認、entry呼び出し前ログ、entry returnログ、returnを正式終了ではなく観測可能イベントとして扱うこと、return後のcurrent参照可能性、return後の暫定停止ループ、QEMUシリアルログでのentry実行観測、Doxygen形式コメント、既存責務分離の維持、第5章への接続条件。
+- **Out of scope**: `task_runner.c` / `task_runner.h` の追加、コンテキストスイッチ、アセンブラ、レジスタ保存・復元、スタック切り替え、独立タスクスタック上での実行、割り込み、タイマ、プリエンプション、複数タスクの交互実行、正式なtask終了状態、task再起動、taskライフサイクル管理、μITRON互換API、`ext_tsk` 相当の明示終了操作、既存RTOS実装の参照・コピー・流用。
+- **Adjacent expectations**: schedulerはREADYタスク選択のみを維持する。dispatcherはcurrent commitのみを維持する。task管理はTCBと状態管理のみを維持する。第5章では4.1の直接entry呼び出しをコンテキストスイッチ境界へ置き換える。将来の正式な終了モデルでは、明示的なtask終了操作によるRUNNINGからDORMANTへの遷移を別specで扱う。
 
 ## Requirements
 
@@ -36,16 +36,18 @@
 6. If the current task entry is NULL, then the task-entry-runner feature shall not call that task entry function.
 7. If an entry precondition is not satisfied, then the task-entry-runner feature shall make the skipped entry call observable in boot-time log output.
 
-### Requirement 3: RUNNING状態の4.1での意味
-**Objective:** As a kernel開発者, I want RUNNINGの意味を4.1向けに拡張しすぎず定義したい, so that 第5章のコンテキストスイッチ設計と矛盾しない状態モデルを維持できる
+### Requirement 3: RUNNING状態の4.1/4.2での意味
+**Objective:** As a kernel開発者, I want RUNNINGの意味を4.1/4.2向けに拡張しすぎず定義したい, so that 第5章のコンテキストスイッチ設計と将来のtask終了設計に矛盾しない状態モデルを維持できる
 
 #### Acceptance Criteria
 1. The task-entry-runner feature shall continue to define `TASK_STATE_RUNNING` as a logical state meaning that a task has been adopted as current.
 2. While 4.1 entry handling is exercised, the task-entry-runner feature shall treat `TASK_STATE_RUNNING` as the state of the current task that is eligible for entry calling.
-3. While 4.1 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that the task is continuously executing on the CPU.
-4. While 4.1 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that the task is executing on an independent task stack.
-5. While 4.1 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that CPU context has been restored.
-6. When entry handling documentation describes `TASK_STATE_RUNNING`, the task-entry-runner feature shall state the 4.1 meaning separately from future context-switch execution semantics.
+3. While 4.2 entry return handling is exercised, the task-entry-runner feature shall keep `TASK_STATE_RUNNING` defined as a logical current-adopted state.
+4. When the current task entry returns in 4.2, the task-entry-runner feature shall not redefine `TASK_STATE_RUNNING` as a task termination state.
+5. While 4.1/4.2 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that the task is continuously executing on the CPU.
+6. While 4.1/4.2 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that the task is executing on an independent task stack.
+7. While 4.1/4.2 entry handling is exercised, the task-entry-runner feature shall not define `TASK_STATE_RUNNING` as proof that CPU context has been restored.
+8. When entry handling documentation describes `TASK_STATE_RUNNING`, the task-entry-runner feature shall state the 4.1/4.2 meaning separately from future context-switch execution semantics and future task termination semantics.
 
 ### Requirement 4: entry呼び出しログとreturn観測
 **Objective:** As a kernel開発者, I want entry呼び出し前後のログを確認したい, so that entryが実際に呼ばれたこととreturnしたことをQEMUシリアルログで追跡できる
@@ -59,15 +61,21 @@
 6. When QEMU is run with `-serial stdio`, the task-entry-runner feature shall make the entry call behavior verifiable from the serial stream.
 
 ### Requirement 5: entry return後の暫定扱い
-**Objective:** As a kernel開発者, I want entry return後の扱いを暫定範囲に限定したい, so that 正式なtask終了状態を4.1へ持ち込まずに検証を終えられる
+**Objective:** As a kernel開発者, I want entry return後の扱いを暫定範囲に限定したい, so that 正式なtask終了状態を4.2へ持ち込まずに検証を終えられる
 
 #### Acceptance Criteria
-1. When the current task entry returns in 4.1, the task-entry-runner feature shall treat the return as an observable boot-time verification event.
-2. When the current task entry returns in 4.1, the task-entry-runner feature shall proceed to the existing halt behavior or an equivalent stop loop.
-3. When the current task entry returns in 4.1, the task-entry-runner feature shall not require a formal task exit state.
-4. When the current task entry returns in 4.1, the task-entry-runner feature shall not require a transition from `TASK_STATE_RUNNING` to `TASK_STATE_DORMANT`.
-5. When the current task entry returns in 4.1, the task-entry-runner feature shall not require a transition from `TASK_STATE_RUNNING` to any wait or termination state.
-6. When the current task entry returns in 4.1, the task-entry-runner feature shall not schedule another task as a result of the return.
+1. When the current task entry returns in 4.2, the task-entry-runner feature shall treat the return as an observable boot-time verification event.
+2. When the current task entry returns in 4.2, the task-entry-runner feature shall not treat the return as a formal task termination.
+3. When the current task entry returns in 4.2, the task-entry-runner feature shall proceed to the existing halt behavior or an equivalent stop loop.
+4. When the current task entry returns in 4.2, the task-entry-runner feature shall not require a formal task exit state.
+5. When the current task entry returns in 4.2, the task-entry-runner feature shall not require a transition from `TASK_STATE_RUNNING` to `TASK_STATE_DORMANT`.
+6. When the current task entry returns in 4.2, the task-entry-runner feature shall not require a transition from `TASK_STATE_RUNNING` to `TASK_STATE_READY`.
+7. When the current task entry returns in 4.2, the task-entry-runner feature shall not require a transition from `TASK_STATE_RUNNING` to any wait or termination state.
+8. When the current task entry returns in 4.2, the task-entry-runner feature shall not require a new internal task state such as EXITED.
+9. When the current task entry returns in 4.2, the task-entry-runner feature shall keep the current task observable after the return event.
+10. When the current task entry returns in 4.2, the task-entry-runner feature shall preserve the current task identification information for post-return observation.
+11. When the current task entry returns in 4.2, the task-entry-runner feature shall not schedule another task as a result of the return.
+12. When the current task entry returns in 4.2, the task-entry-runner feature shall not call the returned entry function again.
 
 ### Requirement 6: scheduler責務の維持
 **Objective:** As a kernel開発者, I want schedulerをREADY task選択だけに保ちたい, so that entry実行の副作用がschedulerへ混入しないことを確認できる
@@ -77,7 +85,8 @@
 2. When `scheduler_select_next()` returns a task, the task-entry-runner feature shall not require scheduler behavior to call that task entry.
 3. When `scheduler_select_next()` returns a task, the task-entry-runner feature shall not require scheduler behavior to change that task state.
 4. When `scheduler_select_next()` returns a task, the task-entry-runner feature shall not require scheduler behavior to commit that task as current.
-5. While 4.1 entry handling is exercised, the task-entry-runner feature shall preserve scheduler behavior as free of HAL console output responsibility.
+5. When the current task entry returns in 4.2, the task-entry-runner feature shall not require scheduler behavior to select a new task.
+6. While 4.1/4.2 entry handling is exercised, the task-entry-runner feature shall preserve scheduler behavior as free of HAL console output responsibility.
 
 ### Requirement 7: dispatcher責務の維持
 **Objective:** As a kernel開発者, I want dispatcherをcurrent commitだけに保ちたい, so that entry実行開始とcurrent確定を混同せずに設計を進められる
@@ -114,26 +123,33 @@
 9. The task-entry-runner feature shall not introduce alternating execution of multiple tasks.
 10. The task-entry-runner feature shall not introduce a formal task termination state.
 11. The task-entry-runner feature shall not introduce μITRON-compatible external APIs.
-12. The task-entry-runner feature shall not refer to, copy, or adapt implementation code or structure from existing RTOS implementations.
+12. The task-entry-runner feature shall not introduce task restart behavior.
+13. The task-entry-runner feature shall not introduce task lifecycle management.
+14. The task-entry-runner feature shall not introduce an `ext_tsk` equivalent operation.
+15. The task-entry-runner feature shall not refer to, copy, or adapt implementation code or structure from existing RTOS implementations.
 
 ### Requirement 10: Doxygen形式コメント
 **Objective:** As a kernel開発者, I want 4.1のentry実行モデルと制約をDoxygen形式コメントで確認したい, so that 後続章で責務境界を誤解せずに拡張できる
 
 #### Acceptance Criteria
-1. Where public or file-level documentation is changed for 4.1, the task-entry-runner feature shall provide Doxygen-format comments.
+1. Where public or file-level documentation is changed for 4.1/4.2, the task-entry-runner feature shall provide Doxygen-format comments.
 2. Where entry calling behavior is documented, the task-entry-runner feature shall describe that the current task entry is called directly as a normal C function call.
 3. Where entry calling behavior is documented, the task-entry-runner feature shall describe the entry call preconditions for current task, RUNNING state, and non-NULL entry.
 4. Where entry return behavior is documented, the task-entry-runner feature shall describe the return handling as temporary boot-time verification behavior.
-5. Where RUNNING state is documented for 4.1, the task-entry-runner feature shall describe that RUNNING does not mean independent stack execution or restored CPU context.
-6. Where adjacent responsibilities are documented, the task-entry-runner feature shall state that scheduler selection, dispatcher commit, and task state management responsibilities remain separate.
-7. Where comments are added or changed by this feature, the task-entry-runner feature shall keep the comments consistent with the observable behavior.
+5. Where entry return behavior is documented, the task-entry-runner feature shall describe that entry return is not formal task termination in 4.2.
+6. Where entry return behavior is documented, the task-entry-runner feature shall describe that future formal termination is expected to be represented by an explicit task termination operation.
+7. Where RUNNING state is documented for 4.1/4.2, the task-entry-runner feature shall describe that RUNNING does not mean independent stack execution or restored CPU context.
+8. Where adjacent responsibilities are documented, the task-entry-runner feature shall state that scheduler selection, dispatcher commit, and task state management responsibilities remain separate.
+9. Where comments are added or changed by this feature, the task-entry-runner feature shall keep the comments consistent with the observable behavior.
 
 ### Requirement 11: 第5章への接続条件
-**Objective:** As a kernel開発者, I want 4.1の直接entry呼び出しを第5章で置き換えられる形にしたい, so that コンテキストスイッチ導入時に実行境界を明確に移行できる
+**Objective:** As a kernel開発者, I want 4.1の直接entry呼び出しと4.2のreturn観測を第5章以降で置き換えられる形にしたい, so that コンテキストスイッチ導入時に実行境界と終了境界を明確に移行できる
 
 #### Acceptance Criteria
 1. The task-entry-runner feature shall leave the current task as the input to future context-switch-based execution.
 2. The task-entry-runner feature shall leave the task entry pointer as the future initial execution target.
 3. The task-entry-runner feature shall leave stack information as future context setup input without using it for 4.1 stack switching.
 4. When 4.1 entry handling is documented, the task-entry-runner feature shall identify the direct entry call as behavior that future context-switch work can replace.
-5. While 4.1 entry handling is exercised, the task-entry-runner feature shall preserve the selected-to-current-to-entry sequence as the conceptual connection to Chapter 5.
+5. When 4.2 entry return handling is documented, the task-entry-runner feature shall identify the post-return handling as behavior that future explicit task termination work can replace.
+6. While 4.1/4.2 entry handling is exercised, the task-entry-runner feature shall preserve the selected-to-current-to-entry-to-return-observation sequence as the conceptual connection to Chapter 5.
+7. Where future task termination semantics are described, the task-entry-runner feature shall keep them compatible with a future `TASK_STATE_RUNNING` to `TASK_STATE_DORMANT` transition.
