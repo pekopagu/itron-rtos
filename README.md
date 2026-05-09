@@ -51,7 +51,8 @@ The current implementation covers the following milestones:
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Completed |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
-| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Planned   |
+| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
+| 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -100,6 +101,23 @@ boot-time verification model. At this stage, an entry return is not treated as
 formal task termination. The current task is preserved, `TASK_STATE_RUNNING`
 remains unchanged, and the scheduler is not re-run. This temporary behavior
 will be replaced by a context-switch-based execution model in Chapter 5.
+
+Chapter 4 Section 4.3 adds cooperative execution control as a boot-time
+verification model:
+
+* The kernel repeats a finite cooperative verification loop.
+* Each iteration selects a READY task with `scheduler_select_next()`.
+* The selected task is committed as current through `dispatcher_commit_current()`.
+* The entry call target is the current task returned by `dispatcher_get_current()`.
+* The current task entry is still called as a normal C function call.
+* Entry return is observed as a cooperative return event, not formal task termination.
+* The returned RUNNING task is moved back to READY as cooperative re-candidacy.
+* The loop stops when the entry-call limit is reached or no READY task exists.
+
+This is still not a real context switch. It does not switch stacks, save or
+restore registers, use interrupts, use timers, or implement preemption.
+It also does not add a `yield_tsk` compatible API, `TASK_STATE_EXITED`,
+DORMANT transition, or task restart behavior.
 
 ---
 
@@ -196,9 +214,12 @@ The committed task becomes the current task and transitions from READY to RUNNIN
 as a logical state. The dispatcher itself still does not execute the task entry
 function, perform a context switch, or switch stacks.
 
-Chapter 4 Section 4.1 directly calls the committed current task entry once.
-This is still not a real context switch, and the task does not run on an
-independent task stack.
+Chapter 4 Section 4.3 runs a finite cooperative verification loop. Each
+iteration commits a scheduler-selected READY task as current, directly calls
+the current task entry as a normal C function, observes the return as a
+cooperative return event, and returns the task to READY as cooperative
+re-candidacy. This is still not a real context switch, and the task does not
+run on an independent task stack.
 
 ### Build
 
@@ -253,22 +274,29 @@ kernel_main reached
 [task] id=3 name=task_c prio=1 state=READY ...
 [task] dump end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
+[cooperative] iteration=1 begin
+[scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
-[task] dump start
-[task] id=2 name=task_b prio=1 state=RUNNING ...
-[task] dump end
 [entry] calling current: id=2 name=task_b prio=1 state=RUNNING
 [task_b] executed
 [entry] returned current: id=2 name=task_b prio=1 state=RUNNING
+[cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
+[cooperative] ready again: result=ok id=2 name=task_b state=READY
+[cooperative] iteration=2 begin
+[scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
+...
+[cooperative] stop: reason=limit-reached
 ```
 
 `task_b` is selected because it has the highest priority under the current rule:
 a smaller numeric priority is higher. `task_b` and `task_c` have the same
-priority, so the task table registration order selects `task_b` first. The
-dispatcher then commits the selected task as current, and Chapter 4 Section 4.1
-calls `task_b` entry once as a normal C function. `RUNNING` in this log is still
-a logical current-task state. It does not mean CPU context restoration, stack
-switching, or preemptive execution.
+priority, so the task table registration order selects `task_b` first. In
+Chapter 4 Section 4.3, the cooperative runner returns `task_b` from RUNNING to
+READY after each cooperative return event. Because the scheduler is still a
+simple fixed-priority selector, it can select `task_b` again until the finite
+entry-call limit is reached. `RUNNING` in this log is still a logical
+current-task state. It does not mean CPU context restoration, stack switching,
+or preemptive execution.
 
 ### Clean
 
@@ -337,8 +365,10 @@ The current kernel includes:
 * Boot-time current task entry execution model
 * Current task entry precondition checks
 * Entry call / entry return serial logs
-* Direct normal C function call of `current->entry()` for Chapter 4.1
-* Return-after-entry halt behavior for temporary verification
+* Direct normal C function call of `current->entry()` for Chapter 4.1-4.3
+* Cooperative return event observation for Chapter 4.3
+* RUNNING to READY cooperative re-candidacy for temporary verification
+* Finite cooperative entry-call limit
 * Monotonically increasing task IDs
 * Stack information storage (`stack_base`, `stack_size`)
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
@@ -355,10 +385,13 @@ The following features are intentionally not implemented yet:
 * Context switch
 * Timer interrupt
 * Preemption
+* `yield_tsk` compatible API
 * Dynamic memory allocation
 * Stack switching
 * Stack frame initialization
 * Formal task termination state
+* `TASK_STATE_EXITED`
+* Task restart
 * Interrupt-driven task management
 
 ---
@@ -542,7 +575,8 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
-| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Planned |
+| 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
+| 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 
 ---
 

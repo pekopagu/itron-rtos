@@ -17,6 +17,9 @@
  * entryを通常のC関数呼び出しとして1回だけ直接呼び出す。
  * 第4章4.2では、entry returnを正式なtask終了ではなく、
  * 観測可能な起動時検証イベントとして扱う。
+ * 第4章4.3では、entry returnをcooperative return eventとして扱い、
+ * RUNNING taskをREADYへ戻して再びscheduler候補にすることで、
+ * 複数回のentry呼び出しを有限の起動時検証loopで観測する。
  * これは一時的なboot-time verification modelであり、第5章では
  * context-switch-based executionへ置き換える前提である。
  *
@@ -32,6 +35,7 @@
 #include <stddef.h>
 
 #define TASK_STACK_SIZE 1024
+#define KERNEL_COOPERATIVE_ENTRY_LIMIT 3UL
 
 static unsigned char task_a_stack[TASK_STACK_SIZE];
 static unsigned char task_b_stack[TASK_STACK_SIZE];
@@ -288,6 +292,110 @@ static void kernel_log_entry_return(const tcb_t *current)
 }
 
 /**
+ * @brief cooperative verification iterationの開始をHAL consoleへ出力する。
+ *
+ * @details
+ * 第4章4.3のboot-time verification modelで、scheduler再実行の境界を
+ * QEMUシリアルログから追跡できるようにする。
+ *
+ * @param iteration 1から始まるiteration番号。
+ * @return なし。
+ * @note 表示専用であり、task状態やcurrent taskを変更しない。
+ */
+static void kernel_log_cooperative_iteration(unsigned long iteration)
+{
+    hal_console_write("[cooperative] iteration=");
+    kernel_write_uint(iteration);
+    hal_console_write(" begin\n");
+}
+
+/**
+ * @brief cooperative return eventをHAL consoleへ出力する。
+ *
+ * @details
+ * entry関数から通常のC関数returnで制御が戻ったことを、
+ * 正式なtask終了ではなくcooperative return eventとして観測する。
+ *
+ * @param current returnしたentryを持つcurrent task。
+ * @return なし。
+ * @note DORMANT遷移、TASK_STATE_EXITED追加、task restartは行わない。
+ */
+static void kernel_log_cooperative_return(const tcb_t *current)
+{
+    const char *safe_name = (current->name != NULL) ? current->name : "(null)";
+    const char *state_name = kernel_task_state_to_string(current->state);
+    const char *safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    hal_console_write("[cooperative] returned current: id=");
+    kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(current->priority);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+    hal_console_write("\n");
+}
+
+/**
+ * @brief RUNNINGからREADYへの再候補化結果をHAL consoleへ出力する。
+ *
+ * @details
+ * 第4章4.3ではRUNNING taskをcooperative return後にREADYへ戻し、
+ * schedulerの再選択候補にする。このログはその結果を観測するだけで、
+ * 正式なyield APIやtask restartを意味しない。
+ *
+ * @param current 再候補化対象のtask。
+ * @param result task_mark_ready_from_running() の戻り値。
+ * @return なし。
+ */
+static void kernel_log_ready_recandidacy(const tcb_t *current, int result)
+{
+    const char *safe_name = (current != NULL && current->name != NULL) ? current->name : "(null)";
+    const char *state_name = (current != NULL) ? kernel_task_state_to_string(current->state) : "UNKNOWN";
+    const char *safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    if (result != 0) {
+        hal_console_write("[cooperative] ready again failed: err=");
+        kernel_write_int(result);
+    } else {
+        hal_console_write("[cooperative] ready again: result=ok");
+    }
+
+    if (current == NULL) {
+        hal_console_write(" current=none\n");
+        return;
+    }
+
+    hal_console_write(" id=");
+    kernel_write_int(current->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+    hal_console_write("\n");
+}
+
+/**
+ * @brief cooperative verification loopの停止理由をHAL consoleへ出力する。
+ *
+ * @details
+ * 起動時検証が無限loopにならないことを観測できるよう、READYなし、
+ * 上限到達、precondition失敗などの停止理由を明示する。
+ *
+ * @param reason 停止理由を表す静的文字列。
+ * @return なし。
+ */
+static void kernel_log_cooperative_stop(const char *reason)
+{
+    const char *safe_reason = (reason != NULL) ? reason : "unknown";
+
+    hal_console_write("[cooperative] stop: reason=");
+    hal_console_write(safe_reason);
+    hal_console_write("\n");
+}
+
+/**
  * @brief entryを呼ばない理由をHAL consoleへ出力する。
  *
  * @details
@@ -330,76 +438,96 @@ static void kernel_log_entry_skip(const char *reason, const tcb_t *current)
 }
 
 /**
- * @brief entry return後またはskip後の暫定停止点。
+ * @brief current taskのentryを4.3の協調実行検証モデルとして有限回直接呼び出す。
  *
  * @details
- * 第4章4.2では正式なtask終了状態や再スケジュールを導入しない。
- * このhelperは停止へ進む設計意図を明示するための境界であり、
- * 実際のHLTループは既存のkernel_main末尾で共有する。
+ * schedulerでREADY taskを選択し、dispatcherでcurrentとしてcommitした後、
+ * `dispatcher_get_current()` で取得したcurrent taskだけをentry呼び出し対象にする。
+ * `current != NULL`、`current->state == TASK_STATE_RUNNING`、
+ * `current->entry != NULL` を満たす場合だけ、`current->entry()` を通常のC関数呼び出し
+ * として1回実行する。
  *
- * @param なし。
- * @return なし。
- * @note current taskの解除、TASK_STATE_RUNNINGからの状態遷移、scheduler再実行は行わない。
- */
-static void kernel_halt_after_entry_return(void)
-{
-}
-
-/**
- * @brief current taskのentryを4.1/4.2の最小モデルとして1回だけ直接呼び出す。
+ * entryがreturnした場合、そのreturnは正式なtask終了ではなくcooperative return event
+ * として観測する。その後、RUNNING taskをREADYへ戻し、再びscheduler候補にする。
+ * このREADY再候補化はtask restartではなく、`yield_tsk`互換APIでもない。
  *
- * @details
- * dispatcherでcommit済みのcurrent taskを取得し、`current != NULL`、
- * `current->state == TASK_STATE_RUNNING`、`current->entry != NULL` を満たす場合だけ
- * `current->entry()` を通常のC関数呼び出しとして実行する。
- *
- * この直接呼び出しは一時的なboot-time verification modelである。
+ * このloopは一時的なboot-time verification modelである。
  * RUNNINGはcurrentとして採用済みでentry呼び出し対象になったことを示すが、
  * CPUで継続実行中、独立stack上で実行中、CPU context復元済みであることは意味しない。
- * entryがreturnしても正式なtask終了ではなく、RUNNINGの意味も変更しない。
  *
  * dispatcherでentryを呼ばないのは、dispatcherをcurrent commitだけの境界に保つためである。
  * schedulerの責務を変更しないのは、READY task選択だけに限定するためである。
- * task_runner専用層を導入しないのは、4.1ではboot-time verificationとして1回呼ぶだけで、
- * 新規public APIやMakefile変更を伴う抽象化が不要だからである。
- * kernel.cで直接呼ぶのは、既存の起動時検証ログと同じ文脈でentry call/returnを観測し、
- * 第5章でこの呼び出し箇所をcontext-switch-based executionへ置き換えやすくするためである。
+ * task_runner専用層を導入しないのは、4.3では第5章前の検証用loopであり、
+ * 新規public APIやMakefile変更を伴う抽象化がまだ不要だからである。
  *
  * @param なし。
  * @return なし。
- * @note TCB状態変更、current解除、scheduler再実行、コンテキストスイッチ、
- * スタック切り替え、レジスタ保存・復元は行わない。
+ * @note コンテキストスイッチ、スタック切り替え、レジスタ保存・復元、
+ * 割り込み、タイマ、プリエンプションは行わない。
  */
-static void kernel_run_current_entry_once(void)
+static void kernel_run_cooperative_entries(void)
 {
-    const tcb_t *current = dispatcher_get_current();
+    unsigned long iteration;
 
-    if (current == NULL) {
-        kernel_log_entry_skip("current-null", current);
-        kernel_halt_after_entry_return();
-        return;
+    for (iteration = 1; iteration <= KERNEL_COOPERATIVE_ENTRY_LIMIT; iteration++) {
+        const tcb_t *selected;
+        const tcb_t *current;
+        int commit_result;
+        int ready_result;
+
+        kernel_log_cooperative_iteration(iteration);
+
+        selected = scheduler_select_next();
+        kernel_log_scheduler_selection("cooperative", selected);
+        if (selected == NULL) {
+            kernel_log_cooperative_stop("no-ready");
+            return;
+        }
+
+        commit_result = dispatcher_commit_current(selected);
+        kernel_log_dispatcher_commit_result(commit_result);
+        if (commit_result != DISPATCHER_OK) {
+            kernel_log_cooperative_stop("commit-failed");
+            return;
+        }
+
+        current = dispatcher_get_current();
+        if (current == NULL) {
+            kernel_log_entry_skip("current-null", current);
+            kernel_log_cooperative_stop("current-null");
+            return;
+        }
+
+        if (current->state != TASK_STATE_RUNNING) {
+            kernel_log_entry_skip("current-not-running", current);
+            kernel_log_cooperative_stop("current-not-running");
+            return;
+        }
+
+        if (current->entry == NULL) {
+            kernel_log_entry_skip("entry-null", current);
+            kernel_log_cooperative_stop("entry-null");
+            return;
+        }
+
+        kernel_log_entry_call(current);
+        current->entry();
+        /*
+         * ここに制御が戻ったことだけをcooperative return eventとして観測する。
+         * これは正式なtask終了ではなく、DORMANT遷移やtask restartも行わない。
+         */
+        kernel_log_entry_return(current);
+        kernel_log_cooperative_return(current);
+
+        ready_result = task_mark_ready_from_running(current->id);
+        kernel_log_ready_recandidacy(current, ready_result);
+        if (ready_result != 0) {
+            kernel_log_cooperative_stop("ready-recandidate-failed");
+            return;
+        }
     }
 
-    if (current->state != TASK_STATE_RUNNING) {
-        kernel_log_entry_skip("current-not-running", current);
-        kernel_halt_after_entry_return();
-        return;
-    }
-
-    if (current->entry == NULL) {
-        kernel_log_entry_skip("entry-null", current);
-        kernel_halt_after_entry_return();
-        return;
-    }
-
-    kernel_log_entry_call(current);
-    current->entry();
-    /*
-     * ここに制御が戻ったことだけをentry returnとして観測する。
-     * これはtask終了ではなく、RUNNINGからDORMANT/READY/WAITING等への遷移も行わない。
-     */
-    kernel_log_entry_return(current);
-    kernel_halt_after_entry_return();
+    kernel_log_cooperative_stop("limit-reached");
 }
 
 /**
@@ -467,10 +595,11 @@ static void task_c(void)
  *
  * @details
  * HAL consoleを初期化し、起動ログと初期タスク管理の確認ログを出力する。
- * タスク登録後は `task_dump()` で一覧を表示し、簡易schedulerの選択結果を表示してから
- * dispatcherでcurrentをcommitする。第4章4.1では、commit済みcurrent taskのentryを
- * 通常のC関数呼び出しで1回だけ直接呼ぶ。第4章4.2ではentry returnを
- * 正式なtask終了ではなく観測イベントとしてログに残し、従来どおりHLTループに入る。
+ * タスク登録後は `task_dump()` で一覧を表示し、簡易schedulerの選択結果を表示する。
+ * 第4章4.3では、kernel.cのboot-time cooperative runnerがREADY taskを選び、
+ * dispatcherでcurrentとしてcommitし、current task entryを通常のC関数呼び出しで
+ * 直接呼ぶ。entry returnは正式終了ではなくcooperative return eventとして観測し、
+ * RUNNING taskをREADYへ戻して再びscheduler候補にする。
  *
  * @param なし。
  * @return なし。
@@ -482,7 +611,6 @@ void kernel_main(void)
     int task_b_id;
     int task_c_id;
     const tcb_t *selected_task;
-    int commit_result;
 
     hal_console_init();
     hal_console_write("itron-rtos booting...\n");
@@ -547,29 +675,12 @@ void kernel_main(void)
     kernel_log_scheduler_selection("after_register", selected_task);
 
     /*
-     * 第3章3.3では選択候補タスクを現在タスクとして確定し、READYからRUNNINGへの
-     * 論理状態遷移だけを行う。タスク入口関数実行やコンテキストスイッチはまだ行わない。
-     * ログ出力をkernel側に置くのは、dispatcherを状態確定だけのモジュールに保ち、
-     * 将来の実行制御やHAL以外の観測手段を追加しやすくするためである。
+     * 第4章4.3では、cooperative runner側でREADY選択、current commit、
+     * current entry直接呼び出し、cooperative return観測、READY再候補化を
+     * 有限回だけ繰り返す。dispatcherはentryを呼ばずcurrent commitだけを維持し、
+     * schedulerはREADY選択だけを維持する。専用task_runner層は導入しない。
      */
-    commit_result = dispatcher_commit_current(selected_task);
-    kernel_log_dispatcher_commit_result(commit_result);
-    /*
-     * commit後にdumpすることで、selectedログとRUNNING状態を同じ起動ログ上で
-     * 比較できる。第4章で実行モデルを追加した後も、実行前状態の確認点として使える。
-     */
-    task_dump();
-
-    /*
-     * 第4章4.1では、dispatcherがcommitしたcurrent taskのentryを
-     * kernel.cの起動時検証フローで直接呼び出す。
-     * dispatcherはentryを呼ばずcurrent commitだけを維持し、schedulerはREADY選択だけを維持する。
-     * 専用task_runner層は第5章前の段階では導入せず、この直接呼び出し箇所を
-     * 将来のcontext-switch-based executionへの置き換え点として残す。
-     */
-    if (commit_result == DISPATCHER_OK) {
-        kernel_run_current_entry_once();
-    }
+    kernel_run_cooperative_entries();
 
     for (;;) {
         __asm__ volatile ("hlt");

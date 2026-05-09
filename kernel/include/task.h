@@ -46,13 +46,17 @@ typedef void (*task_entry_t)(void);
  * 独立stack実行、CPU context復元、継続的なCPU実行中状態は意味しない。
  * 第4章4.2ではentry return後もRUNNINGの意味を変更せず、正式なtask終了状態や
  * RUNNINGからDORMANT/READY/WAITINGへの遷移は導入しない。
+ * 第4章4.3ではboot-time verification modelとして、entry returnを
+ * cooperative return eventとして観測し、RUNNINGからREADYへ戻すことで
+ * 再びscheduler候補にする。ただし、これはtask restartではなく、
+ * CPU実行中状態からの退避や正式なyield APIでもない。
  * WAITINGへの待ち入り、コンテキストスイッチ、割り込み連動は将来拡張として残す。
  */
 typedef enum {
     TASK_STATE_UNUSED = 0, /**< 未使用スロット。空き判定はこの値だけで行う内部管理状態。 */
     TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第8回では将来拡張用に定義のみ行う。 */
     TASK_STATE_READY,      /**< 実行可能な状態。第8回のscheduler_select_next()が唯一の選択対象にする。 */
-    TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。4.1/4.2ではentry直接呼び出しとreturn観測の対象だが、正式終了、独立stack実行、CPU context復元は意味しない。 */
+    TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。4.1/4.2/4.3ではentry直接呼び出しとreturn観測の対象だが、正式終了、独立stack実行、CPU context復元は意味しない。 */
     TASK_STATE_WAITING,    /**< 待ち状態。第8回では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
 } task_state_t;
 
@@ -69,6 +73,8 @@ typedef enum {
  * スタック管理へ接続するときにTCBの役割を作り直さずに済むようにするためである。
  * 第4章4.1では、current taskのentryだけを通常のC関数呼び出しで直接呼ぶ。
  * 第4章4.2では、そのentryがreturnしてもTCB状態を終了状態へ変更しない。
+ * 第4章4.3では、cooperative return後にRUNNINGからREADYへ戻すことで
+ * 再びscheduler候補にできるが、これはtask restartではない。
  * この直接呼び出しは一時的なboot-time verification modelであり、
  * 第5章ではcontext-switch-based executionへ置き換える前提である。
  * ただし第3章3.3では、これらのフィールドは観測用・将来接続用であり、
@@ -176,5 +182,22 @@ const tcb_t *task_get_by_index(int index);
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
  */
 int task_mark_running(int task_id);
+
+/**
+ * @brief RUNNING taskを協調実行用のREADY候補へ戻す。
+ *
+ * @details
+ * 第4章4.3のboot-time verification modelで使用する状態変更APIである。
+ * cooperative return eventを観測した後、currentとして採用されていた
+ * RUNNING taskをREADYへ戻し、再びschedulerの選択候補にする。
+ *
+ * この遷移はcooperative re-candidacyであり、task restartではない。
+ * 正式なtask終了、`yield_tsk`互換API、DORMANT遷移、コンテキストスイッチ、
+ * スタック切り替え、レジスタ保存・復元は行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_ready_from_running(int task_id);
 
 #endif

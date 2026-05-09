@@ -11,6 +11,9 @@
  * タスクは実行せず、entry関数呼び出し、コンテキスト作成、スタック初期化、
  * 割り込み、タイマは追加しない。第8回ではschedulerが読み取りアクセサ経由で
  * READYタスクを選べるようにする。
+ * 第4章4.3では、cooperative return eventを観測したRUNNING taskを
+ * READYへ戻す最小状態遷移を提供する。この遷移は再度scheduler候補に
+ * するためだけのcooperative re-candidacyであり、task restartではない。
  *
  * このファイルはkernel層に属するが、ログ出力は第6回のHAL console APIだけを使う。
  * 依存方向は kernel → HAL → arch(x86_64) → serial → COM1 である。
@@ -435,6 +438,55 @@ int task_mark_running(int task_id)
          * 入口関数呼び出し、スタック切り替え、レジスタ保存、コンテキストスイッチは行わない。
          */
         task->state = TASK_STATE_RUNNING;
+        return 0;
+    }
+
+    return TASK_ERR_NOT_FOUND;
+}
+
+/**
+ * @brief RUNNING taskを協調実行用にREADYへ戻す。
+ *
+ * @details
+ * 第4章4.3のboot-time verification modelで、entry returnを
+ * cooperative return eventとして観測した後に使用する。
+ * 対象taskがRUNNINGの場合だけREADYへ戻し、再びscheduler候補にする。
+ *
+ * これはtask restartではなく、正式なyield APIでもない。
+ * コンテキストスイッチ、スタック切り替え、レジスタ保存・復元、
+ * 割り込み、タイマ、プリエンプションは行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_ready_from_running(int task_id)
+{
+    int index;
+
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        if (task->id != task_id) {
+            continue;
+        }
+
+        /*
+         * 4.3のcooperative re-candidacyはRUNNINGからREADYだけを許す。
+         * DORMANTや終了状態への遷移、task restartはここでは扱わない。
+         */
+        if (task->state != TASK_STATE_RUNNING) {
+            return TASK_ERR_BAD_STATE;
+        }
+
+        task->state = TASK_STATE_READY;
         return 0;
     }
 
