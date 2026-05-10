@@ -54,6 +54,7 @@ The current implementation covers the following milestones:
 | 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
+| 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -131,6 +132,17 @@ Chapter 5 Section 5.1 adds task stack foundation metadata:
 * The kernel still does not load `stack_top` into CPU RSP.
 * Task entries still run through the existing direct normal C function call
   model from Chapter 4.
+
+Chapter 5 Section 5.2 adds a per-task register save area:
+
+* `task_context_t` defines the prepared x86_64 register save area.
+* The TCB stores `context` with `rsp`, `rbp`, `rbx`, `r12`, `r13`, `r14`, and `r15`.
+* `context.rsp` is initialized from `stack_top` as a future restore candidate.
+* Other context fields are initialized to zero.
+* Registration logs and task dump logs show each task's context metadata.
+* This is still a save-area preparation step only.
+* The kernel still does not save live CPU registers, restore CPU registers,
+  switch stacks, or load `context.rsp` into CPU RSP.
 
 ---
 
@@ -239,6 +251,12 @@ task. The serial log shows `stack_base`, `stack_size`, and `stack_top` for
 each task, and the stack ranges are separate. This is still metadata only:
 the kernel does not switch stacks or load `stack_top` into CPU RSP.
 
+Chapter 5 Section 5.2 registers a prepared register save area for each task.
+The serial log shows `context.rsp`, `context.rbp`, `context.rbx`,
+`context.r12`, `context.r13`, `context.r14`, and `context.r15`. `context.rsp`
+matches the task's `stack_top`, but it is still metadata only and is not loaded
+into CPU RSP.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -280,16 +298,16 @@ itron-rtos booting...
 kernel_main reached
 [kernel] task init
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY prio=5 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] registered: id=1 name=task_a state=READY prio=5 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] registered: id=2 name=task_b state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] registered: id=3 name=task_c state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
-[task] id=2 name=task_b prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
-[task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] id=1 name=task_a prio=5 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 [cooperative] iteration=1 begin
@@ -318,6 +336,9 @@ or preemptive execution.
 
 The `stack_top` values shown in Chapter 5 Section 5.1 are observable
 foundation data only. They are not used as active CPU stack pointers yet.
+Chapter 5 Section 5.2 additionally shows `context.rsp` values that correspond
+to `stack_top`. These values are prepared register save-area metadata only;
+the kernel still does not save or restore live CPU register values.
 
 ### Clean
 
@@ -394,6 +415,9 @@ The current kernel includes:
 * Stack information storage (`stack_base`, `stack_size`, `stack_top`)
 * Per-task static stack regions for boot-time observation
 * Stack metadata logs for registration and dump output
+* Per-task register save area (`task_context_t`) in the TCB
+* Register save-area initialization from stack metadata
+* Register save-area logs for registration and dump output
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
 
 ---
@@ -406,12 +430,14 @@ The following features are intentionally not implemented yet:
 * RUNNING as CPU execution state
 * Independent task stack execution
 * Context switch
+* CPU register save / restore
 * Timer interrupt
 * Preemption
 * `yield_tsk` compatible API
 * Dynamic memory allocation
 * Stack switching
 * Stack frame initialization
+* Loading `context.rsp` into CPU RSP
 * Formal task termination state
 * `TASK_STATE_EXITED`
 * Task restart
@@ -568,6 +594,7 @@ See the LICENSE file for details.
 * [x] Scheduler
 * [x] Task entry handling
 * [x] Task stack foundation
+* [x] Register save area
 * [ ] Semaphore
 * [ ] Timer / interrupt
 
@@ -602,6 +629,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
+| 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 
 ---
 

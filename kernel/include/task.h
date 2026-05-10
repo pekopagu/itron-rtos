@@ -31,6 +31,30 @@
 typedef void (*task_entry_t)(void);
 
 /**
+ * @struct task_context_t
+ * @brief 将来のx86_64最小context switchで使うregister保存領域。
+ *
+ * @details
+ * 第5章5.2では、taskごとに保存領域を準備しTCB上で観測できるようにするだけで、
+ * 実CPU register値の保存・復元は行わない。`rsp` は第5章5.1で導入した
+ * `stack_top` をもとにした将来の復元候補であり、現段階ではCPUのRSPへロードしない。
+ *
+ * callee-saved register相当の値を明示的に並べることで、第5章5.3以降の
+ * 最小context switch実装時に、どの値を保存領域として扱うかを追跡しやすくする。
+ * ただし、この構造体の存在はstack switch、assembler dispatch、interrupt、
+ * timer、preemption、task stack上でのentry実行を意味しない。
+ */
+typedef struct {
+    unsigned long rsp; /**< 将来のstack pointer復元候補。第5章5.2ではCPU RSPへロードしない。 */
+    unsigned long rbp; /**< 将来保存対象にするbase pointer領域。現段階では実register値ではない。 */
+    unsigned long rbx; /**< 将来保存対象にする汎用register領域。現段階では実register値ではない。 */
+    unsigned long r12; /**< 将来保存対象にするcallee-saved register領域。現段階では実register値ではない。 */
+    unsigned long r13; /**< 将来保存対象にするcallee-saved register領域。現段階では実register値ではない。 */
+    unsigned long r14; /**< 将来保存対象にするcallee-saved register領域。現段階では実register値ではない。 */
+    unsigned long r15; /**< 将来保存対象にするcallee-saved register領域。現段階では実register値ではない。 */
+} task_context_t;
+
+/**
  * @enum task_state_t
  * @brief タスク管理テーブル上のタスク状態。
  *
@@ -98,6 +122,15 @@ typedef struct {
      * ロードしない。task entryも引き続きboot-timeのC stack上で直接呼び出す。
      */
     void *stack_top;
+    /**
+     * @brief taskごとのCPU register保存領域。
+     *
+     * @details
+     * 第5章5.2では `context.rsp` に `stack_top` と同じ将来復元候補を保持し、
+     * その他のregister領域を0で初期化する。これは保存領域の準備と観測であり、
+     * 実際のCPU register保存・復元、CPU RSPへのロード、stack switchは行わない。
+     */
+    task_context_t context;
 } tcb_t;
 
 /**

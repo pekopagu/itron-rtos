@@ -132,6 +132,83 @@ static void *task_calculate_stack_top(void *stack_base, unsigned long stack_size
 }
 
 /**
+ * @brief task context保存領域を未使用状態へ初期化する。
+ *
+ * @details
+ * task_table全体の初期化で使う。すべてのregister保存領域を0へ戻し、
+ * 前回起動や前回登録の観測値が残らないようにする。
+ *
+ * @param context 初期化対象のcontext保存領域。
+ * @return なし。
+ * @note 実CPU registerを読み取らず、保存・復元も行わない。
+ */
+static void task_clear_context(task_context_t *context)
+{
+    if (context == NULL) {
+        return;
+    }
+
+    context->rsp = 0;
+    context->rbp = 0;
+    context->rbx = 0;
+    context->r12 = 0;
+    context->r13 = 0;
+    context->r14 = 0;
+    context->r15 = 0;
+}
+
+/**
+ * @brief 登録済みtask用のcontext保存領域を初期化する。
+ *
+ * @details
+ * 第5章5.2では、`rsp` に将来の復元候補としてTCBの `stack_top` を入れ、
+ * その他のregister保存領域は0にする。ここで設定した `rsp` はmetadataであり、
+ * CPUのRSPへロードしない。task entryも引き続き通常のC関数呼び出しで実行される。
+ *
+ * @param task 初期化対象の登録済みTCB。
+ * @return なし。
+ * @note stack switch、context switch、register save/restoreは行わない。
+ */
+static void task_initialize_context(tcb_t *task)
+{
+    if (task == NULL) {
+        return;
+    }
+
+    task_clear_context(&task->context);
+    task->context.rsp = (unsigned long)task->stack_top;
+}
+
+/**
+ * @brief task context保存領域をログへ出力する。
+ *
+ * @details
+ * 登録ログとdumpログで同じfield順序を保つための表示補助である。
+ * 出力される値はTCB内metadataであり、現在のCPU register値ではない。
+ *
+ * @param context 表示対象のcontext保存領域。
+ * @return なし。
+ * @note 表示専用であり、contextやCPU状態を変更しない。
+ */
+static void task_write_context(const task_context_t *context)
+{
+    hal_console_write(" context.rsp=");
+    task_write_hex(context->rsp);
+    hal_console_write(" context.rbp=");
+    task_write_hex(context->rbp);
+    hal_console_write(" context.rbx=");
+    task_write_hex(context->rbx);
+    hal_console_write(" context.r12=");
+    task_write_hex(context->r12);
+    hal_console_write(" context.r13=");
+    task_write_hex(context->r13);
+    hal_console_write(" context.r14=");
+    task_write_hex(context->r14);
+    hal_console_write(" context.r15=");
+    task_write_hex(context->r15);
+}
+
+/**
  * @brief 静的タスクテーブルから登録可能なスロットを探す。
  *
  * @details
@@ -236,6 +313,7 @@ void task_init(void)
         task_table[index].stack_base = NULL;
         task_table[index].stack_size = 0;
         task_table[index].stack_top = NULL;
+        task_clear_context(&task_table[index].context);
     }
 
     /* ID 0を無効値として残すため、最初の有効IDは1から始める。 */
@@ -296,10 +374,12 @@ int task_register(
     slot->stack_base = stack_base;
     slot->stack_size = stack_size;
     slot->stack_top = task_calculate_stack_top(stack_base, stack_size);
+    task_initialize_context(slot);
 
     /*
      * ここでは登録内容を可視化するだけで、entry関数は呼び出さない。
-     * コンテキスト作成、スタック切り替え、RSPへのstack_topロードも将来フェーズの責務として残す。
+     * context保存領域はTCB metadataとして初期化するが、CPU register保存・復元、
+     * スタック切り替え、RSPへのcontext.rspロードは将来フェーズの責務として残す。
      */
     hal_console_write("[task] registered: id=");
     task_write_int(slot->id);
@@ -317,6 +397,7 @@ int task_register(
     task_write_uint(slot->stack_size);
     hal_console_write(" stack_top=");
     task_write_hex((unsigned long)slot->stack_top);
+    task_write_context(&slot->context);
     hal_console_write("\n");
 
     return id;
@@ -364,6 +445,7 @@ void task_dump(void)
         task_write_uint(task->stack_size);
         hal_console_write(" stack_top=");
         task_write_hex((unsigned long)task->stack_top);
+        task_write_context(&task->context);
         hal_console_write("\n");
     }
 
