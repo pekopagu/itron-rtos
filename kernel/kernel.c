@@ -35,11 +35,17 @@
 #include <stddef.h>
 
 #define TASK_STACK_SIZE 1024
+#define TASK_STACK_ALIGNMENT 16
 #define KERNEL_COOPERATIVE_ENTRY_LIMIT 3UL
 
-static unsigned char task_a_stack[TASK_STACK_SIZE];
-static unsigned char task_b_stack[TASK_STACK_SIZE];
-static unsigned char task_c_stack[TASK_STACK_SIZE];
+/*
+ * 第5章5.1のtask stack foundation用の静的stack領域。
+ * 各領域はTCB metadataとして登録し、stack_top候補をログで観測するために使う。
+ * まだCPUのRSPへロードせず、task entryもこの領域上では実行しない。
+ */
+static unsigned char task_a_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_b_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_c_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。

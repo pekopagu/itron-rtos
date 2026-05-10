@@ -84,7 +84,7 @@ static void task_write_int(int value)
  * @brief 整数値をアドレス確認用の16進表記で出力する。
  *
  * @details
- * entryアドレスとstack_baseをQEMUログで確認しやすくする。
+ * entryアドレスとstack_base/stack_topをQEMUログで確認しやすくする。
  *
  * @param value 出力する値。
  * @return なし。
@@ -111,6 +111,24 @@ static void task_write_hex(unsigned long value)
             started = 1;
         }
     }
+}
+
+/**
+ * @brief 将来の初期stack pointer候補を算出する。
+ *
+ * @details
+ * x86_64のstackは下方向へ伸びる前提なので、stack領域の上端である
+ * `stack_base + stack_size` を候補値として扱う。第5章5.1ではこの値を
+ * TCBに保持してログへ出すだけで、CPUのRSPへロードしない。
+ *
+ * @param stack_base taskに割り当てられたstack領域の基底アドレス。
+ * @param stack_size stack領域のサイズ。
+ * @return 将来の初期stack pointer候補。
+ * @note 16-byte alignmentは将来のcontext switch実装で再確認する。
+ */
+static void *task_calculate_stack_top(void *stack_base, unsigned long stack_size)
+{
+    return (void *)((unsigned char *)stack_base + stack_size);
 }
 
 /**
@@ -217,6 +235,7 @@ void task_init(void)
         task_table[index].state = TASK_STATE_UNUSED;
         task_table[index].stack_base = NULL;
         task_table[index].stack_size = 0;
+        task_table[index].stack_top = NULL;
     }
 
     /* ID 0を無効値として残すため、最初の有効IDは1から始める。 */
@@ -276,10 +295,11 @@ int task_register(
     slot->state = TASK_STATE_READY;
     slot->stack_base = stack_base;
     slot->stack_size = stack_size;
+    slot->stack_top = task_calculate_stack_top(stack_base, stack_size);
 
     /*
      * ここでは登録内容を可視化するだけで、entry関数は呼び出さない。
-     * コンテキスト作成とスタック初期化も将来フェーズの責務として残す。
+     * コンテキスト作成、スタック切り替え、RSPへのstack_topロードも将来フェーズの責務として残す。
      */
     hal_console_write("[task] registered: id=");
     task_write_int(slot->id);
@@ -295,6 +315,8 @@ int task_register(
     task_write_hex((unsigned long)slot->stack_base);
     hal_console_write(" stack_size=");
     task_write_uint(slot->stack_size);
+    hal_console_write(" stack_top=");
+    task_write_hex((unsigned long)slot->stack_top);
     hal_console_write("\n");
 
     return id;
@@ -340,6 +362,8 @@ void task_dump(void)
         task_write_hex((unsigned long)task->stack_base);
         hal_console_write(" stack_size=");
         task_write_uint(task->stack_size);
+        hal_console_write(" stack_top=");
+        task_write_hex((unsigned long)task->stack_top);
         hal_console_write("\n");
     }
 

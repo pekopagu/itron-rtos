@@ -53,6 +53,7 @@ The current implementation covers the following milestones:
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
 | 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
+| 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -118,6 +119,18 @@ This is still not a real context switch. It does not switch stacks, save or
 restore registers, use interrupts, use timers, or implement preemption.
 It also does not add a `yield_tsk` compatible API, `TASK_STATE_EXITED`,
 DORMANT transition, or task restart behavior.
+
+Chapter 5 Section 5.1 adds task stack foundation metadata:
+
+* Each sample task has its own static stack region.
+* The TCB stores `stack_base`, `stack_size`, and `stack_top`.
+* `stack_top` is derived from `stack_base + stack_size` for the current
+  downward-growing x86_64 stack assumption.
+* Registration logs and task dump logs show each task's stack metadata.
+* `stack_top` is only a future initial stack pointer candidate.
+* The kernel still does not load `stack_top` into CPU RSP.
+* Task entries still run through the existing direct normal C function call
+  model from Chapter 4.
 
 ---
 
@@ -221,6 +234,11 @@ cooperative return event, and returns the task to READY as cooperative
 re-candidacy. This is still not a real context switch, and the task does not
 run on an independent task stack.
 
+Chapter 5 Section 5.1 registers stack foundation metadata for each sample
+task. The serial log shows `stack_base`, `stack_size`, and `stack_top` for
+each task, and the stack ranges are separate. This is still metadata only:
+the kernel does not switch stacks or load `stack_top` into CPU RSP.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -262,16 +280,16 @@ itron-rtos booting...
 kernel_main reached
 [kernel] task init
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY prio=5 ...
+[task] registered: id=1 name=task_a state=READY prio=5 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY prio=1 ...
+[task] registered: id=2 name=task_b state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY prio=1 ...
+[task] registered: id=3 name=task_c state=READY prio=1 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY ...
-[task] id=2 name=task_b prio=1 state=READY ...
-[task] id=3 name=task_c prio=1 state=READY ...
+[task] id=1 name=task_a prio=5 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] id=2 name=task_b prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
+[task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x...
 [task] dump end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 [cooperative] iteration=1 begin
@@ -297,6 +315,9 @@ simple fixed-priority selector, it can select `task_b` again until the finite
 entry-call limit is reached. `RUNNING` in this log is still a logical
 current-task state. It does not mean CPU context restoration, stack switching,
 or preemptive execution.
+
+The `stack_top` values shown in Chapter 5 Section 5.1 are observable
+foundation data only. They are not used as active CPU stack pointers yet.
 
 ### Clean
 
@@ -370,7 +391,9 @@ The current kernel includes:
 * RUNNING to READY cooperative re-candidacy for temporary verification
 * Finite cooperative entry-call limit
 * Monotonically increasing task IDs
-* Stack information storage (`stack_base`, `stack_size`)
+* Stack information storage (`stack_base`, `stack_size`, `stack_top`)
+* Per-task static stack regions for boot-time observation
+* Stack metadata logs for registration and dump output
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
 
 ---
@@ -544,6 +567,7 @@ See the LICENSE file for details.
 * [x] Initial task management
 * [x] Scheduler
 * [x] Task entry handling
+* [x] Task stack foundation
 * [ ] Semaphore
 * [ ] Timer / interrupt
 
@@ -577,6 +601,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
 | 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
+| 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 
 ---
 

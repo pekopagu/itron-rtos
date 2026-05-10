@@ -88,6 +88,16 @@ typedef struct {
     task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
     void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */
     unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。将来のスタック検証に使えるよう、現段階からTCBに含める。 */
+    /**
+     * @brief 将来の初期stack pointer候補。
+     *
+     * @details
+     * x86_64のstackが下方向へ伸びる前提で、現段階では
+     * `stack_base + stack_size` に対応する上端アドレスを保持する。
+     * 第5章5.1ではstack foundationの観測用metadataであり、CPUのRSPへ
+     * ロードしない。task entryも引き続きboot-timeのC stack上で直接呼び出す。
+     */
+    void *stack_top;
 } tcb_t;
 
 /**
