@@ -55,6 +55,7 @@ The current implementation covers the following milestones:
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
+| 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -143,6 +144,21 @@ Chapter 5 Section 5.2 adds a per-task register save area:
 * This is still a save-area preparation step only.
 * The kernel still does not save live CPU registers, restore CPU registers,
   switch stacks, or load `context.rsp` into CPU RSP.
+
+Chapter 5 Section 5.3 adds a minimal explicit context switch smoke path:
+
+* The boot path enters x86_64 long mode before `kernel_main`.
+* `arch_context_switch()` saves and restores `rsp`, `rbp`, `rbx`, and
+  `r12`-`r15`.
+* The kernel prepares one initial task stack frame for the selected current
+  task.
+* The smoke path switches from the boot context to the task stack, runs the
+  task entry once through a trampoline, observes entry return, and switches
+  back to the boot context.
+* Scheduler responsibility remains READY task selection.
+* Dispatcher responsibility remains current commit.
+* Timer interrupts, interrupt-handler switching, preemption, wait states,
+  semaphores, timers, and a public yield API are still not implemented.
 
 ---
 
@@ -257,6 +273,18 @@ The serial log shows `context.rsp`, `context.rbp`, `context.rbx`,
 matches the task's `stack_top`, but it is still metadata only and is not loaded
 into CPU RSP.
 
+Chapter 5 Section 5.3 adds a separate minimal context switch smoke path. The
+image is linked as an x86_64 kernel and converted to a 32-bit ELF container so
+QEMU's Multiboot `-kernel` loader can still load it. The boot stub then enters
+long mode before calling `kernel_main`.
+
+The smoke path logs the selected task, dispatcher commit, prepared task stack
+frame, the switch from boot context to task context, task entry execution on
+the prepared task stack, and the switch back to boot context. `RUNNING` is
+still a logical current-adopted state managed by the dispatcher and task module;
+this smoke does not introduce preemptive CPU ownership or a complete task
+lifecycle.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -310,6 +338,17 @@ kernel_main reached
 [task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
+[context-smoke] begin
+[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[context] prepared initial frame: task id=2 name=task_b context.rsp=0x...
+[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x...
+[context] entered task stack: task id=2 name=task_b current.rsp=0x...
+[task_b] executed
+[context] task entry returned: task id=2 name=task_b
+[context] task ready after switch entry: result=0 task id=2 name=task_b
+[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x... boot.rsp.restore=0x...
+[context] switch resumed: task=boot boot.rsp.after=0x... from id=2 name=task_b from.rsp.saved=0x...
+[context-smoke] end
 [cooperative] iteration=1 begin
 [scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
@@ -340,6 +379,12 @@ Chapter 5 Section 5.2 additionally shows `context.rsp` values that correspond
 to `stack_top`. These values are prepared register save-area metadata only;
 the kernel still does not save or restore live CPU register values.
 
+Chapter 5 Section 5.3 changes that last point for the explicit smoke path only:
+the arch switch saves and restores the minimal callee-saved x86_64 context and
+loads the prepared task `context.rsp`. The older cooperative runner remains as
+a direct C-call verification model for comparison and is still not timer-driven
+or preemptive.
+
 ### Clean
 
 ```powershell
@@ -367,6 +412,8 @@ itron-rtos/
 ├─ arch/
 │  └─ x86_64/
 │     ├─ hal_console.c
+│     ├─ context_switch.asm
+│     ├─ context_switch.h
 │     ├─ serial.c
 │     └─ serial.h
 ├─ build/
@@ -418,6 +465,9 @@ The current kernel includes:
 * Per-task register save area (`task_context_t`) in the TCB
 * Register save-area initialization from stack metadata
 * Register save-area logs for registration and dump output
+* x86_64 minimal context switch primitive
+* Boot-context to task-context switch smoke
+* Prepared initial task stack frame for the smoke path
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
 
 ---
@@ -426,18 +476,14 @@ The current kernel includes:
 
 The following features are intentionally not implemented yet:
 
-* Real task execution by context switching
+* Full task-to-task execution by context switching
 * RUNNING as CPU execution state
-* Independent task stack execution
-* Context switch
-* CPU register save / restore
+* Continuous independent task stack execution
 * Timer interrupt
 * Preemption
 * `yield_tsk` compatible API
 * Dynamic memory allocation
-* Stack switching
-* Stack frame initialization
-* Loading `context.rsp` into CPU RSP
+* Timer-driven stack switching
 * Formal task termination state
 * `TASK_STATE_EXITED`
 * Task restart
@@ -630,6 +676,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 4       | 4.3     | Cooperative execution control              | v4.3-task-cooperative-runner | Completed |
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
+| 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 
 ---
 

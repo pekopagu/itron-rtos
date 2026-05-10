@@ -4,7 +4,7 @@
 
 /**
  * @file console.h
- * @brief kernel共通部向けHAL console API（第6回）
+ * @brief kernel共通部向けHAL console API（第2章2.3）
  *
  * @details
  * kernelがログ出力を行うための抽象境界を定義する。
@@ -48,7 +48,7 @@ void hal_console_putc(char c);
  *
  * @param message 出力するNULL終端文字列。
  * @return なし。
- * @note 第6回HAL境界の中心となる文字列出力APIである。
+ * @note 第2章2.3 HAL境界の中心となる文字列出力APIである。
  */
 void hal_console_write(const char *message);
 

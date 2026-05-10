@@ -24,6 +24,17 @@
  */
 static const tcb_t *current_task;
 
+/**
+ * @brief dispatcherのcurrent task保持状態を初期化する。
+ *
+ * @details
+ * 起動直後はまだscheduler選択もcurrent commitも行われていないため、
+ * current taskを明示的にNULLへ戻す。TCB状態は変更せず、dispatcherが持つ
+ * 観測用のcurrent pointerだけを初期化する。
+ *
+ * @param なし。
+ * @return なし。
+ */
 void dispatcher_init(void)
 {
     /*
@@ -34,6 +45,17 @@ void dispatcher_init(void)
     current_task = NULL;
 }
 
+/**
+ * @brief schedulerが選択したREADY taskをcurrent taskとして確定する。
+ *
+ * @details
+ * この関数はREADYからRUNNINGへの論理状態遷移とcurrent pointer更新だけを行う。
+ * task entry呼び出し、context switch、stack switch、register save/restoreは
+ * dispatcherの責務ではないため実行しない。
+ *
+ * @param selected schedulerが選択したREADY task。
+ * @return 成功時はDISPATCHER_OK、失敗時はDISPATCHER_ERR_*。
+ */
 int dispatcher_commit_current(const tcb_t *selected)
 {
     int result;
@@ -61,14 +83,17 @@ int dispatcher_commit_current(const tcb_t *selected)
      */
     result = task_mark_running(selected->id);
     if (result == TASK_ERR_NOT_FOUND) {
+        /* schedulerが返したtaskがtask table側で見つからない場合は境界不整合として扱う。 */
         return DISPATCHER_ERR_NOT_FOUND;
     }
 
     if (result == TASK_ERR_BAD_STATE) {
+        /* READY確認後に状態が変わった場合も、dispatcher側では成功扱いしない。 */
         return DISPATCHER_ERR_BAD_STATE;
     }
 
     if (result != 0) {
+        /* task層のその他errorはdispatcherの入力不正として丸める。 */
         return DISPATCHER_ERR_INVAL;
     }
 
@@ -81,7 +106,20 @@ int dispatcher_commit_current(const tcb_t *selected)
     return DISPATCHER_OK;
 }
 
+/**
+ * @brief dispatcherが保持しているcurrent taskを読み取り専用で返す。
+ *
+ * @details
+ * current taskがまだcommitされていない場合はNULLを返す。呼び出し側は返された
+ * pointerを観測用として扱い、TCB更新はtask moduleの明示的APIへ委譲する。
+ *
+ * @return current taskへの読み取り専用pointer。未設定時はNULL。
+ */
 const tcb_t *dispatcher_get_current(void)
 {
+    /*
+     * current_taskはdispatcherだけが更新する。
+     * 呼び出し側には読み取り専用pointerだけを返し、TCB変更はtask層APIへ集約する。
+     */
     return current_task;
 }

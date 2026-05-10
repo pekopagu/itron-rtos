@@ -4,18 +4,18 @@
 
 /**
  * @file task.c
- * @brief 初期タスク管理実装（第7回、第8回）
+ * @brief 初期タスク管理実装（第3章3.1、第3章3.2）
  *
  * @details
  * 最大256件の静的タスクテーブルを持ち、タスク情報の初期化、登録、dumpを提供する。
  * タスクは実行せず、entry関数呼び出し、コンテキスト作成、スタック初期化、
- * 割り込み、タイマは追加しない。第8回ではschedulerが読み取りアクセサ経由で
+ * 割り込み、タイマは追加しない。第3章3.2ではschedulerが読み取りアクセサ経由で
  * READYタスクを選べるようにする。
  * 第4章4.3では、cooperative return eventを観測したRUNNING taskを
  * READYへ戻す最小状態遷移を提供する。この遷移は再度scheduler候補に
  * するためだけのcooperative re-candidacyであり、task restartではない。
  *
- * このファイルはkernel層に属するが、ログ出力は第6回のHAL console APIだけを使う。
+ * このファイルはkernel層に属するが、ログ出力は第2章2.3のHAL console APIだけを使う。
  * 依存方向は kernel → HAL → arch(x86_64) → serial → COM1 である。
  */
 
@@ -326,7 +326,7 @@ void task_init(void)
  *
  * @details
  * 入力を検証し、空きスロットへTCBを設定する。
- * 第7回では登録確認だけを目的とするため、entry呼び出し、コンテキスト作成、
+ * 第3章3.1では登録確認だけを目的とするため、entry呼び出し、コンテキスト作成、
  * スタック初期化は行わない。
  *
  * @param name タスク名。NULLの場合はTASK_ERR_INVAL。
@@ -456,7 +456,7 @@ void task_dump(void)
  * @brief schedulerが走査できるタスクスロット数を返す。
  *
  * @details
- * 第8回のschedulerはtask_tableを直接extern参照せず、このAPIで固定長テーブルの
+ * 第3章3.2のschedulerはtask_tableを直接extern参照せず、このAPIで固定長テーブルの
  * 走査範囲だけを取得する。task_tableの所有権はこのファイルに閉じたままにする。
  *
  * @param なし。
@@ -486,6 +486,29 @@ const tcb_t *task_get_by_index(int index)
     }
 
     return &task_table[index];
+}
+
+tcb_t *task_get_mutable_by_id(int task_id)
+{
+    int index;
+
+    if (task_id <= 0) {
+        return NULL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        if (task->id == task_id) {
+            return task;
+        }
+    }
+
+    return NULL;
 }
 
 /**

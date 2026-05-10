@@ -1,0 +1,400 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * @file task_context.c
+ * @brief 第5章5.3向けのTCB-level最小context switch実装。
+ */
+
+#include <stddef.h>
+
+#include "context_switch.h"
+#include "hal/console.h"
+#include "task_context.h"
+
+extern void task_context_trampoline(void);
+
+static task_context_t boot_context;
+static tcb_t *active_task;
+
+/**
+ * @brief 符号なし整数をHAL consoleへ10進数で出力する。
+ *
+ * @details
+ * freestanding環境ではprintfを導入していないため、context switch smokeの
+ * 観測に必要な最小限の数値出力だけを行う。表示補助であり、TCBやCPU contextは
+ * 変更しない。
+ *
+ * @param value 出力する符号なし整数。
+ * @return なし。
+ */
+static void context_write_uint(unsigned long value)
+{
+    char buffer[20];
+    int index = 0;
+
+    if (value == 0) {
+        /* 0は桁分解loopでは出力されないため、特別扱いで1文字だけ出す。 */
+        hal_console_putc('0');
+        return;
+    }
+
+    /* 下位桁から取り出すため、いったん逆順でbufferへ積む。 */
+    while (value > 0) {
+        buffer[index++] = (char)('0' + (value % 10));
+        value /= 10;
+    }
+
+    /* bufferへ逆順に積んだ桁を、表示順へ戻して出力する。 */
+    while (index > 0) {
+        hal_console_putc(buffer[--index]);
+    }
+}
+
+/**
+ * @brief 符号付き整数をHAL consoleへ10進数で出力する。
+ *
+ * @details
+ * context switch wrapperの戻り値やtask idを同じ出力経路で観測するための
+ * 補助関数である。負数は先に符号を出し、絶対値部分を符号なし出力へ委譲する。
+ *
+ * @param value 出力する符号付き整数。
+ * @return なし。
+ */
+static void context_write_int(int value)
+{
+    if (value < 0) {
+        /* error codeを読みやすくするため、符号を明示してから数値を出す。 */
+        hal_console_putc('-');
+        context_write_uint((unsigned long)(-value));
+        return;
+    }
+
+    context_write_uint((unsigned long)value);
+}
+
+/**
+ * @brief register値やaddress値を16進数で出力する。
+ *
+ * @details
+ * `context.rsp` などのpointer相当値は10進数より16進数の方がstack範囲との
+ * 対応を確認しやすい。先頭の0を省略して、QEMU serial logを短く保つ。
+ *
+ * @param value 出力する値。
+ * @return なし。
+ */
+static void context_write_hex(unsigned long value)
+{
+    static const char digits[] = "0123456789abcdef";
+    int shift;
+    int started = 0;
+
+    hal_console_write("0x");
+    if (value == 0) {
+        /* 0だけは先頭0省略の結果が空になるため、明示的に出力する。 */
+        hal_console_putc('0');
+        return;
+    }
+
+    /* 上位nibbleから確認し、最初の非0以降だけを出力する。 */
+    for (shift = (int)(sizeof(unsigned long) * 8) - 4; shift >= 0; shift -= 4) {
+        unsigned long nibble = (value >> shift) & 0xFUL;
+
+        if (nibble != 0 || started) {
+            hal_console_putc(digits[nibble]);
+            started = 1;
+        }
+    }
+}
+
+/**
+ * @brief task名をlog出力用の安全な文字列として返す。
+ *
+ * @details
+ * 異常系logでもNULL pointerをHAL consoleへ渡さないようにするための
+ * 表示補助である。task状態やcontextは変更しない。
+ *
+ * @param task 表示対象task。NULLも許容する。
+ * @return 表示用の静的文字列またはTCB上のtask名。
+ */
+static const char *context_task_name(const tcb_t *task)
+{
+    if (task == NULL) {
+        return "(null)";
+    }
+
+    return (task->name != NULL) ? task->name : "(unnamed)";
+}
+
+/**
+ * @brief task識別情報をprefix付きでserial logへ出力する。
+ *
+ * @details
+ * switch元、switch先、復帰元を同じ形式で出力し、QEMU serial log上で
+ * context switchの方向を追いやすくする。表示専用であり、scheduler選択や
+ * dispatcher commitは行わない。
+ *
+ * @param label `from` や `to` など、出力する役割名。
+ * @param task 表示対象task。NULLの場合はnoneとして出力する。
+ * @return なし。
+ */
+static void context_log_task_prefix(const char *label, const tcb_t *task)
+{
+    hal_console_write(label);
+    if (task == NULL) {
+        /* 異常系でもlogの形を崩さず、対象taskなしを明示する。 */
+        hal_console_write(" none");
+        return;
+    }
+
+    hal_console_write(" id=");
+    context_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(context_task_name(task));
+}
+
+/**
+ * @brief `rsp` 相当値をlabel付きでserial logへ出力する。
+ *
+ * @details
+ * 保存前、復元対象、保存後の `context.rsp` を同じ形式で出し、stack switchの
+ * 観測点を揃えるための補助関数である。
+ *
+ * @param label 出力前に付ける説明文字列。
+ * @param rsp 出力するstack pointer値。
+ * @return なし。
+ */
+static void context_log_rsp(const char *label, unsigned long rsp)
+{
+    hal_console_write(label);
+    context_write_hex(rsp);
+}
+
+/**
+ * @brief context switch対象taskが最小条件を満たすか検証する。
+ *
+ * @details
+ * arch primitiveは低レベル境界であり、NULLや未準備stackを防御しない。
+ * C wrapper側でTCB、stack metadata、`context.rsp` を検証し、不正な入力で
+ * CPU register復元へ進まないようにする。
+ *
+ * @param task 検証対象task。
+ * @return 成功時はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+static int context_validate_task(const tcb_t *task)
+{
+    if (task == NULL || task->stack_base == NULL || task->stack_top == NULL) {
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    if (task->stack_size < 64) {
+        /* trampoline用return addressを置けないほど小さいstackは拒否する。 */
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    if (task->context.rsp == 0) {
+        /* context.rspが0のtaskは、復元先stack pointerを持たない。 */
+        return TASK_CONTEXT_ERR_BAD_STATE;
+    }
+
+    return TASK_CONTEXT_OK;
+}
+
+/**
+ * @brief 登録済みtaskのcontextに初回entry用stack frameを準備する。
+ *
+ * @details
+ * task登録時点の `context.rsp == stack_top` を、実際に `ret` できるstackへ
+ * 進める。task stack上にはtrampoline addressだけを置き、完全なtask lifecycleや
+ * 割り込み復帰frameはまだ作らない。
+ *
+ * @param task 初回frameを準備するtask。
+ * @return 成功時はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+int task_context_prepare_initial_frame(tcb_t *task)
+{
+    unsigned long stack_top;
+    unsigned long *stack_pointer;
+
+    if (context_validate_task(task) != TASK_CONTEXT_OK) {
+        hal_console_write("[context] prepare failed: invalid task\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    stack_top = (unsigned long)task->stack_top;
+    stack_top &= ~0xFUL;
+    stack_pointer = (unsigned long *)stack_top;
+
+    /*
+     * arch switchは復元されたstackへretする。初回実行taskには保存済みreturn addressが
+     * まだ存在しないため、学習用frameとしてtrampolineへ入り、entryを1回だけ呼んで
+     * bootへ切り戻す。これは実際のtask lifecycle frameより意図的に小さい。
+     */
+    stack_pointer--;
+    *stack_pointer = (unsigned long)task_context_trampoline;
+
+    /*
+     * 初回復元時のret先をstackへ積んだので、context.rspはそのreturn addressを
+     * 指す位置に更新する。r12にはtrampolineがC側へ渡すTCB pointerを置く。
+     */
+    task->context.rsp = (unsigned long)stack_pointer;
+    task->context.rbp = 0;
+    task->context.rbx = 0;
+    task->context.r12 = (unsigned long)task;
+    task->context.r13 = 0;
+    task->context.r14 = 0;
+    task->context.r15 = 0;
+
+    hal_console_write("[context] prepared initial frame:");
+    context_log_task_prefix(" task", task);
+    context_log_rsp(" context.rsp=", task->context.rsp);
+    hal_console_write("\n");
+
+    return TASK_CONTEXT_OK;
+}
+
+/**
+ * @brief task context同士を明示的に切り替える。
+ *
+ * @details
+ * switch元・先のTCBを検証し、保存前後の `context.rsp` をlogへ出したうえで
+ * arch primitiveへ委譲する。scheduler選択とdispatcher commitは呼び出し側の責務である。
+ *
+ * @param from switch元task。
+ * @param to switch先task。
+ * @return switch経路が戻った場合はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+int task_context_switch(tcb_t *from, tcb_t *to)
+{
+    unsigned long before_rsp;
+
+    if (context_validate_task(from) != TASK_CONTEXT_OK ||
+        context_validate_task(to) != TASK_CONTEXT_OK) {
+        hal_console_write("[context] switch failed: invalid task context\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    before_rsp = from->context.rsp;
+
+    /* switch前に保存前rspと復元対象rspを出し、以後の変化と比較できるようにする。 */
+    hal_console_write("[context] switch begin:");
+    context_log_task_prefix(" from", from);
+    context_log_task_prefix(" to", to);
+    context_log_rsp(" from.rsp.before=", before_rsp);
+    context_log_rsp(" to.rsp.restore=", to->context.rsp);
+    hal_console_write("\n");
+
+    arch_context_switch(&from->context, &to->context);
+
+    /*
+     * ここに戻るのは、後続のswitchで `from` が復元された後である。
+     * 保存後のrspを出力し、実際にarch primitiveがfrom contextを更新したことを観測する。
+     */
+    hal_console_write("[context] switch resumed:");
+    context_log_task_prefix(" task", from);
+    context_log_rsp(" from.rsp.before=", before_rsp);
+    context_log_rsp(" from.rsp.after=", from->context.rsp);
+    hal_console_write("\n");
+
+    return TASK_CONTEXT_OK;
+}
+
+/**
+ * @brief boot contextから準備済みtask contextへ切り替える。
+ *
+ * @details
+ * 第5章5.3のsmoke pathとして、boot stack上の実行を保存してtask stackへ入り、
+ * task側からboot contextが復元された後に戻る。timerやpreemptionは使わない。
+ *
+ * @param to switch先task。
+ * @return taskからbootへ戻った場合はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+int task_context_switch_to_task(tcb_t *to)
+{
+    if (context_validate_task(to) != TASK_CONTEXT_OK) {
+        hal_console_write("[context] boot switch failed: invalid task context\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    active_task = to;
+
+    /* boot_contextはこの時点では未保存なので、before値は0として観測される。 */
+    hal_console_write("[context] switch begin:");
+    hal_console_write(" from=boot");
+    context_log_task_prefix(" to", to);
+    context_log_rsp(" boot.rsp.before=", boot_context.rsp);
+    context_log_rsp(" to.rsp.restore=", to->context.rsp);
+    hal_console_write("\n");
+
+    arch_context_switch(&boot_context, &to->context);
+
+    /* task側からboot_contextが復元された後、保存済みtask rspを確認する。 */
+    hal_console_write("[context] switch resumed:");
+    hal_console_write(" task=boot");
+    context_log_rsp(" boot.rsp.after=", boot_context.rsp);
+    if (active_task != NULL) {
+        context_log_task_prefix(" from", active_task);
+        context_log_rsp(" from.rsp.saved=", active_task->context.rsp);
+    }
+    hal_console_write("\n");
+
+    active_task = NULL;
+    return TASK_CONTEXT_OK;
+}
+
+/**
+ * @brief trampolineから呼ばれ、task entryを1回実行してbootへ戻す。
+ *
+ * @details
+ * arch primitiveがtask stackを復元した後、trampoline経由でこの関数へ入る。
+ * entry returnは正式なtask終了ではなく、boot contextへ戻るための観測点として扱う。
+ *
+ * @param task 実行対象task。
+ * @return なし。正常系ではboot contextへswitch backする。
+ */
+void task_context_enter(tcb_t *task)
+{
+    int ready_result;
+
+    if (task == NULL || task->entry == NULL) {
+        hal_console_write("[context] task entry skipped: invalid task\n");
+        for (;;) {
+            /* 復帰先が安全に作れないため、異常系ではCPUを停止して観測可能にする。 */
+            __asm__ volatile ("hlt");
+        }
+    }
+
+    /* trampolineからtask stackへ入ったことを、entry呼び出し前に明示する。 */
+    hal_console_write("[context] entered task stack:");
+    context_log_task_prefix(" task", task);
+    context_log_rsp(" current.rsp=", task->context.rsp);
+    hal_console_write("\n");
+
+    task->entry();
+
+    /* entry returnは正式なtask終了ではなく、bootへ戻るための観測点として扱う。 */
+    hal_console_write("[context] task entry returned:");
+    context_log_task_prefix(" task", task);
+    hal_console_write("\n");
+
+    ready_result = task_mark_ready_from_running(task->id);
+    hal_console_write("[context] task ready after switch entry: result=");
+    context_write_int(ready_result);
+    context_log_task_prefix(" task", task);
+    hal_console_write("\n");
+
+    hal_console_write("[context] switch back:");
+    context_log_task_prefix(" from", task);
+    hal_console_write(" to=boot");
+    context_log_rsp(" from.rsp.before=", task->context.rsp);
+    context_log_rsp(" boot.rsp.restore=", boot_context.rsp);
+    hal_console_write("\n");
+
+    arch_context_switch(&task->context, &boot_context);
+
+    for (;;) {
+        /* 正常系ではここへ戻らない。戻った場合は制御流異常として停止する。 */
+        __asm__ volatile ("hlt");
+    }
+}

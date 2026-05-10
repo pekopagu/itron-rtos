@@ -4,16 +4,16 @@
 
 /**
  * @file task.h
- * @brief 初期タスク管理API定義（第7回、第8回）
+ * @brief 初期タスク管理API定義（第3章3.1、第3章3.2）
  *
  * @details
  * kernel層でタスクを「実行対象」ではなく「管理対象」として登録するための
  * TCB、状態、エラーコード、公開APIを定義する。
- * 第7回ではタスクを実行せず、entry関数呼び出し、コンテキスト作成、
- * スタック初期化は行わない。第8回ではREADY状態のタスクを選ぶ
+ * 第3章3.1ではタスクを実行せず、entry関数呼び出し、コンテキスト作成、
+ * スタック初期化は行わない。第3章3.2ではREADY状態のタスクを選ぶ
  * 簡易スケジューラから参照できるよう、状態と優先度を公開契約として整理する。
  *
- * ログ出力は第6回のHAL境界を守り、kernel → HAL → arch(x86_64) → serial → COM1
+ * ログ出力は第2章2.3のHAL境界を守り、kernel → HAL → arch(x86_64) → serial → COM1
  * の層構造を維持する。
  */
 
@@ -78,10 +78,10 @@ typedef struct {
  */
 typedef enum {
     TASK_STATE_UNUSED = 0, /**< 未使用スロット。空き判定はこの値だけで行う内部管理状態。 */
-    TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第8回では将来拡張用に定義のみ行う。 */
-    TASK_STATE_READY,      /**< 実行可能な状態。第8回のscheduler_select_next()が唯一の選択対象にする。 */
+    TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第3章3.2では将来拡張用に定義のみ行う。 */
+    TASK_STATE_READY,      /**< 実行可能な状態。第3章3.2のscheduler_select_next()が唯一の選択対象にする。 */
     TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。4.1/4.2/4.3ではentry直接呼び出しとreturn観測の対象だが、正式終了、独立stack実行、CPU context復元は意味しない。 */
-    TASK_STATE_WAITING,    /**< 待ち状態。第8回では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
+    TASK_STATE_WAITING,    /**< 待ち状態。第3章3.2では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
 } task_state_t;
 
 /**
@@ -151,12 +151,12 @@ void task_init(void);
  *
  * @details
  * 引数検証、空きスロット探索、ID採番、TCB設定、登録ログ出力を行う。
- * 登録直後の状態はREADYであり、第8回の簡易スケジューラの選択候補になる。
+ * 登録直後の状態はREADYであり、第3章3.2の簡易スケジューラの選択候補になる。
  * ただし、この関数はentry関数を呼ばず、実行もコンテキスト作成も行わない。
  *
  * @param name タスク名。NULLは不正。
  * @param entry タスク入口関数。NULLは不正だが、このAPIでは呼び出さない。
- * @param priority 優先度。数値が小さいほど高優先度として第8回schedulerが扱う。
+ * @param priority 優先度。数値が小さいほど高優先度として第3章3.2 schedulerが扱う。
  * @param stack_base スタック領域の基底アドレス。NULLは不正だが初期化しない。
  * @param stack_size スタック領域のサイズ。0は不正。
  * @return 成功時は1以上のタスクID。失敗時はTASK_ERR_*。
@@ -187,7 +187,7 @@ void task_dump(void);
  * @brief schedulerが走査できるタスクスロット数を返す。
  *
  * @details
- * 第8回ではschedulerがtask_tableを直接extern参照しないよう、この読み取りAPIを使う。
+ * 第3章3.2ではschedulerがtask_tableを直接extern参照しないよう、この読み取りAPIを使う。
  * 戻り値は固定長テーブルの上限であるMAX_TASKSであり、動的メモリや可変長配列は使わない。
  *
  * @param なし。
@@ -208,6 +208,21 @@ int task_get_count(void);
  * @note task_tableをextern公開しないための境界APIであり、タスク実行は行わない。
  */
 const tcb_t *task_get_by_index(int index);
+
+/**
+ * @brief 登録済みTCBをtask idで更新用に取得する。
+ *
+ * @details
+ * 第5章5.3の最小context switch smokeでは、task登録時に作った
+ * `task_context_t` に初回stack frameを準備する必要がある。schedulerは引き続き
+ * 読み取り専用 accessor だけを使い、この更新用 accessor はkernel/task-context
+ * 境界からのみ利用する。entry呼び出し、scheduler選択、dispatcher commit、
+ * 割り込み、timer、preemptionは行わない。
+ *
+ * @param task_id 登録済みtask id。0以下は不正。
+ * @return 更新対象TCBへのポインタ。見つからない場合はNULL。
+ */
+tcb_t *task_get_mutable_by_id(int task_id);
 
 /**
  * @brief 登録済みREADYタスクを論理的なRUNNING状態へ変更する。

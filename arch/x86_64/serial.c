@@ -4,7 +4,7 @@
 
 /**
  * @file serial.c
- * @brief COM1シリアル出力実装（第5回）
+ * @brief COM1シリアル出力実装（第2章2.2）
  *
  * @details
  * x86_64のI/Oポート命令を使い、COM1へ文字を送信する。
@@ -12,7 +12,7 @@
  * 最小カーネルの起動ログ確認に使う。
  *
  * このファイルは arch(x86_64) → serial → COM1 の層に位置する。
- * 第6回のHAL境界により、kernel共通部はこの実装を直接呼ばない。
+ * 第2章2.3のHAL境界により、kernel共通部はこの実装を直接呼ばない。
  */
 
 #include "serial.h"
@@ -33,6 +33,10 @@
  */
 static void outb(unsigned short port, unsigned char value)
 {
+    /*
+     * I/O port命令はCだけでは表現できないため、arch層の最小inline assemblyへ閉じ込める。
+     * 呼び出し側にはCOM1 registerの意味だけを見せ、命令形式の詳細はここで吸収する。
+     */
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
@@ -50,6 +54,11 @@ static void outb(unsigned short port, unsigned char value)
 static unsigned char inb(unsigned short port)
 {
     unsigned char value;
+
+    /*
+     * COM1のline status確認に必要な1byte読み取りだけを提供する。
+     * 入力デバイスとしてのserial受信処理は、この段階の対象外にする。
+     */
     __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
     return value;
 }
@@ -68,10 +77,24 @@ static unsigned char inb(unsigned short port)
  */
 void serial_init(void)
 {
+    /*
+     * COM1割り込みは使わず、polling送信だけに限定する。
+     * まず割り込みを無効化し、baud divisor設定のためDLABを有効にする。
+     */
     outb(COM1_PORT + 1, 0x00);
     outb(COM1_PORT + 3, 0x80);
+
+    /*
+     * divisorを3に設定して38400 baud相当にする。
+     * QEMUのserial log確認では正確な速度制御より、安定して文字が出ることを優先する。
+     */
     outb(COM1_PORT + 0, 0x03);
     outb(COM1_PORT + 1, 0x00);
+
+    /*
+     * 8bit、parityなし、stop bit 1の基本設定へ戻し、FIFOとmodem制御を有効にする。
+     * ここでも割り込みdrivenな送受信は導入しない。
+     */
     outb(COM1_PORT + 3, 0x03);
     outb(COM1_PORT + 2, 0xC7);
     outb(COM1_PORT + 4, 0x0B);
@@ -86,10 +109,14 @@ void serial_init(void)
  *
  * @param なし。
  * @return 送信可能なら非0、まだ送信できなければ0。
- * @note 第5回の最小シリアル出力として、単純なポーリングに限定する。
+ * @note 第2章2.2の最小シリアル出力として、単純なポーリングに限定する。
  */
 static int serial_can_transmit(void)
 {
+    /*
+     * Line Status RegisterのTHR Empty bitだけを見る。
+     * 送信可能になるまで待つ単純pollingのため、timeoutや割り込み復帰は扱わない。
+     */
     return (inb(COM1_PORT + 5) & 0x20) != 0;
 }
 
@@ -106,8 +133,14 @@ static int serial_can_transmit(void)
  */
 static void serial_write_raw_char(char value)
 {
+    /*
+     * 起動初期の観測用なので、送信可能になるまでbusy waitする。
+     * schedulerやtimerがない段階でも確実に1文字ずつ出すことを優先する。
+     */
     while (!serial_can_transmit()) {
     }
+
+    /* COM1 data registerへ1byteを書き込むことで、QEMU serialへ文字を流す。 */
     outb(COM1_PORT, (unsigned char)value);
 }
 
@@ -125,9 +158,14 @@ static void serial_write_raw_char(char value)
 void serial_putc(char c)
 {
     if (c == '\n') {
+        /*
+         * QEMU serial logを端末で読んだときに行頭が揃うよう、LFの前にCRを補う。
+         * 呼び出し側は通常の'\n'だけを意識すればよい。
+         */
         serial_write_raw_char('\r');
     }
 
+    /* 変換後の1文字を最下層のpolling送信へ渡す。 */
     serial_write_raw_char(c);
 }
 
@@ -145,9 +183,11 @@ void serial_putc(char c)
 void serial_write(const char *message)
 {
     if (message == 0) {
+        /* NULL messageは異常停止にせず、ログなしとして安全に無視する。 */
         return;
     }
 
+    /* printfは導入せず、NULL終端文字列を1文字ずつ送信する。 */
     while (*message != '\0') {
         serial_putc(*message);
         message++;

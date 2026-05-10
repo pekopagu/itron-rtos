@@ -4,7 +4,7 @@
 
 /**
  * @file hal_console.c
- * @brief x86_64向けHAL console実装（第6回）
+ * @brief x86_64向けHAL console実装（第2章2.3）
  *
  * @details
  * kernel共通部がarch依存のserial実装を直接呼ばないよう、
@@ -24,10 +24,14 @@
  *
  * @param なし。
  * @return なし。
- * @note 第6回のHAL境界により、移植時はこの層を差し替える。
+ * @note 第2章2.3のHAL境界により、移植時はこの層を差し替える。
  */
 void hal_console_init(void)
 {
+    /*
+     * kernel共通部から見える初期化入口はHALに限定する。
+     * 現在のx86_64実装ではCOM1 serialを初期化するだけだが、移植時はここを差し替える。
+     */
     serial_init();
 }
 
@@ -44,6 +48,10 @@ void hal_console_init(void)
  */
 void hal_console_putc(char c)
 {
+    /*
+     * 1文字出力もHAL境界を経由させることで、kernel側がserialのI/O port詳細へ
+     * 依存しないようにする。
+     */
     serial_putc(c);
 }
 
@@ -56,9 +64,13 @@ void hal_console_putc(char c)
  *
  * @param message 出力するNULL終端文字列。NULL時の扱いはserial層に従う。
  * @return なし。
- * @note 第7回のタスク管理ログもこのHAL境界を通る。
+ * @note 第3章3.1のタスク管理ログもこのHAL境界を通る。
  */
 void hal_console_write(const char *message)
 {
+    /*
+     * 文字列出力をserial実装へ委譲する。
+     * NULL処理や改行処理はserial層に集約し、HALは依存方向だけを保つ。
+     */
     serial_write(message);
 }

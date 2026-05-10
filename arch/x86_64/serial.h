@@ -4,12 +4,12 @@
 
 /**
  * @file serial.h
- * @brief x86_64向けシリアル出力API定義（第5回）
+ * @brief x86_64向けシリアル出力API定義（第2章2.2）
  *
  * @details
  * COM1を使用したシリアル出力のarch依存APIを宣言する。
  * このヘッダは arch(x86_64) 層に属し、HAL実装から利用される。
- * kernel共通部は第6回のHAL境界により、このヘッダを直接参照しない。
+ * kernel共通部は第2章2.3のHAL境界により、このヘッダを直接参照しない。
  *
  * 層構造は kernel → HAL → arch(x86_64) → serial → COM1 である。
  */
@@ -22,7 +22,7 @@
  *
  * @details
  * QEMUの `-serial stdio` で起動ログを確認できるよう、COM1の基本設定を行う。
- * 第5回のシリアルAPIとして提供され、第6回以降はHAL実装から呼び出される。
+ * 第2章2.2のシリアルAPIとして提供され、第2章2.3以降はHAL実装から呼び出される。
  *
  * @param なし。
  * @return なし。
@@ -48,11 +48,11 @@ void serial_putc(char c);
  *
  * @details
  * 文字列を1文字ずつ `serial_putc()` に渡す。
- * 第5回ではprintfを導入せず、最小の文字列出力に限定している。
+ * 第2章2.2ではprintfを導入せず、最小の文字列出力に限定している。
  *
  * @param message 送信するNULL終端文字列。NULLの場合は何もしない。
  * @return なし。
- * @note kernel共通部は第6回のHAL console APIを通じて間接的に利用する。
+ * @note kernel共通部は第2章2.3のHAL console APIを通じて間接的に利用する。
  */
 void serial_write(const char *message);
 

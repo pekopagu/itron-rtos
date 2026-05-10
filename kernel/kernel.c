@@ -4,14 +4,14 @@
 
 /**
  * @file kernel.c
- * @brief 最小kernel起動と初期タスク登録・簡易scheduler確認（第4回、第6回、第7回、第8回）
+ * @brief 最小kernel起動と初期タスク登録・簡易scheduler確認（第2章2.1、第2章2.3、第3章3.1、第3章3.2）
  *
  * @details
- * 第4回の最小kernel起動点として `kernel_main()` を提供し、
- * 第6回のHAL console APIだけを通じてログ出力を行う。
- * 第7回では、タスクを実行せずに `task_init()`、`task_register()`、
+ * 第2章2.1の最小kernel起動点として `kernel_main()` を提供し、
+ * 第2章2.3のHAL console APIだけを通じてログ出力を行う。
+ * 第3章3.1では、タスクを実行せずに `task_init()`、`task_register()`、
  * `task_dump()` を呼び出し、QEMUシリアルログで登録状態を確認する。
- * 第8回では `scheduler_select_next()` でREADYタスクを1つ選択し、
+ * 第3章3.2では `scheduler_select_next()` でREADYタスクを1つ選択し、
  * 選択結果だけをHAL console経由で表示する。entry関数は呼び出さない。
  * 第4章4.1では、dispatcherでcurrentとしてcommit済みのタスクについて、
  * entryを通常のC関数呼び出しとして1回だけ直接呼び出す。
@@ -31,6 +31,7 @@
 #include "dispatcher.h"
 #include "scheduler.h"
 #include "task.h"
+#include "task_context.h"
 
 #include <stddef.h>
 
@@ -402,6 +403,59 @@ static void kernel_log_cooperative_stop(const char *reason)
 }
 
 /**
+ * @brief 第5章5.3の最小context switch smokeを1回だけ実行する。
+ *
+ * @details
+ * schedulerはREADY task選択だけ、dispatcherはcurrent commitだけを担当する。
+ * このhelperはcommit済みtaskのcontextを初回stack frameとして準備し、boot
+ * contextからそのtask contextへ明示的にswitchする。task entryは復元された
+ * task stack上のtrampolineから1回呼ばれ、return後にboot contextへ戻る。
+ *
+ * これはtimer interrupt、preemption、割り込みハンドラ連携、yield API、
+ * 本格task lifecycleを導入しないためのboot-time verification modelである。
+ *
+ * @param selected schedulerが選択したREADY task。
+ * @return 成功時は0、失敗時は負の値。
+ */
+static int kernel_run_minimal_context_switch_smoke(const tcb_t *selected)
+{
+    tcb_t *current_task;
+    int commit_result;
+    int prepare_result;
+    int switch_result;
+
+    hal_console_write("[context-smoke] begin\n");
+
+    commit_result = dispatcher_commit_current(selected);
+    kernel_log_dispatcher_commit_result(commit_result);
+    if (commit_result != DISPATCHER_OK) {
+        hal_console_write("[context-smoke] stop: reason=commit-failed\n");
+        return commit_result;
+    }
+
+    current_task = task_get_mutable_by_id(selected->id);
+    if (current_task == NULL) {
+        hal_console_write("[context-smoke] stop: reason=current-not-found\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    prepare_result = task_context_prepare_initial_frame(current_task);
+    if (prepare_result != TASK_CONTEXT_OK) {
+        hal_console_write("[context-smoke] stop: reason=prepare-failed\n");
+        return prepare_result;
+    }
+
+    switch_result = task_context_switch_to_task(current_task);
+    if (switch_result != TASK_CONTEXT_OK) {
+        hal_console_write("[context-smoke] stop: reason=switch-failed\n");
+        return switch_result;
+    }
+
+    hal_console_write("[context-smoke] end\n");
+    return 0;
+}
+
+/**
  * @brief entryを呼ばない理由をHAL consoleへ出力する。
  *
  * @details
@@ -540,7 +594,7 @@ static void kernel_run_cooperative_entries(void)
  * @brief サンプルタスクAのentry関数。
  *
  * @details
- * 第7回ではentry関数を登録するだけで呼び出さない。
+ * 第3章3.1ではentry関数を登録するだけで呼び出さない。
  * 第4章4.1ではcurrentとしてcommitされた場合だけ、boot-time verification modelとして
  * 通常のC関数呼び出しで実行される。
  *
@@ -561,7 +615,7 @@ static void task_a(void)
  * @brief サンプルタスクBのentry関数。
  *
  * @details
- * 第7回ではentry関数を登録するだけで呼び出さない。
+ * 第3章3.1ではentry関数を登録するだけで呼び出さない。
  * 第4章4.1では、優先度選択とcurrent commit後にboot-time verification modelとして
  * 通常のC関数呼び出しで1回だけ実行対象になる。
  *
@@ -582,14 +636,14 @@ static void task_b(void)
  * @brief サンプルタスクCのentry関数。
  *
  * @details
- * 第8回の同一priority確認用に登録するだけの関数である。
+ * 第3章3.2の同一priority確認用に登録するだけの関数である。
  * schedulerはTCBを選択するだけで、このentryを呼び出さない。
  * 第4章4.1でも、schedulerが選択しdispatcherがcommitしたcurrentだけが
  * kernel.cのboot-time verification helperから直接呼ばれる。
  *
  * @param なし。
  * @return なし。
- * @note このログが出た場合は、第8回の「選択のみ」制約に反している。
+ * @note このログが出た場合は、第3章3.2の「選択のみ」制約に反している。
  */
 static void task_c(void)
 {
@@ -674,11 +728,20 @@ void kernel_main(void)
     task_dump();
 
     /*
-     * 第8回では「どのタスクが次に実行対象になるか」を選ぶだけで、
+     * 第3章3.2では「どのタスクが次に実行対象になるか」を選ぶだけで、
      * 選択されたentry関数を呼び出したりRUNNINGへ遷移させたりしない。
      */
     selected_task = scheduler_select_next();
     kernel_log_scheduler_selection("after_register", selected_task);
+
+    /*
+     * 第5章5.3では、timer/preemptionなしの明示的な最小context switch経路を
+     * 1回だけ確認する。既存のcooperative runnerは後続の比較用に残すが、
+     * このsmokeではboot contextからtask stackへ入り、entry return後にbootへ戻る。
+     */
+    if (selected_task != NULL) {
+        (void)kernel_run_minimal_context_switch_smoke(selected_task);
+    }
 
     /*
      * 第4章4.3では、cooperative runner側でREADY選択、current commit、
