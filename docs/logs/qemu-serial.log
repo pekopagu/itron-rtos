@@ -2,28 +2,45 @@ itron-rtos booting...
 kernel_main reached
 [kernel] task init
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY prio=5 entry=0x101320 stack_base=0x10d000 stack_size=1024 stack_top=0x10d400 context.rsp=0x10d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x101330 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY prio=1 entry=0x1013a0 stack_base=0x10d400 stack_size=1024 stack_top=0x10d800 context.rsp=0x10d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x1013b0 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY prio=1 entry=0x1013c0 stack_base=0x10d800 stack_size=1024 stack_top=0x10dc00 context.rsp=0x10dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x1013d0 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY entry=0x101320 stack_base=0x10d000 stack_size=1024 stack_top=0x10d400 context.rsp=0x10d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY entry=0x1013a0 stack_base=0x10d400 stack_size=1024 stack_top=0x10d800 context.rsp=0x10d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY entry=0x1013c0 stack_base=0x10d800 stack_size=1024 stack_top=0x10dc00 context.rsp=0x10dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101330 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x1013b0 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x1013d0 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
+[sem-smoke] begin
+[sem] table initialized
+[sem] initialized: id=1 name=sem_a count=1 max_count=1
+[sem] wai_sem: task id=2 name=task_b sem id=1 name=sem_a count_before=1 count_after=0 result=ok
+[sem] wai_sem: task id=3 name=task_c sem id=1 name=sem_a count_before=0 result=waiting
+[task] waiting: id=3 name=task_c wait_sem_id=1 state=WAITING
+[sem] sig_sem: sem id=1 name=sem_a count_before=0 result=wakeup task id=3 name=task_c
+[task] ready: id=3 name=task_c state=READY wait_sem_id=0
+[task] dump start
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101330 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x1013b0 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x1013d0 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] dump end
+[sem] dump start
+[sem] id=1 name=sem_a count=0 max_count=1
+[sem] dump end
+[sem-smoke] end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 [context-smoke] begin
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
-[context] prepared initial frame: task id=2 name=task_b context.rsp=0x10d7f8
-[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x10d7f8
-[context] entered task stack: task id=2 name=task_b current.rsp=0x10d7f8
+[context] prepared initial frame: task id=2 name=task_b context.rsp=0x10e7f8
+[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x10e7f8
+[context] entered task stack: task id=2 name=task_b current.rsp=0x10e7f8
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
 [context] task ready after switch entry: result=0 task id=2 name=task_b
-[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x10d7f8 boot.rsp.restore=0x10cf68
-[context] switch resumed: task=boot boot.rsp.after=0x10cf68 from id=2 name=task_b from.rsp.saved=0x10d7d8
+[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x10e7f8 boot.rsp.restore=0x10df68
+[context] switch resumed: task=boot boot.rsp.after=0x10df68 from id=2 name=task_b from.rsp.saved=0x10e7d8
 [context-smoke] end
 [cooperative] iteration=1 begin
 [scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY

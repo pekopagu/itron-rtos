@@ -30,6 +30,7 @@
 #include "hal/console.h"
 #include "dispatcher.h"
 #include "scheduler.h"
+#include "semaphore.h"
 #include "task.h"
 #include "task_context.h"
 
@@ -591,6 +592,62 @@ static void kernel_run_cooperative_entries(void)
 }
 
 /**
+ * @brief 第6章6.1のセマフォ基盤smoke sequenceを実行する。
+ *
+ * @details
+ * 静的セマフォを作成し、countが残る取得、count不足によるWAITING遷移、
+ * sig_sem相当操作による1 task wakeup、task/semaphore dumpを観測する。
+ * この検証はtimer、timeout、preemption、interrupt、wait queueとは接続しない。
+ * WAITING taskはこのhelper内でREADYへ戻してから既存のminimal context switch
+ * smoke pathへ進むため、後続のscheduler/cooperative runnerの前提を壊さない。
+ *
+ * @param task_b_id wai_sem成功確認に使うtask id。
+ * @param task_c_id WAITING遷移確認に使うtask id。
+ */
+static void kernel_run_semaphore_smoke(int task_b_id, int task_c_id)
+{
+    int sem_a_id;
+
+    hal_console_write("[sem-smoke] begin\n");
+    /*
+     * セマフォtableだけを初期化する。task tableやscheduler状態には触れず、
+     * 「同期機構の台帳を起動時に用意する」観測点として分離する。
+     */
+    (void)sem_init();
+
+    /*
+     * count=1/max=1の単純なセマフォに固定することで、
+     * 1回目のwai_semは成功、2回目のwai_semはWAITINGという流れを確実に作る。
+     */
+    sem_a_id = sem_create("sem_a", 1, 1);
+    if (sem_a_id < 0) {
+        hal_console_write("[sem-smoke] stop: reason=create-failed\n");
+        return;
+    }
+
+    /*
+     * task_bでcountを消費し、task_cでcount==0の待ち入りを観測する。
+     * これは本格的なtask間同期ではなく、boot-timeの状態遷移確認である。
+     */
+    (void)wai_sem(sem_a_id, task_b_id);
+    (void)wai_sem(sem_a_id, task_c_id);
+
+    /*
+     * sig_semでtask_cをREADYへ戻す。後続のminimal context switch smokeと
+     * cooperative runnerにWAITING taskを残さないため、このhelper内で復帰まで行う。
+     */
+    (void)sig_sem(sem_a_id);
+
+    /*
+     * task dumpとsemaphore dumpを続けて出すことで、wait_sem_idが0へ戻ったことと
+     * セマフォcount/max_countが維持されていることを同じQEMUログで確認できる。
+     */
+    task_dump();
+    sem_dump();
+    hal_console_write("[sem-smoke] end\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -726,6 +783,13 @@ void kernel_main(void)
 
     /* 登録済みTCBだけを表示し、UNUSEDスロットは表示されないことを確認する。 */
     task_dump();
+
+    /*
+     * 第6章6.1では、セマフォのcount変化とWAITING遷移をboot-time verification
+     * modelとして観測する。sig_semでWAITING taskをREADYへ戻してから既存の
+     * minimal-context-switch smoke pathへ進むため、後続のログ順序を壊さない。
+     */
+    kernel_run_semaphore_smoke(task_b_id, task_c_id);
 
     /*
      * 第3章3.2では「どのタスクが次に実行対象になるか」を選ぶだけで、

@@ -56,6 +56,7 @@ The current implementation covers the following milestones:
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
+| 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -159,6 +160,19 @@ Chapter 5 Section 5.3 adds a minimal explicit context switch smoke path:
 * Dispatcher responsibility remains current commit.
 * Timer interrupts, interrupt-handler switching, preemption, wait states,
   semaphores, timers, and a public yield API are still not implemented.
+
+Chapter 6 Section 6.1 adds the semaphore foundation:
+
+* `semaphore_t` stores `id`, `name`, `count`, and `max_count`.
+* Semaphores are managed in a static semaphore table.
+* `sem_create()` initializes a semaphore and logs its initial state.
+* `wai_sem()` decrements `count` when a resource is available.
+* When `count == 0`, `wai_sem()` moves the target task to `WAITING`.
+* The TCB stores `wait_sem_id` so semaphore wait state can be observed.
+* `sig_sem()` wakes one waiting task as a minimal boot-time model.
+* `sem_dump()` logs semaphore `count` and `max_count`.
+* This does not implement timer integration, timeout waits, preemption,
+  interrupts, FIFO/priority wait queues, mutexes, or full μITRON compatibility.
 
 ---
 
@@ -285,6 +299,13 @@ still a logical current-adopted state managed by the dispatcher and task module;
 this smoke does not introduce preemptive CPU ownership or a complete task
 lifecycle.
 
+Chapter 6 Section 6.1 adds a semaphore smoke sequence before the existing
+minimal context switch smoke path. The kernel creates `sem_a`, lets `task_b`
+consume the initial count, moves `task_c` to `WAITING` on the second
+`wai_sem()`, and then wakes `task_c` with `sig_sem()`. The waiting task is
+returned to READY before the context switch smoke and cooperative runner
+continue, so the existing execution-order checks remain intact.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -337,6 +358,18 @@ kernel_main reached
 [task] id=2 name=task_b prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
+[sem-smoke] begin
+[sem] table initialized
+[sem] initialized: id=1 name=sem_a count=1 max_count=1
+[sem] wai_sem: task id=2 name=task_b sem id=1 name=sem_a count_before=1 count_after=0 result=ok
+[sem] wai_sem: task id=3 name=task_c sem id=1 name=sem_a count_before=0 result=waiting
+[task] waiting: id=3 name=task_c wait_sem_id=1 state=WAITING
+[sem] sig_sem: sem id=1 name=sem_a count_before=0 result=wakeup task id=3 name=task_c
+[task] ready: id=3 name=task_c state=READY wait_sem_id=0
+[sem] dump start
+[sem] id=1 name=sem_a count=0 max_count=1
+[sem] dump end
+[sem-smoke] end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 [context-smoke] begin
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
@@ -385,6 +418,12 @@ loads the prepared task `context.rsp`. The older cooperative runner remains as
 a direct C-call verification model for comparison and is still not timer-driven
 or preemptive.
 
+Chapter 6 Section 6.1 adds semaphore logs for `sem_a`. `task_b` consumes the
+only available count, `task_c` enters `WAITING` with `wait_sem_id=1`, and
+`sig_sem()` returns it to READY. The semaphore smoke is still a boot-time
+verification model and does not introduce timer-based blocking, preemption,
+interrupt-driven scheduling, or a real wait queue.
+
 ### Clean
 
 ```powershell
@@ -402,9 +441,11 @@ itron-rtos/
 ├─ boot/
 ├─ kernel/
 │  ├─ kernel.c
+│  ├─ semaphore.c
 │  ├─ task.c
 │  ├─ scheduler.c
 │  └─ include/
+│     ├─ semaphore.h
 │     ├─ task.h
 │     ├─ scheduler.h
 │     └─ hal/
@@ -469,6 +510,14 @@ The current kernel includes:
 * Boot-context to task-context switch smoke
 * Prepared initial task stack frame for the smoke path
 * Boot-time task registration, dump, scheduler selection, and current commit confirmation
+* Semaphore foundation with static semaphore table
+* `semaphore_t` with `id`, `name`, `count`, and `max_count`
+* `sem_create()`
+* `wai_sem()`
+* `sig_sem()`
+* `sem_dump()`
+* TCB `wait_sem_id` for observable semaphore waits
+* WAITING to READY semaphore wakeup for one waiting task
 
 ---
 
@@ -484,6 +533,12 @@ The following features are intentionally not implemented yet:
 * `yield_tsk` compatible API
 * Dynamic memory allocation
 * Timer-driven stack switching
+* Timeout wait (`twai_sem`)
+* Polling semaphore wait (`pol_sem`)
+* FIFO or priority semaphore wait queue
+* Timer-integrated semaphore blocking
+* Mutex
+* Event flag
 * Formal task termination state
 * `TASK_STATE_EXITED`
 * Task restart
@@ -641,7 +696,7 @@ See the LICENSE file for details.
 * [x] Task entry handling
 * [x] Task stack foundation
 * [x] Register save area
-* [ ] Semaphore
+* [x] Semaphore foundation
 * [ ] Timer / interrupt
 
 ---
@@ -677,6 +732,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 5       | 5.1     | Task stack foundation                      | v5.1-task-stack-foundation  | Completed |
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
+| 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 
 ---
 

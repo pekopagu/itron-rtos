@@ -310,6 +310,7 @@ void task_init(void)
         task_table[index].entry = NULL;
         task_table[index].priority = 0;
         task_table[index].state = TASK_STATE_UNUSED;
+        task_table[index].wait_sem_id = 0;
         task_table[index].stack_base = NULL;
         task_table[index].stack_size = 0;
         task_table[index].stack_top = NULL;
@@ -371,6 +372,7 @@ int task_register(
     slot->priority = priority;
     /* 登録済みだが未実行のタスクとして、将来のスケジューラ候補にしやすいREADYへ置く。 */
     slot->state = TASK_STATE_READY;
+    slot->wait_sem_id = 0;
     slot->stack_base = stack_base;
     slot->stack_size = stack_size;
     slot->stack_top = task_calculate_stack_top(stack_base, stack_size);
@@ -387,6 +389,8 @@ int task_register(
     hal_console_write(slot->name);
     hal_console_write(" state=");
     hal_console_write(task_state_to_string(slot->state));
+    hal_console_write(" wait_sem_id=");
+    task_write_int(slot->wait_sem_id);
     hal_console_write(" prio=");
     task_write_int(slot->priority);
     hal_console_write(" entry=");
@@ -437,6 +441,8 @@ void task_dump(void)
         task_write_int(task->priority);
         hal_console_write(" state=");
         hal_console_write(task_state_to_string(task->state));
+        hal_console_write(" wait_sem_id=");
+        task_write_int(task->wait_sem_id);
         hal_console_write(" entry=");
         task_write_hex((unsigned long)task->entry);
         hal_console_write(" stack_base=");
@@ -486,6 +492,37 @@ const tcb_t *task_get_by_index(int index)
     }
 
     return &task_table[index];
+}
+
+const tcb_t *task_get_by_id(int task_id)
+{
+    int index;
+
+    /*
+     * task_idは1以上だけを有効にする。0は未使用・無効値として扱うため、
+     * semaphore moduleが誤って待ちなしIDを渡してもTCBへ到達しない。
+     */
+    if (task_id <= 0) {
+        return NULL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        const tcb_t *task = &task_table[index];
+
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        /*
+         * 読み取り専用APIなので、見つかったTCBをそのまま返すだけにする。
+         * 状態変更はtask_mark_*系APIへ集約し、呼び出し側の責務を限定する。
+         */
+        if (task->id == task_id) {
+            return task;
+        }
+    }
+
+    return NULL;
 }
 
 tcb_t *task_get_mutable_by_id(int task_id)
@@ -616,6 +653,162 @@ int task_mark_ready_from_running(int task_id)
         }
 
         task->state = TASK_STATE_READY;
+        return 0;
+    }
+
+    return TASK_ERR_NOT_FOUND;
+}
+
+/**
+ * @brief セマフォ待ちによるWAITING遷移をtask module内で実行する。
+ *
+ * @details
+ * 第6章6.1ではWAITINGを観測可能な最小状態として扱う。ここではTCBのstateと
+ * wait_sem_idだけを更新し、wait queue、timeout、timer、preemption、interrupt、
+ * context switch連携は行わない。
+ *
+ * @param task_id 対象task id。
+ * @param sem_id 待ち対象セマフォID。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_waiting_on_sem(int task_id, int sem_id)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /*
+     * sem_id==0は「待ちなし」を表す値としてTCBに使うため、
+     * WAITING遷移の待ち対象としては受け付けない。
+     */
+    if (task_id <= 0 || sem_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * 第6章6.1ではREADYまたはRUNNINGからの観測用待ち入りだけを許す。
+     * DORMANTや既にWAITINGのtaskを重ねて待たせる設計は、wait queue導入時に扱う。
+     */
+    if (task->state != TASK_STATE_READY && task->state != TASK_STATE_RUNNING) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * ここで初めてTCBを更新する。semaphore moduleではなくtask moduleに閉じることで、
+     * schedulerやdispatcherが参照するstateの所有権を分散させない。
+     */
+    task->state = TASK_STATE_WAITING;
+    task->wait_sem_id = sem_id;
+
+    hal_console_write("[task] waiting: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" wait_sem_id=");
+    task_write_int(task->wait_sem_id);
+    hal_console_write(" state=");
+    hal_console_write(task_state_to_string(task->state));
+    hal_console_write("\n");
+
+    return 0;
+}
+
+/**
+ * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
+ *
+ * @details
+ * sig_sem側がwakeupログを先に組み立てるための探索APIである。
+ * task状態は変更しない。wait queue未導入のため、探索順はtask table順であり、
+ * FIFO順や優先度順を意味しない。
+ *
+ * @param sem_id 対象セマフォID。
+ * @return 見つかったWAITING task。対象なしや不正入力はNULL。
+ */
+const tcb_t *task_find_waiting_on_sem(int sem_id)
+{
+    int index;
+
+    if (sem_id <= 0) {
+        return NULL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        const tcb_t *task = &task_table[index];
+
+        /*
+         * wait_sem_idだけではなくstateも確認する。
+         * READY taskに古いwait_sem_idが残るような不整合が将来起きても、
+         * wakeup候補として誤認しないためである。
+         */
+        if (task->state == TASK_STATE_WAITING && task->wait_sem_id == sem_id) {
+            return task;
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief 指定セマフォを待つtaskを1件だけREADYへ戻す。
+ *
+ * @details
+ * wait queueをまだ持たない第6章6.1の最小wakeupである。task tableの走査順で
+ * 最初に見つかったtaskだけをREADYへ戻すため、FIFO順や優先度順は保証しない。
+ * 将来のwait queue導入時にはこの探索境界を置き換える。
+ *
+ * @param sem_id 対象セマフォID。
+ * @param woken_task_id wakeupしたtask idの格納先。NULLも許容する。
+ * @return wakeup成功時は0。対象なしや不正入力は負のTASK_ERR_*値。
+ */
+int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
+{
+    int index;
+
+    /*
+     * sem_id==0は待ちなしを表す予約値なので、wakeup対象として扱わない。
+     */
+    if (sem_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        if (task->state != TASK_STATE_WAITING) {
+            continue;
+        }
+
+        if (task->wait_sem_id != sem_id) {
+            continue;
+        }
+
+        /*
+         * 第6章6.1のwakeupは「最初に見つかった1件だけ」をREADYへ戻す。
+         * ここにはFIFO/priorityの意味を持たせず、将来wait queueで置き換える。
+         */
+        task->state = TASK_STATE_READY;
+        task->wait_sem_id = 0;
+
+        /*
+         * 呼び出し側がwakeup対象を追加ログや検証に使えるようIDを返す。
+         * NULLは許容し、READY遷移そのものは常に実行する。
+         */
+        if (woken_task_id != NULL) {
+            *woken_task_id = task->id;
+        }
+
+        hal_console_write("[task] ready: id=");
+        task_write_int(task->id);
+        hal_console_write(" name=");
+        hal_console_write(task->name);
+        hal_console_write(" state=");
+        hal_console_write(task_state_to_string(task->state));
+        hal_console_write(" wait_sem_id=");
+        task_write_int(task->wait_sem_id);
+        hal_console_write("\n");
+
         return 0;
     }
 

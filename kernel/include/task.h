@@ -110,6 +110,7 @@ typedef struct {
     task_entry_t entry;        /**< 将来の実行開始で使う入口関数。4.1/4.2ではcurrent/RUNNING確認後に直接呼びreturnを観測するが、将来のcontext switch置換点として保持する。 */
     int priority;              /**< scheduler選択用優先度。数値が小さいほど高優先度として扱い、将来の優先度制御の基礎にする。 */
     task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
+    int wait_sem_id;           /**< セマフォ待ち対象ID。0は待ちなし。第6章6.1では観測用で、timeoutやwait queueとは接続しない。 */
     void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */
     unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。将来のスタック検証に使えるよう、現段階からTCBに含める。 */
     /**
@@ -210,6 +211,18 @@ int task_get_count(void);
 const tcb_t *task_get_by_index(int index);
 
 /**
+ * @brief 登録済みTCBをtask idで読み取り専用参照する。
+ *
+ * @details
+ * semaphore moduleがログ用のtask名と状態を確認するための境界APIである。
+ * 返されたTCBを呼び出し側が変更してはならない。
+ *
+ * @param task_id 登録済みtask id。0以下は不正。
+ * @return 見つかったTCBへの読み取り専用ポインタ。見つからない場合はNULL。
+ */
+const tcb_t *task_get_by_id(int task_id);
+
+/**
  * @brief 登録済みTCBをtask idで更新用に取得する。
  *
  * @details
@@ -257,5 +270,45 @@ int task_mark_running(int task_id);
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
  */
 int task_mark_ready_from_running(int task_id);
+
+/**
+ * @brief 指定taskをセマフォ待ちのWAITING状態へ変更する。
+ *
+ * @details
+ * 第6章6.1の観測用最小WAITING遷移である。wait queue、timeout、timer、
+ * preemption、interruptとは接続しない。セマフォmoduleから呼ばれるが、
+ * TCBの状態とwait_sem_idの所有権はtask moduleに残す。
+ *
+ * @param task_id 対象task id。
+ * @param sem_id 待ち対象セマフォID。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_waiting_on_sem(int task_id, int sem_id);
+
+/**
+ * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
+ *
+ * @details
+ * 第6章6.1のsig_semログでwakeup対象を先に観測するための読み取りAPIである。
+ * task状態は変更しない。wait queue未導入のため、探索順はtask table順であり、
+ * FIFO順や優先度順を保証しない。
+ *
+ * @param sem_id 対象セマフォID。
+ * @return 見つかったWAITING task。対象なしや不正入力はNULL。
+ */
+const tcb_t *task_find_waiting_on_sem(int sem_id);
+
+/**
+ * @brief 指定セマフォを待つtaskを1件READYへ戻す。
+ *
+ * @details
+ * 第6章6.1ではwait queueを持たないため、task tableを走査して最初に見つかった
+ * WAITING taskを1件だけREADYへ戻す。FIFO順や優先度順は保証しない。
+ *
+ * @param sem_id 対象セマフォID。
+ * @param woken_task_id wakeupしたtask idの格納先。NULLも許容する。
+ * @return wakeup成功時は0。対象なしや不正入力は負のTASK_ERR_*値。
+ */
+int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id);
 
 #endif

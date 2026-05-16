@@ -15,13 +15,14 @@ QEMU_LOG := $(LOG_DIR)/qemu-serial.log
 BOOT_OBJ := $(BUILD_DIR)/boot.o
 KERNEL_OBJ := $(BUILD_DIR)/kernel.o
 TASK_OBJ := $(BUILD_DIR)/task.o
+SEMAPHORE_OBJ := $(BUILD_DIR)/semaphore.o
 SCHEDULER_OBJ := $(BUILD_DIR)/scheduler.o
 DISPATCHER_OBJ := $(BUILD_DIR)/dispatcher.o
 TASK_CONTEXT_OBJ := $(BUILD_DIR)/task_context.o
 ARCH_CONTEXT_SWITCH_OBJ := $(BUILD_DIR)/arch/x86_64/context_switch.o
 HAL_CONSOLE_OBJ := $(BUILD_DIR)/arch/x86_64/hal_console.o
 SERIAL_OBJ := $(BUILD_DIR)/arch/x86_64/serial.o
-OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(HAL_CONSOLE_OBJ) $(SERIAL_OBJ)
+OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(HAL_CONSOLE_OBJ) $(SERIAL_OBJ)
 
 CFLAGS := -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic -fno-pie -mno-red-zone -Wall -Wextra -I. -Ikernel/include -Iarch/x86_64
 LDFLAGS := -nostdlib -T linker.ld
@@ -38,11 +39,14 @@ dirs:
 $(BOOT_OBJ): boot/boot.asm | dirs
 	$(NASM) -f elf64 boot/boot.asm -o $(BOOT_OBJ)
 
-$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/task_context.h | dirs
+$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/task_context.h kernel/include/semaphore.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/kernel.c -o $(KERNEL_OBJ)
 
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/task.c -o $(TASK_OBJ)
+
+$(SEMAPHORE_OBJ): kernel/semaphore.c kernel/include/semaphore.h kernel/include/task.h kernel/include/hal/console.h | dirs
+	$(CLANG) $(CFLAGS) -c kernel/semaphore.c -o $(SEMAPHORE_OBJ)
 
 $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/task.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/scheduler.c -o $(SCHEDULER_OBJ)
