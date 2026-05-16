@@ -57,6 +57,7 @@ The current implementation covers the following milestones:
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
+| 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -173,6 +174,19 @@ Chapter 6 Section 6.1 adds the semaphore foundation:
 * `sem_dump()` logs semaphore `count` and `max_count`.
 * This does not implement timer integration, timeout waits, preemption,
   interrupts, FIFO/priority wait queues, mutexes, or full μITRON compatibility.
+
+Chapter 6 Section 6.2 adds the timer foundation:
+
+* `timer_init()` initializes the RTOS-internal system tick to 0.
+* `timer_tick()` advances the system tick by one explicit call.
+* `timer_get_ticks()` returns the current system tick without changing state.
+* The boot-time timer smoke calls `timer_tick()` explicitly and logs tick
+  growth to the QEMU serial log.
+* `timer_tick()` is shaped so a future timer interrupt handler can call it,
+  but this chapter does not connect it to a hardware timer interrupt.
+* This is not preemption. It does not implement PIT/APIC/HPET setup,
+  interrupt-handler context switching, time slice, `dly_tsk`, timeout waits,
+  sleep/delay queues, ready queues, round-robin, or μITRON-compatible timer APIs.
 
 ---
 
@@ -306,6 +320,13 @@ consume the initial count, moves `task_c` to `WAITING` on the second
 returned to READY before the context switch smoke and cooperative runner
 continue, so the existing execution-order checks remain intact.
 
+Chapter 6 Section 6.2 adds a timer smoke sequence near the beginning of
+`kernel_main`. The kernel initializes the system tick, explicitly calls
+`timer_tick()` three times, and reads the current tick with `timer_get_ticks()`.
+This is still a boot-time verification model. The tick does not come from a
+hardware timer interrupt and does not drive scheduler selection, dispatcher
+commit, context switching, preemption, time slice, `dly_tsk`, or timeout wakeup.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -346,6 +367,13 @@ Successful output includes:
 itron-rtos booting...
 kernel_main reached
 [kernel] task init
+[timer-smoke] begin
+[timer] init: tick=0
+[timer] tick: 1
+[timer] tick: 2
+[timer] tick: 3
+[timer-smoke] current tick=3
+[timer-smoke] end
 [scheduler] before_register selected: none
 [task] registered: id=1 name=task_a state=READY prio=5 entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
@@ -424,6 +452,12 @@ only available count, `task_c` enters `WAITING` with `wait_sem_id=1`, and
 verification model and does not introduce timer-based blocking, preemption,
 interrupt-driven scheduling, or a real wait queue.
 
+Chapter 6 Section 6.2 adds timer logs before task registration. The timer
+smoke initializes `tick=0`, advances the tick to 1, 2, and 3 through explicit
+`timer_tick()` calls, and confirms the current tick with `timer_get_ticks()`.
+This is timer foundation only: it is not interrupt-driven and does not reorder
+the existing task, semaphore, context switch, or cooperative verification flow.
+
 ### Clean
 
 ```powershell
@@ -442,10 +476,12 @@ itron-rtos/
 ├─ kernel/
 │  ├─ kernel.c
 │  ├─ semaphore.c
+│  ├─ timer.c
 │  ├─ task.c
 │  ├─ scheduler.c
 │  └─ include/
 │     ├─ semaphore.h
+│     ├─ timer.h
 │     ├─ task.h
 │     ├─ scheduler.h
 │     └─ hal/
@@ -518,6 +554,11 @@ The current kernel includes:
 * `sem_dump()`
 * TCB `wait_sem_id` for observable semaphore waits
 * WAITING to READY semaphore wakeup for one waiting task
+* Timer foundation with RTOS-internal system tick
+* `timer_init()`
+* `timer_tick()`
+* `timer_get_ticks()`
+* Explicit boot-time timer smoke for tick observation
 
 ---
 
@@ -530,6 +571,8 @@ The following features are intentionally not implemented yet:
 * Continuous independent task stack execution
 * Timer interrupt
 * Preemption
+* Time slice
+* `dly_tsk`
 * `yield_tsk` compatible API
 * Dynamic memory allocation
 * Timer-driven stack switching
@@ -537,6 +580,8 @@ The following features are intentionally not implemented yet:
 * Polling semaphore wait (`pol_sem`)
 * FIFO or priority semaphore wait queue
 * Timer-integrated semaphore blocking
+* Sleep or delay queue
+* Round-robin scheduling
 * Mutex
 * Event flag
 * Formal task termination state
@@ -733,6 +778,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 5       | 5.2     | Register save area                         | v5.2-register-save-area     | Completed |
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
+| 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 
 ---
 

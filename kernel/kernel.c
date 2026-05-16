@@ -22,6 +22,9 @@
  * 複数回のentry呼び出しを有限の起動時検証loopで観測する。
  * これは一時的なboot-time verification modelであり、第5章では
  * context-switch-based executionへ置き換える前提である。
+ * 第6章6.2では、timer foundationのsystem tickを起動時に明示的に進め、
+ * QEMU serial logで時間経過を観測する。まだtimer interrupt、preemption、
+ * time slice、delay/timeoutとは接続しない。
  *
  * kernel層はarch依存コードを直接呼ばず、依存方向は
  * kernel → HAL → arch(x86_64) → serial → COM1 である。
@@ -33,6 +36,7 @@
 #include "semaphore.h"
 #include "task.h"
 #include "task_context.h"
+#include "timer.h"
 
 #include <stddef.h>
 
@@ -404,6 +408,40 @@ static void kernel_log_cooperative_stop(const char *reason)
 }
 
 /**
+ * @brief 第6章6.2のtimer foundation smokeを実行する。
+ *
+ * @details
+ * `timer_init()` でsystem tickを0へ戻し、`timer_tick()` を明示的に複数回呼ぶ。
+ * `timer_get_ticks()` で現在値を読み取り、tickがRTOS内部時間の最小単位として
+ * 更新されたことをQEMU serial logから確認できるようにする。
+ *
+ * このhelperは将来のtimer interrupt handler接続を先取りしない。
+ * tick増加後にscheduler選択、dispatcher commit、context switch、preemption、
+ * time slice、delay/timeout wakeupは行わない。
+ */
+static void kernel_run_timer_smoke(void)
+{
+    unsigned long ticks;
+
+    hal_console_write("[timer-smoke] begin\n");
+    timer_init();
+
+    /*
+     * 第6章6.2では実ハードウェア割り込みではなく、明示呼び出しで時間経過を観測する。
+     * 3 ticksだけ進め、将来の割り込み接続前にtimer module単体の振る舞いを確認する。
+     */
+    timer_tick();
+    timer_tick();
+    timer_tick();
+
+    ticks = timer_get_ticks();
+    hal_console_write("[timer-smoke] current tick=");
+    kernel_write_uint(ticks);
+    hal_console_write("\n");
+    hal_console_write("[timer-smoke] end\n");
+}
+
+/**
  * @brief 第5章5.3の最小context switch smokeを1回だけ実行する。
  *
  * @details
@@ -717,10 +755,12 @@ static void task_c(void)
  * dispatcherでcurrentとしてcommitし、current task entryを通常のC関数呼び出しで
  * 直接呼ぶ。entry returnは正式終了ではなくcooperative return eventとして観測し、
  * RUNNING taskをREADYへ戻して再びscheduler候補にする。
+ * 第6章6.2では、system tickをtimer interruptなしで明示的に進める
+ * timer foundation smokeを追加する。
  *
  * @param なし。
  * @return なし。
- * @note task_start、context_switch、stack switch、割り込み、タイマ、プリエンプションは追加しない。
+ * @note task_start、割り込み駆動のタイマ、プリエンプション、time sliceは追加しない。
  */
 void kernel_main(void)
 {
@@ -737,6 +777,13 @@ void kernel_main(void)
     task_init();
     scheduler_init();
     dispatcher_init();
+
+    /*
+     * 第6章6.2では、timer interruptではなく明示呼び出しによるtimer foundationを
+     * 先に観測する。既存のtask登録、semaphore smoke、context smokeの相対順序は
+     * 変えず、tick増加からscheduler/dispatcher/context switchも呼び出さない。
+     */
+    kernel_run_timer_smoke();
 
     /*
      * READYタスクがまだ存在しない段階での選択結果を確認する。
