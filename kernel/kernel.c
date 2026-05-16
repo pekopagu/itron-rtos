@@ -30,8 +30,9 @@
  * kernel → HAL → arch(x86_64) → serial → COM1 である。
  */
 
-#include "hal/console.h"
 #include "dispatcher.h"
+#include "hal/console.h"
+#include "hal/interrupt.h"
 #include "scheduler.h"
 #include "semaphore.h"
 #include "task.h"
@@ -973,6 +974,26 @@ void kernel_main(void)
     hal_console_init();
     hal_console_write("itron-rtos booting...\n");
     hal_console_write("kernel_main reached\n");
+
+    /*
+     * 第7章7.1ではCPU例外を受け取るための土台だけを初期化する。
+     * ここでIDTをloadしてもhardware interruptは有効化せず、例外処理を
+     * scheduling、dispatching、context switchingへ接続しない。
+     */
+    if (hal_interrupt_init() != 0) {
+        hal_console_write("[kernel] interrupt init failed\n");
+        for (;;) {
+            __asm__ volatile ("hlt");
+        }
+    }
+
+#ifdef ARCH_INTERRUPT_VALIDATE_EXCEPTION
+    /*
+     * 明示的な検証buildでは、例外handler到達ログを出した後に停止する。
+     * 通常のsmokeでは無効にしておき、IDT初期化後も既存の第6章6.3 flowを継続する。
+     */
+    hal_interrupt_trigger_validation_exception();
+#endif
 
     /* タスク管理台帳だけを初期化し、スケジューラや実行コンテキストは作らない。 */
     task_init();

@@ -6,7 +6,11 @@ LD_LLD ?= ld.lld
 OBJCOPY ?= llvm-objcopy
 QEMU ?= qemu-system-x86_64
 
+VALIDATE_EXCEPTION ?= 0
 BUILD_DIR := build
+ifeq ($(VALIDATE_EXCEPTION),1)
+BUILD_DIR := build/validate-exception
+endif
 LOG_DIR := docs/logs
 KERNEL_ELF := $(BUILD_DIR)/kernel.elf
 KERNEL_ELF64 := $(BUILD_DIR)/kernel64.elf
@@ -22,25 +26,30 @@ DISPATCHER_OBJ := $(BUILD_DIR)/dispatcher.o
 TASK_CONTEXT_OBJ := $(BUILD_DIR)/task_context.o
 ARCH_CONTEXT_SWITCH_OBJ := $(BUILD_DIR)/arch/x86_64/context_switch.o
 HAL_CONSOLE_OBJ := $(BUILD_DIR)/arch/x86_64/hal_console.o
+HAL_INTERRUPT_OBJ := $(BUILD_DIR)/arch/x86_64/hal_interrupt.o
 SERIAL_OBJ := $(BUILD_DIR)/arch/x86_64/serial.o
-OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(HAL_CONSOLE_OBJ) $(SERIAL_OBJ)
+ARCH_INTERRUPT_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt.o
+ARCH_INTERRUPT_ENTRY_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt_entry.o
+OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(ARCH_INTERRUPT_OBJ) $(ARCH_INTERRUPT_ENTRY_OBJ) $(HAL_CONSOLE_OBJ) $(HAL_INTERRUPT_OBJ) $(SERIAL_OBJ)
 
 CFLAGS := -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic -fno-pie -mno-red-zone -Wall -Wextra -I. -Ikernel/include -Iarch/x86_64
 LDFLAGS := -nostdlib -T linker.ld
+
+ifeq ($(VALIDATE_EXCEPTION),1)
+CFLAGS += -DARCH_INTERRUPT_VALIDATE_EXCEPTION=1
+endif
 
 .PHONY: all run clean dirs
 
 all: $(KERNEL_ELF)
 
 dirs:
-	@if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
-	@if not exist $(BUILD_DIR)\arch\x86_64 mkdir $(BUILD_DIR)\arch\x86_64
-	@if not exist $(LOG_DIR) mkdir $(LOG_DIR)
+	powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force '$(BUILD_DIR)' | Out-Null; New-Item -ItemType Directory -Force '$(BUILD_DIR)/arch/x86_64' | Out-Null; New-Item -ItemType Directory -Force '$(LOG_DIR)' | Out-Null"
 
 $(BOOT_OBJ): boot/boot.asm | dirs
 	$(NASM) -f elf64 boot/boot.asm -o $(BOOT_OBJ)
 
-$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h | dirs
+$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/interrupt.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/kernel.c -o $(KERNEL_OBJ)
 
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs
@@ -64,8 +73,17 @@ $(TASK_CONTEXT_OBJ): kernel/task_context.c kernel/include/task_context.h kernel/
 $(ARCH_CONTEXT_SWITCH_OBJ): arch/x86_64/context_switch.asm arch/x86_64/context_switch.h kernel/include/task.h | dirs
 	$(NASM) -f elf64 arch/x86_64/context_switch.asm -o $(ARCH_CONTEXT_SWITCH_OBJ)
 
+$(ARCH_INTERRUPT_OBJ): arch/x86_64/interrupt.c arch/x86_64/interrupt.h kernel/include/hal/console.h | dirs
+	$(CLANG) $(CFLAGS) -c arch/x86_64/interrupt.c -o $(ARCH_INTERRUPT_OBJ)
+
+$(ARCH_INTERRUPT_ENTRY_OBJ): arch/x86_64/interrupt_entry.asm | dirs
+	$(NASM) -f elf64 arch/x86_64/interrupt_entry.asm -o $(ARCH_INTERRUPT_ENTRY_OBJ)
+
 $(HAL_CONSOLE_OBJ): arch/x86_64/hal_console.c kernel/include/hal/console.h arch/x86_64/serial.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/hal_console.c -o $(HAL_CONSOLE_OBJ)
+
+$(HAL_INTERRUPT_OBJ): arch/x86_64/hal_interrupt.c kernel/include/hal/interrupt.h arch/x86_64/interrupt.h | dirs
+	$(CLANG) $(CFLAGS) -c arch/x86_64/hal_interrupt.c -o $(HAL_INTERRUPT_OBJ)
 
 $(SERIAL_OBJ): arch/x86_64/serial.c arch/x86_64/serial.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/serial.c -o $(SERIAL_OBJ)

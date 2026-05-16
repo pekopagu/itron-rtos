@@ -59,6 +59,7 @@ The current implementation covers the following milestones:
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
+| 7       | 7.1     | Interrupt and exception foundation         | -                           | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -206,6 +207,26 @@ Chapter 6 Section 6.3 adds the preemption decision foundation:
   interrupt nesting, SMP, priority inheritance, tickless timer, advanced
   interrupt masking, user mode, or ITRON-compatible APIs.
 
+Chapter 7 Section 7.1 adds the interrupt and CPU exception foundation:
+
+* `hal_interrupt_init()` is the kernel-facing HAL boundary for the exception
+  foundation; the x86_64 HAL implementation delegates to `arch_interrupt_init()`.
+* `arch_interrupt_init()` builds a minimal x86_64 IDT and loads it with `lidt`.
+* The IDT uses the existing long-mode GDT code selector prepared by `boot/boot.asm`.
+* Representative CPU exception entries are registered for observation.
+* The common exception handler logs the vector, exception name, error code,
+  RIP, CS, and RFLAGS through the HAL console.
+* Normal boot logs IDT initialization and then continues the existing Chapter
+  6.3 smoke flow.
+* `make run VALIDATE_EXCEPTION=1` explicitly triggers `int3` and confirms
+  handler arrival, then halts after the observation log.
+* This is an educational observation handler, not a recoverable exception
+  subsystem.
+* This chapter still does not implement hardware timer interrupts, IRQ routing,
+  PIC/APIC setup, scheduler calls, dispatcher calls, context switching from an
+  interrupt handler, preemption, nested interrupt control, user mode, SMP, or
+  ITRON-compatible interrupt APIs.
+
 ---
 
 ## Development Environment
@@ -290,6 +311,13 @@ The current runtime path is:
 kernel -> HAL -> arch(x86_64) -> serial -> COM1
 ```
 
+Chapter 7 Section 7.1 adds this exception-observation path:
+
+```text
+kernel_main -> hal_interrupt_init -> arch_interrupt_init -> IDT load
+CPU exception -> arch exception stub -> observation handler -> HAL console
+```
+
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
 to the serial log.
 
@@ -353,6 +381,21 @@ scheduler still only returns a decision. The dispatcher remains responsible for
 current-task commit, and the context switch layer remains responsible for
 register save/restore.
 
+Chapter 7 Section 7.1 initializes the x86_64 IDT immediately after the HAL
+console becomes available. The normal boot path only observes IDT initialization
+and load completion. Exception-handler arrival is verified with an explicit
+validation build:
+
+```powershell
+make run VALIDATE_EXCEPTION=1
+```
+
+That validation run triggers `int3`, logs vector 3 as `breakpoint`, and then
+halts inside the observation handler. The normal `make run` path does not
+trigger this validation exception, so the existing task, semaphore, timer,
+preemption-decision, context-switch smoke, and cooperative verification logs
+continue to run.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -392,6 +435,9 @@ Successful output includes:
 ```text
 itron-rtos booting...
 kernel_main reached
+[interrupt] init begin
+[interrupt] idt initialized
+[interrupt] idt loaded
 [kernel] task init
 [timer-smoke] begin
 [timer] init: tick=0
@@ -532,12 +578,17 @@ itron-rtos/
 │     ├─ task.h
 │     ├─ scheduler.h
 │     └─ hal/
-│        └─ console.h
+│        ├─ console.h
+│        └─ interrupt.h
 ├─ arch/
 │  └─ x86_64/
 │     ├─ hal_console.c
+│     ├─ hal_interrupt.c
 │     ├─ context_switch.asm
 │     ├─ context_switch.h
+│     ├─ interrupt_entry.asm
+│     ├─ interrupt.c
+│     ├─ interrupt.h
 │     ├─ serial.c
 │     └─ serial.h
 ├─ build/
@@ -613,6 +664,12 @@ The current kernel includes:
 * Timer-triggered boot-time preemption decision smoke
 * Preemption occurrence and non-occurrence serial logs
 * Scheduler / dispatcher / timer / context switch responsibility separation for preemption decisions
+* x86_64 IDT initialization
+* `lidt` based IDT load
+* Representative CPU exception entry stubs
+* CPU exception observation handler
+* Exception vector/name/error/RIP/CS/RFLAGS serial logs
+* Explicit validation exception mode with `VALIDATE_EXCEPTION=1`
 
 ---
 
@@ -625,6 +682,9 @@ The following features are intentionally not implemented yet:
 * Continuous independent task stack execution
 * Timer interrupt
 * Full interrupt-driven preemption
+* IRQ routing
+* PIC/APIC initialization
+* Recoverable exception handling
 * Time slice
 * `dly_tsk`
 * `yield_tsk` compatible API
@@ -648,6 +708,7 @@ The following features are intentionally not implemented yet:
 * Tickless timer
 * User mode
 * Advanced interrupt mask control
+* ITRON-compatible interrupt management APIs
 
 ---
 
@@ -804,6 +865,7 @@ See the LICENSE file for details.
 * [x] Semaphore foundation
 * [x] Timer foundation
 * [x] Preemption decision foundation
+* [x] Interrupt and exception foundation
 * [ ] Timer interrupt
 
 ---
@@ -842,6 +904,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
+| 7       | 7.1     | Interrupt and exception foundation         | -                           | Completed |
 
 ---
 
