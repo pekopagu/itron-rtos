@@ -66,4 +66,11 @@ int dispatcher_commit_current(const tcb_t *selected);
  */
 const tcb_t *dispatcher_get_current(void);
 
+/**
+ * @note 第6章6.3のpreemption foundationでは、schedulerが高優先度READY候補を
+ * 見つける場合がある。ただし、その候補をcurrentに確定するのはschedulerではない。
+ * current taskの確定はdispatcherの責務に残し、register save/restoreは
+ * このinterfaceの外側に残す。
+ */
+
 #endif

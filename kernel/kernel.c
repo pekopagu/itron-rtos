@@ -196,6 +196,109 @@ static void kernel_log_scheduler_selection(const char *label, const tcb_t *task)
 }
 
 /**
+ * @brief schedulerのpreemption判断をログ用理由文字列へ変換する。
+ *
+ * @details
+ * schedulerは意図的に小さな判断分類だけを返す。kernel smoke層では、
+ * QEMU serial logで観測しやすいように、より具体的な理由文字列へ変換する。
+ * これによりlogging policyをscheduler.cへ入れず、schedulerの責務を
+ * 「選択と比較のみ」に保つ。
+ *
+ * @param decision scheduler helperが生成した読み取り専用の判断結果。
+ * @return QEMU serial出力用の静的な理由文字列。
+ */
+static const char *kernel_preempt_reason_to_string(
+    scheduler_preempt_decision_t decision
+)
+{
+    if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {
+        return "higher-priority-ready";
+    }
+
+    if (decision.reason == SCHEDULER_PREEMPT_INVALID_CURRENT) {
+        return "invalid-current";
+    }
+
+    if (decision.current == NULL) {
+        return "no-current";
+    }
+
+    if (decision.candidate == NULL) {
+        return "no-ready";
+    }
+
+    return "candidate-not-higher";
+}
+
+/**
+ * @brief preemption判断ログ用にtask情報を短く出力する。
+ *
+ * @details
+ * このhelperは表示専用である。TCBを変更せず、taskをcurrentとして確定しない。
+ * kernel.cに置くことで、scheduler.cへHAL logging依存を追加しない。
+ *
+ * @param label `" current"` や `" candidate"` などの接頭辞。
+ * @param task 表示対象task。NULLも許容する。
+ */
+static void kernel_log_preempt_task(const char *label, const tcb_t *task)
+{
+    const char *safe_name;
+    const char *state_name;
+    const char *safe_state;
+
+    hal_console_write(label);
+    if (task == NULL) {
+        hal_console_write("=none");
+        return;
+    }
+
+    safe_name = (task->name != NULL) ? task->name : "(null)";
+    state_name = kernel_task_state_to_string(task->state);
+    safe_state = (state_name != NULL) ? state_name : "UNKNOWN";
+
+    hal_console_write(" id=");
+    kernel_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(safe_name);
+    hal_console_write(" prio=");
+    kernel_write_int(task->priority);
+    hal_console_write(" state=");
+    hal_console_write(safe_state);
+}
+
+/**
+ * @brief preemption判断の観測結果を出力する。
+ *
+ * @details
+ * `"switch-target"` は、高優先度READY taskが切り替え候補として選ばれた
+ * ことだけを意味する。この関数はそのtaskへdispatchせず、context switchも
+ * 実行しない。current確定はdispatcher、register save/restoreはcontext
+ * switch境界の責務として残す。
+ *
+ * @param label 検証シナリオ名。
+ * @param decision ログ出力するscheduler判断結果。
+ */
+static void kernel_log_preemption_decision(
+    const char *label,
+    scheduler_preempt_decision_t decision
+)
+{
+    const char *safe_label = (label != NULL) ? label : "(no-label)";
+    const char *result =
+        (decision.reason == SCHEDULER_PREEMPT_NEEDED) ? "switch-target" : "no-switch";
+
+    hal_console_write("[preempt] ");
+    hal_console_write(safe_label);
+    hal_console_write(" result=");
+    hal_console_write(result);
+    hal_console_write(" reason=");
+    hal_console_write(kernel_preempt_reason_to_string(decision));
+    kernel_log_preempt_task(" current", decision.current);
+    kernel_log_preempt_task(" candidate", decision.candidate);
+    hal_console_write("\n");
+}
+
+/**
  * @brief dispatcherの現在タスク確定結果をHAL consoleへ出力する。
  *
  * @details
@@ -439,6 +542,104 @@ static void kernel_run_timer_smoke(void)
     kernel_write_uint(ticks);
     hal_console_write("\n");
     hal_console_write("[timer-smoke] end\n");
+}
+
+/**
+ * @brief timer契機のpreemption判断を1回実行し、結果をログへ出力する。
+ *
+ * @details
+ * このhelperは第6章6.3の境界を表す。先にtimer tickを進め、その後で
+ * kernel smoke層がdispatcherから論理current taskを取得し、schedulerへ
+ * 判断を依頼する。timer moduleはschedulingを知らず、schedulerはcurrent
+ * 確定やcontext switchを行わない。
+ *
+ * @param label `[preempt]` serial出力に使うscenario名。
+ */
+static void kernel_run_preemption_decision_smoke(const char *label)
+{
+    const tcb_t *current;
+    scheduler_preempt_decision_t decision;
+
+    /*
+     * timerはtickを進めるだけに留める。tick後の判断はkernel層で明示的に呼び、
+     * timer moduleへscheduler責務を混ぜない。
+     */
+    timer_tick();
+    current = dispatcher_get_current();
+    decision = scheduler_select_preemption_candidate(current);
+    kernel_log_preemption_decision(label, decision);
+}
+
+/**
+ * @brief boot中にtimer契機preemption判断を検証する。
+ *
+ * @details
+ * これは完全な割り込み駆動preemption経路ではない。このhelperでは、
+ * scheduler判断の比較基準を作るためだけに `dispatcher_commit_current()` を使う。
+ * 高優先度READY taskが見つかった場合も、候補をログに残すだけで、意図的に
+ * dispatchやcontext switchは行わない。
+ *
+ * @param low_task_id 最初のcurrent基準として使う低優先度task。
+ * @param high_task_id 次のcurrent基準として使う高優先度task。
+ */
+static void kernel_run_preemption_smoke(int low_task_id, int high_task_id)
+{
+    const tcb_t *low_task;
+    const tcb_t *high_task;
+    int result;
+
+    hal_console_write("[preempt-smoke] begin\n");
+    /*
+     * current未確定でも判断処理が破綻しないことを先に観測する。
+     * これはtimer契機が来ても比較基準がない場合の非発生ケースである。
+     */
+    kernel_run_preemption_decision_smoke("no-current");
+
+    /*
+     * 低優先度task_aを論理currentにして、高優先度READY task_bを候補にできる
+     * ケースを作る。ここでは候補検出だけを確認し、task_bへは切り替えない。
+     */
+    low_task = task_get_by_id(low_task_id);
+    result = dispatcher_commit_current(low_task);
+    kernel_log_dispatcher_commit_result(result);
+    if (result == DISPATCHER_OK) {
+        kernel_run_preemption_decision_smoke("higher-ready");
+
+        /*
+         * 後続の既存smokeを壊さないよう、比較基準にしたtaskをREADYへ戻す。
+         * これは検証後片付けであり、preemption実行ではない。
+         */
+        result = task_mark_ready_from_running(low_task_id);
+        hal_console_write("[preempt-smoke] restore current result=");
+        kernel_write_int(result);
+        hal_console_write(" task_id=");
+        kernel_write_int(low_task_id);
+        hal_console_write("\n");
+    }
+
+    /*
+     * 高優先度task_bを論理currentにすると、同priorityのtask_cはtime slice対象
+     * ではないため切り替え候補にしない。この仕様の非発生ケースを確認する。
+     */
+    high_task = task_get_by_id(high_task_id);
+    result = dispatcher_commit_current(high_task);
+    kernel_log_dispatcher_commit_result(result);
+    if (result == DISPATCHER_OK) {
+        kernel_run_preemption_decision_smoke("no-higher-ready");
+
+        /*
+         * 検証でRUNNINGにしたtaskをREADYへ戻し、semaphore/context/cooperative
+         * smokeが従来どおりREADY taskを選べる状態へ戻す。
+         */
+        result = task_mark_ready_from_running(high_task_id);
+        hal_console_write("[preempt-smoke] restore current result=");
+        kernel_write_int(result);
+        hal_console_write(" task_id=");
+        kernel_write_int(high_task_id);
+        hal_console_write("\n");
+    }
+
+    hal_console_write("[preempt-smoke] end\n");
 }
 
 /**
@@ -830,6 +1031,14 @@ void kernel_main(void)
 
     /* 登録済みTCBだけを表示し、UNUSEDスロットは表示されないことを確認する。 */
     task_dump();
+
+    /*
+     * 第6章6.3では、既存のsemaphore/context switch smokeへ進む前に、
+     * timer契機のpreemption判断だけを観測する。dispatcherで論理current基準を
+     * 作り、schedulerへ候補判断を依頼した後、taskをREADYへ戻すことで
+     * 後続の検証フローの前提を保つ。
+     */
+    kernel_run_preemption_smoke(task_a_id, task_b_id);
 
     /*
      * 第6章6.1では、セマフォのcount変化とWAITING遷移をboot-time verification

@@ -91,3 +91,63 @@ const tcb_t *scheduler_select_next(void)
     /* READY候補がなければNULLを返し、呼び出し側に停止判断を委ねる。 */
     return best;
 }
+
+/**
+ * @brief 論理current taskをプリエンプトすべきか判断する。
+ *
+ * @details
+ * 第6章6.3ではpreemptionを観測可能なスケジューリング判断として扱う。
+ * この関数はdispatcherから渡されたcurrent taskと既存のREADY選択結果を読み取り、
+ * priorityだけを比較する。task状態は変更せず、新しいcurrent taskも確定せず、
+ * context switch層も呼び出さない。timer codeはこのmoduleの外側に残し、
+ * kernel層の検証フローからだけこのhelperを利用する。
+ *
+ * @param current dispatcherから得たcurrent taskの観測値。比較基準にするにはRUNNINGである必要がある。
+ * @return currentとcandidateへの借用ポインタを含むpreemption判断結果。
+ */
+scheduler_preempt_decision_t scheduler_select_preemption_candidate(const tcb_t *current)
+{
+    scheduler_preempt_decision_t decision;
+    const tcb_t *candidate;
+
+    decision.reason = SCHEDULER_PREEMPT_NONE;
+    decision.current = current;
+    decision.candidate = NULL;
+
+    /*
+     * currentが未確定の段階では比較基準がない。preemptionなしとして返し、
+     * 呼び出し側のログで「currentなし」を観測できるようにする。
+     */
+    if (current == NULL) {
+        return decision;
+    }
+
+    /*
+     * RUNNINGは論理状態としての基準であり、schedulerはここで状態を直さない。
+     * 不正な基準は入力不正として返し、dispatcher/task moduleの責務に踏み込まない。
+     */
+    if (current->state != TASK_STATE_RUNNING) {
+        decision.reason = SCHEDULER_PREEMPT_INVALID_CURRENT;
+        return decision;
+    }
+
+    /*
+     * 既存のREADY選択規則を再利用する。scheduler_select_next()も読み取り専用なので、
+     * この呼び出しでcurrent確定やtask状態変更は起きない。
+     */
+    candidate = scheduler_select_next();
+    decision.candidate = candidate;
+    if (candidate == NULL) {
+        return decision;
+    }
+
+    /*
+     * priority値が小さいほど高優先度。等しいpriorityはtime slice対象ではないため、
+     * この段階では切り替え候補にしない。
+     */
+    if (candidate->priority < current->priority) {
+        decision.reason = SCHEDULER_PREEMPT_NEEDED;
+    }
+
+    return decision;
+}

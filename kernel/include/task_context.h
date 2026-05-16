@@ -63,6 +63,13 @@ int task_context_switch(tcb_t *from, tcb_t *to);
 int task_context_switch_to_task(tcb_t *to);
 
 /**
+ * @note 第6章6.3のpreemption判断は、この層へcontext switchを依頼する前段で行う。
+ * task context層の責務は、準備済みstack/contextの検証とregister save/restoreの
+ * arch層への委譲だけである。timer tickの解釈、READY task選択、dispatcher current
+ * 確定は行わない。
+ */
+
+/**
  * @brief 準備済みtask stack上のassembly trampolineから呼ばれる入口。
  *
  * @details

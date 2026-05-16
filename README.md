@@ -58,6 +58,7 @@ The current implementation covers the following milestones:
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
+| 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -187,6 +188,23 @@ Chapter 6 Section 6.2 adds the timer foundation:
 * This is not preemption. It does not implement PIT/APIC/HPET setup,
   interrupt-handler context switching, time slice, `dly_tsk`, timeout waits,
   sleep/delay queues, ready queues, round-robin, or μITRON-compatible timer APIs.
+
+Chapter 6 Section 6.3 adds the preemption decision foundation:
+
+* `scheduler_select_preemption_candidate()` compares the logical current task
+  with the highest-priority READY task.
+* A READY task becomes a switch target only when its numeric priority is lower
+  than the current task's priority.
+* Equal-priority READY tasks are not preemption targets. This chapter does not
+  introduce time slicing.
+* The scheduler returns a decision value only. It does not commit a new current
+  task, update task states, or call the context switch layer.
+* The boot-time smoke advances the timer tick first, then asks the scheduler
+  for a preemption decision through the kernel verification flow.
+* `[preempt]` logs show no-current, switch-target, and no-switch cases.
+* This is still not complete interrupt-driven preemption. It does not implement
+  interrupt nesting, SMP, priority inheritance, tickless timer, advanced
+  interrupt masking, user mode, or ITRON-compatible APIs.
 
 ---
 
@@ -327,6 +345,14 @@ This is still a boot-time verification model. The tick does not come from a
 hardware timer interrupt and does not drive scheduler selection, dispatcher
 commit, context switching, preemption, time slice, `dly_tsk`, or timeout wakeup.
 
+Chapter 6 Section 6.3 adds a preemption decision smoke sequence after task
+registration and before the semaphore smoke. The kernel advances the timer tick,
+reads the current task through the dispatcher boundary, and asks the scheduler
+whether a higher-priority READY task should become the switch target. The
+scheduler still only returns a decision. The dispatcher remains responsible for
+current-task commit, and the context switch layer remains responsible for
+register save/restore.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -386,6 +412,18 @@ kernel_main reached
 [task] id=2 name=task_b prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=3 name=task_c prio=1 state=READY entry=0x... stack_base=0x... stack_size=1024 stack_top=0x... context.rsp=0x... context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
+[preempt-smoke] begin
+[timer] tick: 4
+[preempt] no-current result=no-switch reason=no-current current=none candidate=none
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[timer] tick: 5
+[preempt] higher-ready result=switch-target reason=higher-priority-ready current id=1 name=task_a prio=5 state=RUNNING candidate id=2 name=task_b prio=1 state=READY
+[preempt-smoke] restore current result=0 task_id=1
+[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[timer] tick: 6
+[preempt] no-higher-ready result=no-switch reason=candidate-not-higher current id=2 name=task_b prio=1 state=RUNNING candidate id=3 name=task_c prio=1 state=READY
+[preempt-smoke] restore current result=0 task_id=2
+[preempt-smoke] end
 [sem-smoke] begin
 [sem] table initialized
 [sem] initialized: id=1 name=sem_a count=1 max_count=1
@@ -457,6 +495,15 @@ smoke initializes `tick=0`, advances the tick to 1, 2, and 3 through explicit
 `timer_tick()` calls, and confirms the current tick with `timer_get_ticks()`.
 This is timer foundation only: it is not interrupt-driven and does not reorder
 the existing task, semaphore, context switch, or cooperative verification flow.
+
+Chapter 6 Section 6.3 adds preemption decision logs after task registration.
+The `no-current` case confirms that a timer tick without a current task does
+not force a switch. The `higher-ready` case confirms that `task_b` becomes a
+switch target while lower-priority `task_a` is the logical current task. The
+`no-higher-ready` case confirms that equal-priority `task_c` is not selected as
+a preemption target while `task_b` is current. These logs show the decision
+foundation only; the smoke intentionally restores task state and does not
+perform an actual dispatch or context switch.
 
 ### Clean
 
@@ -559,6 +606,13 @@ The current kernel includes:
 * `timer_tick()`
 * `timer_get_ticks()`
 * Explicit boot-time timer smoke for tick observation
+* Preemption decision foundation
+* `scheduler_preempt_reason_t`
+* `scheduler_preempt_decision_t`
+* `scheduler_select_preemption_candidate()`
+* Timer-triggered boot-time preemption decision smoke
+* Preemption occurrence and non-occurrence serial logs
+* Scheduler / dispatcher / timer / context switch responsibility separation for preemption decisions
 
 ---
 
@@ -570,7 +624,7 @@ The following features are intentionally not implemented yet:
 * RUNNING as CPU execution state
 * Continuous independent task stack execution
 * Timer interrupt
-* Preemption
+* Full interrupt-driven preemption
 * Time slice
 * `dly_tsk`
 * `yield_tsk` compatible API
@@ -588,6 +642,12 @@ The following features are intentionally not implemented yet:
 * `TASK_STATE_EXITED`
 * Task restart
 * Interrupt-driven task management
+* Interrupt nesting control
+* SMP scheduling
+* Priority inheritance
+* Tickless timer
+* User mode
+* Advanced interrupt mask control
 
 ---
 
@@ -742,7 +802,9 @@ See the LICENSE file for details.
 * [x] Task stack foundation
 * [x] Register save area
 * [x] Semaphore foundation
-* [ ] Timer / interrupt
+* [x] Timer foundation
+* [x] Preemption decision foundation
+* [ ] Timer interrupt
 
 ---
 
@@ -779,6 +841,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 5       | 5.3     | Minimal context switch                     | v5.3-minimal-context-switch | Completed |
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
+| 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
 
 ---
 

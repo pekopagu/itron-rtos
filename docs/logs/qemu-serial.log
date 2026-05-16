@@ -9,17 +9,29 @@ kernel_main reached
 [timer-smoke] current tick=3
 [timer-smoke] end
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x1013a0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x1013b0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x101420 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x101430 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x101440 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x101450 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x1013a0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101420 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101440 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x1013b0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101430 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101450 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
+[preempt-smoke] begin
+[timer] tick: 4
+[preempt] no-current result=no-switch reason=no-current current=none candidate=none
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[timer] tick: 5
+[preempt] higher-ready result=switch-target reason=higher-priority-ready current id=1 name=task_a prio=5 state=RUNNING candidate id=2 name=task_b prio=1 state=READY
+[preempt-smoke] restore current result=0 task_id=1
+[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[timer] tick: 6
+[preempt] no-higher-ready result=no-switch reason=candidate-not-higher current id=2 name=task_b prio=1 state=RUNNING candidate id=3 name=task_c prio=1 state=READY
+[preempt-smoke] restore current result=0 task_id=2
+[preempt-smoke] end
 [sem-smoke] begin
 [sem] table initialized
 [sem] initialized: id=1 name=sem_a count=1 max_count=1
@@ -29,9 +41,9 @@ kernel_main reached
 [sem] sig_sem: sem id=1 name=sem_a count_before=0 result=wakeup task id=3 name=task_c
 [task] ready: id=3 name=task_c state=READY wait_sem_id=0
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x1013a0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101420 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101440 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x1013b0 stack_base=0x10e000 stack_size=1024 stack_top=0x10e400 context.rsp=0x10e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101430 stack_base=0x10e400 stack_size=1024 stack_top=0x10e800 context.rsp=0x10e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101450 stack_base=0x10e800 stack_size=1024 stack_top=0x10ec00 context.rsp=0x10ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
 [sem] id=1 name=sem_a count=0 max_count=1

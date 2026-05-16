@@ -43,6 +43,13 @@ void timer_init(void);
 void timer_tick(void);
 
 /**
+ * @note 第6章6.3では、timer tickをkernel層のpreemption判断smokeの契機として使う。
+ * timer moduleが所有するのは引き続きtick状態だけである。READY task選択、
+ * dispatcher current確定、context switch層の呼び出しは行わない。
+ * ハードウェアタイマ割り込みと完全な割り込み復帰時dispatchは将来作業として残す。
+ */
+
+/**
  * @brief 現在のsystem tickを取得する。
  *
  * @details
