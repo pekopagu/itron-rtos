@@ -15,6 +15,7 @@
 #include "hal/interrupt.h"
 
 #include "interrupt.h"
+#include "pic.h"
 
 /**
  * @brief HAL interrupt初期化をx86_64固有実装へ委譲する。
@@ -28,6 +29,21 @@
 int hal_interrupt_init(void)
 {
     return arch_interrupt_init();
+}
+
+/**
+ * @brief HAL interrupt controller 初期化を x86_64 legacy PIC 実装へ委譲する。
+ *
+ * @details
+ * kernel 共通層から見える入口は HAL API に限定し、PIC の port I/O は
+ * `arch_pic_init()` の内側へ閉じる。ここでは timer interrupt、EOI、scheduler、
+ * dispatcher、context switch への接続は行わない。
+ *
+ * @return 成功時は 0、初期化失敗時は負値。
+ */
+int hal_interrupt_controller_init(void)
+{
+    return arch_pic_init();
 }
 
 /**

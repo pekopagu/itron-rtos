@@ -22,7 +22,7 @@ build/
 # =========================
 docs/logs/*
 !docs/logs/
-!docs/logs/qemu-serial.log   # 第4回の実行ログのみ許可
+!docs/logs/qemu-serial.log   # Keep only the QEMU serial verification log
 
 # =========================
 # Temporary
@@ -56,7 +56,7 @@ prompts/
 articles/
 
 # =========================
-# kiro generated (不要)
+# kiro generated (local-only)
 # =========================
 .kiro/specs/**/research.md
 .kiro/specs/**/brief.md

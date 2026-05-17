@@ -59,7 +59,9 @@ The current implementation covers the following milestones:
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
-| 7       | 7.1     | Interrupt and exception foundation         | -                           | Completed |
+| 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
+| 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
+| 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -227,6 +229,28 @@ Chapter 7 Section 7.1 adds the interrupt and CPU exception foundation:
   interrupt handler, preemption, nested interrupt control, user mode, SMP, or
   ITRON-compatible interrupt APIs.
 
+Chapter 7 Section 7.2 adds the interrupt controller foundation:
+
+* The first interrupt controller target is the legacy PIC (8259A), because it
+  keeps the early x86_64 + QEMU learning path observable through simple port
+  I/O and explicit vector remapping.
+* APIC, IOAPIC, and LAPIC are documented as future extensions, not implemented
+  in this chapter.
+* `hal_interrupt_controller_init()` is the kernel-facing HAL boundary for
+  interrupt controller initialization; the x86_64 HAL implementation delegates
+  to the arch-local PIC module.
+* The PIC is remapped so IRQ0 starts at vector 32, leaving CPU exception
+  vectors 0-31 reserved for exceptions.
+* The PIC remains fully masked after initialization. No IRQ line is unmasked by
+  the normal boot path.
+* The boot log shows PIC initialization completion before the existing task,
+  timer, semaphore, preemption-decision, context-switch, and cooperative smoke
+  flows.
+* This chapter still does not implement PIT timer interrupt delivery, a timer
+  ISR, EOI handling, `timer_tick()` from an ISR, scheduler or dispatcher calls
+  from an interrupt handler, preemption execution, context switching from an
+  interrupt handler, nested interrupts, SMP, or ITRON-compatible interrupt APIs.
+
 ---
 
 ## Development Environment
@@ -318,6 +342,12 @@ kernel_main -> hal_interrupt_init -> arch_interrupt_init -> IDT load
 CPU exception -> arch exception stub -> observation handler -> HAL console
 ```
 
+Chapter 7 Section 7.2 adds this interrupt-controller preparation path:
+
+```text
+kernel_main -> hal_interrupt_controller_init -> arch_pic_init -> PIC remap and all-mask
+```
+
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
 to the serial log.
 
@@ -396,6 +426,12 @@ trigger this validation exception, so the existing task, semaphore, timer,
 preemption-decision, context-switch smoke, and cooperative verification logs
 continue to run.
 
+Chapter 7 Section 7.2 initializes the legacy PIC after the IDT foundation and
+before the existing smoke flows. The PIC is remapped to use vector base 32 for
+the master PIC and 40 for the slave PIC, then all IRQ lines are left masked.
+This prepares the IRQ0 routing position for Chapter 7 Section 7.3 without
+starting PIT delivery or interrupt-driven task switching.
+
 ### Build
 
 Run from Windows PowerShell:
@@ -438,6 +474,8 @@ kernel_main reached
 [interrupt] init begin
 [interrupt] idt initialized
 [interrupt] idt loaded
+[pic] init begin
+[pic] init done: master_base=32 slave_base=40 irqs=masked
 [kernel] task init
 [timer-smoke] begin
 [timer] init: tick=0
@@ -670,6 +708,11 @@ The current kernel includes:
 * CPU exception observation handler
 * Exception vector/name/error/RIP/CS/RFLAGS serial logs
 * Explicit validation exception mode with `VALIDATE_EXCEPTION=1`
+* Legacy PIC interrupt controller foundation
+* PIC remap with IRQ0 prepared at vector 32
+* PIC mask/unmask API in the x86_64 arch boundary
+* Fully masked PIC state after boot-time initialization
+* PIC initialization observation through QEMU serial log
 
 ---
 
@@ -683,7 +726,10 @@ The following features are intentionally not implemented yet:
 * Timer interrupt
 * Full interrupt-driven preemption
 * IRQ routing
-* PIC/APIC initialization
+* APIC, IOAPIC, and LAPIC support
+* PIT timer interrupt delivery
+* Timer ISR
+* EOI handling
 * Recoverable exception handling
 * Time slice
 * `dly_tsk`
@@ -866,6 +912,7 @@ See the LICENSE file for details.
 * [x] Timer foundation
 * [x] Preemption decision foundation
 * [x] Interrupt and exception foundation
+* [x] PIC interrupt controller foundation
 * [ ] Timer interrupt
 
 ---
@@ -904,7 +951,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 6       | 6.1     | Semaphore foundation                       | v6.1-semaphore-foundation   | Completed |
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
-| 7       | 7.1     | Interrupt and exception foundation         | -                           | Completed |
+| 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
 
 ---
 

@@ -32,6 +32,19 @@
 int hal_interrupt_init(void);
 
 /**
+ * @brief 割り込みコントローラ初期化を HAL 境界越しに要求する。
+ *
+ * @details
+ * kernel 共通層はこの関数だけを呼び、PIC の I/O port、vector base、初期化 sequence は
+ * arch 固有実装へ閉じる。第7章7.2では legacy PIC を remap し、全 IRQ を mask した
+ * ままにする。PIT、timer ISR、EOI、scheduler、dispatcher、preemption、context switch
+ * には接続しない。
+ *
+ * @return 成功時は 0、初期化失敗時は負値。
+ */
+int hal_interrupt_controller_init(void);
+
+/**
  * @brief 明示的な検証buildでCPU例外到達を確認する。
  *
  * @details

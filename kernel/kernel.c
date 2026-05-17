@@ -987,6 +987,18 @@ void kernel_main(void)
         }
     }
 
+    /*
+     * 第7章7.2では割り込みコントローラの routing preparation として legacy PIC を
+     * 初期化する。IRQ0 は vector 32 以降へ移すが、全 IRQ は mask したままにし、
+     * timer ISR、scheduler、dispatcher、context switch へはまだ接続しない。
+     */
+    if (hal_interrupt_controller_init() != 0) {
+        hal_console_write("[kernel] interrupt controller init failed\n");
+        for (;;) {
+            __asm__ volatile ("hlt");
+        }
+    }
+
 #ifdef ARCH_INTERRUPT_VALIDATE_EXCEPTION
     /*
      * 明示的な検証buildでは、例外handler到達ログを出した後に停止する。

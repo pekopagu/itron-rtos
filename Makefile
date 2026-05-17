@@ -27,10 +27,11 @@ TASK_CONTEXT_OBJ := $(BUILD_DIR)/task_context.o
 ARCH_CONTEXT_SWITCH_OBJ := $(BUILD_DIR)/arch/x86_64/context_switch.o
 HAL_CONSOLE_OBJ := $(BUILD_DIR)/arch/x86_64/hal_console.o
 HAL_INTERRUPT_OBJ := $(BUILD_DIR)/arch/x86_64/hal_interrupt.o
+ARCH_PIC_OBJ := $(BUILD_DIR)/arch/x86_64/pic.o
 SERIAL_OBJ := $(BUILD_DIR)/arch/x86_64/serial.o
 ARCH_INTERRUPT_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt.o
 ARCH_INTERRUPT_ENTRY_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt_entry.o
-OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(ARCH_INTERRUPT_OBJ) $(ARCH_INTERRUPT_ENTRY_OBJ) $(HAL_CONSOLE_OBJ) $(HAL_INTERRUPT_OBJ) $(SERIAL_OBJ)
+OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(ARCH_INTERRUPT_OBJ) $(ARCH_INTERRUPT_ENTRY_OBJ) $(ARCH_PIC_OBJ) $(HAL_CONSOLE_OBJ) $(HAL_INTERRUPT_OBJ) $(SERIAL_OBJ)
 
 CFLAGS := -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic -fno-pie -mno-red-zone -Wall -Wextra -I. -Ikernel/include -Iarch/x86_64
 LDFLAGS := -nostdlib -T linker.ld
@@ -82,8 +83,11 @@ $(ARCH_INTERRUPT_ENTRY_OBJ): arch/x86_64/interrupt_entry.asm | dirs
 $(HAL_CONSOLE_OBJ): arch/x86_64/hal_console.c kernel/include/hal/console.h arch/x86_64/serial.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/hal_console.c -o $(HAL_CONSOLE_OBJ)
 
-$(HAL_INTERRUPT_OBJ): arch/x86_64/hal_interrupt.c kernel/include/hal/interrupt.h arch/x86_64/interrupt.h | dirs
+$(HAL_INTERRUPT_OBJ): arch/x86_64/hal_interrupt.c kernel/include/hal/interrupt.h arch/x86_64/interrupt.h arch/x86_64/pic.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/hal_interrupt.c -o $(HAL_INTERRUPT_OBJ)
+
+$(ARCH_PIC_OBJ): arch/x86_64/pic.c arch/x86_64/pic.h kernel/include/hal/console.h | dirs
+	$(CLANG) $(CFLAGS) -c arch/x86_64/pic.c -o $(ARCH_PIC_OBJ)
 
 $(SERIAL_OBJ): arch/x86_64/serial.c arch/x86_64/serial.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/serial.c -o $(SERIAL_OBJ)
