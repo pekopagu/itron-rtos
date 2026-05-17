@@ -40,6 +40,7 @@
 #define ARCH_PIC_MASTER_HAS_SLAVE_ON_IRQ2 0x04U
 #define ARCH_PIC_SLAVE_CASCADE_ID 0x02U
 #define ARCH_PIC_ALL_MASKED 0xFFU
+#define ARCH_PIC_EOI 0x20U
 
 typedef unsigned char arch_pic_u8_t;
 typedef unsigned short arch_pic_u16_t;
@@ -185,4 +186,21 @@ void arch_pic_unmask_irq(unsigned int irq)
     }
 
     arch_pic_write_masks();
+}
+
+void arch_pic_send_eoi(unsigned int irq)
+{
+    if (!arch_pic_irq_is_valid(irq)) {
+        return;
+    }
+
+    /*
+     * slave側IRQはcascade元のmaster IRQ2にも完了通知が必要である。
+     * mask mirrorは割り込み許可状態のsource of truthなので、EOIでは変更しない。
+     */
+    if (irq >= ARCH_PIC_IRQS_PER_CHIP) {
+        arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_COMMAND, ARCH_PIC_EOI);
+    }
+
+    arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_COMMAND, ARCH_PIC_EOI);
 }

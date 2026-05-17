@@ -11,12 +11,14 @@ BITS 64
 section .text
 
 extern arch_exception_handle
+extern arch_timer_irq_handle
 
 global arch_exception_stub_divide_error
 global arch_exception_stub_breakpoint
 global arch_exception_stub_invalid_opcode
 global arch_exception_stub_general_protection
 global arch_exception_stub_page_fault
+global arch_timer_irq_stub
 
 %macro EXCEPTION_STUB_NO_ERROR 2
 %1:
@@ -68,3 +70,13 @@ EXCEPTION_STUB_NO_ERROR arch_exception_stub_breakpoint, 3
 EXCEPTION_STUB_NO_ERROR arch_exception_stub_invalid_opcode, 6
 EXCEPTION_STUB_WITH_ERROR arch_exception_stub_general_protection, 13
 EXCEPTION_STUB_WITH_ERROR arch_exception_stub_page_fault, 14
+
+arch_timer_irq_stub:
+    ; 第7章7.3のtimer IRQ entry到達観測用stub。
+    ; 本格的なinterrupt frame、register保存、iretq復帰、timer_tick接続はまだ行わない。
+    call arch_timer_irq_handle
+.halt:
+    ; interrupt gate entry後にiretqしないため、validation runは到達log後に停止する。
+    ; 連続IRQやpreemptionへ進まないことを明示する観測モデルである。
+    hlt
+    jmp .halt

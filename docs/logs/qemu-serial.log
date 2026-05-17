@@ -5,6 +5,7 @@ kernel_main reached
 [interrupt] idt loaded
 [pic] init begin
 [pic] init done: master_base=32 slave_base=40 irqs=masked
+[timer-irq] validation enable: unmask irq0 and sti
 [kernel] task init
 [timer-smoke] begin
 [timer] init: tick=0
@@ -88,6 +89,4 @@ kernel_main reached
 [entry] calling current: id=2 name=task_b prio=1 state=RUNNING
 [task_b] executed
 [entry] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] ready again: result=ok id=2 name=task_b state=READY
-[cooperative] stop: reason=limit-reached
+[cooperative] returned current: [timer-irq] entry reached: vector=32 irq=0

@@ -61,7 +61,7 @@ The current implementation covers the following milestones:
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
 | 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
 | 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
-| 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
+| 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -251,6 +251,24 @@ Chapter 7 Section 7.2 adds the interrupt controller foundation:
   from an interrupt handler, preemption execution, context switching from an
   interrupt handler, nested interrupts, SMP, or ITRON-compatible interrupt APIs.
 
+Chapter 7 Section 7.3 adds the timer interrupt entry boundary:
+
+* IDT vector 32 is registered as the remapped legacy PIC IRQ0 entry.
+* `arch/x86_64/interrupt_entry.asm` provides the temporary timer IRQ entry
+  stub, and the C handler logs only `[timer-irq] entry reached: vector=32 irq=0`.
+* The handler sends the minimum legacy PIC EOI for IRQ0 after the observation
+  log. PIC EOI port details remain inside the x86_64 PIC module.
+* Normal boot keeps IRQ0 masked, so existing smoke logs continue without timer
+  IRQ handler arrival.
+* `make run VALIDATE_TIMER_IRQ_ENTRY=1` explicitly unmasks IRQ0 and enables
+  maskable interrupts for entry-arrival observation.
+* This is not a timer subsystem. It does not program PIT frequency, call
+  `timer_tick()` from an interrupt, evaluate preemption, call scheduler or
+  dispatcher, switch context, change task state, implement nested interrupts,
+  or provide ITRON-compatible interrupt APIs.
+* The interrupt-time log is intentionally minimal. Chapter 7 Section 7.4 will
+  handle the logging constraints and observation model more explicitly.
+
 ---
 
 ## Development Environment
@@ -348,6 +366,13 @@ Chapter 7 Section 7.2 adds this interrupt-controller preparation path:
 kernel_main -> hal_interrupt_controller_init -> arch_pic_init -> PIC remap and all-mask
 ```
 
+Chapter 7 Section 7.3 adds this timer IRQ entry validation path:
+
+```text
+kernel_main -> hal_interrupt_enable_timer_entry_validation
+IRQ0/vector 32 -> arch timer IRQ stub -> timer IRQ observation handler -> PIC EOI
+```
+
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
 to the serial log.
 
@@ -431,6 +456,20 @@ before the existing smoke flows. The PIC is remapped to use vector base 32 for
 the master PIC and 40 for the slave PIC, then all IRQ lines are left masked.
 This prepares the IRQ0 routing position for Chapter 7 Section 7.3 without
 starting PIT delivery or interrupt-driven task switching.
+
+Chapter 7 Section 7.3 registers vector 32 as the timer IRQ entry and adds a
+temporary x86_64 handler that logs entry arrival and sends IRQ0 EOI. Normal
+boot still leaves IRQ0 masked. The entry path is enabled only by an explicit
+validation build:
+
+```powershell
+make run VALIDATE_TIMER_IRQ_ENTRY=1
+```
+
+That validation run observes the IRQ0/vector 32 entry point. It does not
+program the PIT, does not call `timer_tick()`, and does not connect the
+interrupt path to preemption, scheduler, dispatcher, context switching, or task
+state changes.
 
 ### Build
 
@@ -913,6 +952,7 @@ See the LICENSE file for details.
 * [x] Preemption decision foundation
 * [x] Interrupt and exception foundation
 * [x] PIC interrupt controller foundation
+* [x] Timer interrupt entry
 * [ ] Timer interrupt
 
 ---
@@ -952,6 +992,8 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 6       | 6.2     | Timer foundation                           | v6.2-timer-foundation       | Completed |
 | 6       | 6.3     | Preemption foundation                      | v6.3-preemption-foundation  | Completed |
 | 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
+| 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
+| 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
 
 ---
 

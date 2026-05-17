@@ -16,6 +16,7 @@
 #include "interrupt.h"
 
 #include "hal/console.h"
+#include "pic.h"
 
 #include <stddef.h>
 
@@ -24,6 +25,8 @@
 #define ARCH_GDT_KERNEL_CODE_SELECTOR 0x08U
 #define ARCH_INTERRUPT_OK 0
 #define ARCH_INTERRUPT_ERR_INVAL (-1)
+#define ARCH_TIMER_IRQ_VECTOR 32U
+#define ARCH_TIMER_IRQ_LINE 0U
 
 typedef unsigned char arch_u8_t;
 typedef unsigned short arch_u16_t;
@@ -77,6 +80,7 @@ extern void arch_exception_stub_breakpoint(void);
 extern void arch_exception_stub_invalid_opcode(void);
 extern void arch_exception_stub_general_protection(void);
 extern void arch_exception_stub_page_fault(void);
+extern void arch_timer_irq_stub(void);
 
 static arch_idt_entry_t arch_idt[ARCH_IDT_ENTRY_COUNT];
 static int arch_interrupt_initialized;
@@ -239,6 +243,18 @@ static int arch_idt_install_exception_gates(void)
 }
 
 /**
+ * @brief remap済みIRQ0に対応するvector 32 timer IRQ gateを登録する。
+ *
+ * @details
+ * 第7章7.3では割り込み入口に到達できる構造だけを作る。ここで登録するgateは
+ * `timer_tick()`、scheduler、dispatcher、context switchへ接続しない。
+ */
+static int arch_idt_install_timer_irq_gate(void)
+{
+    return arch_idt_set_gate(ARCH_TIMER_IRQ_VECTOR, arch_timer_irq_stub);
+}
+
+/**
  * @brief 構築済みIDTRをCPUへloadする。
  *
  * @details
@@ -291,6 +307,22 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
     }
 }
 
+/**
+ * @brief IRQ0/vector 32 timer interrupt entry到達を最小限に観測する。
+ *
+ * @details
+ * このhandlerは第7章7.3の一時的なentry-arrival observation handlerである。
+ * serial logは7.4で本格的に制約を整理する前の最小出力に留める。
+ * `timer_tick()`、scheduler、dispatcher、context switch、task state変更は
+ * 呼び出さない。観測後にlegacy PICへIRQ0 EOIを送り、PIC完了通知位置だけを
+ * 明示する。
+ */
+void arch_timer_irq_handle(void)
+{
+    hal_console_write("[timer-irq] entry reached: vector=32 irq=0\n");
+    arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
+}
+
 int arch_interrupt_init(void)
 {
     arch_idtr_t idtr;
@@ -300,6 +332,10 @@ int arch_interrupt_init(void)
 
     if (arch_idt_install_exception_gates() != ARCH_INTERRUPT_OK) {
         hal_console_write("[interrupt] init failed: gate install\n");
+        return ARCH_INTERRUPT_ERR_INVAL;
+    }
+    if (arch_idt_install_timer_irq_gate() != ARCH_INTERRUPT_OK) {
+        hal_console_write("[interrupt] init failed: timer irq gate install\n");
         return ARCH_INTERRUPT_ERR_INVAL;
     }
 
@@ -330,4 +366,20 @@ void arch_interrupt_trigger_validation_exception(void)
      * 使わず、IDT登録とentry stub到達だけをQEMU serial logで確認する。
      */
     __asm__ volatile ("int3");
+}
+
+void arch_interrupt_enable_timer_entry_validation(void)
+{
+    if (!arch_interrupt_initialized) {
+        hal_console_write("[timer-irq] validation skipped: interrupt not initialized\n");
+        return;
+    }
+
+    hal_console_write("[timer-irq] validation enable: unmask irq0 and sti\n");
+    arch_pic_unmask_irq(ARCH_TIMER_IRQ_LINE);
+    /*
+     * PIT programmingは行わない。QEMUの既定状態で届くIRQ0がvector 32 entryへ
+     * 到達できることだけを観測するため、CPU側のmaskable interruptを開く。
+     */
+    __asm__ volatile ("sti");
 }

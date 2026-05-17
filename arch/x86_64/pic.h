@@ -58,4 +58,21 @@ void arch_pic_mask_irq(unsigned int irq);
  */
 void arch_pic_unmask_irq(unsigned int irq);
 
+/**
+ * @brief 指定したPIC IRQ lineの処理完了をlegacy PICへ通知する。
+ *
+ * @details
+ * IRQ handlerが最小限の観測処理を終えた後に呼ぶarch-local APIである。
+ * port I/Oとmaster/slave PICのEOI順序はx86_64 PIC moduleに閉じる。
+ * IRQ 8-15ではslave PICへEOIを送ってからmaster PICへEOIを送る。
+ *
+ * このAPIはmask stateを変更しない。範囲外IRQは無視する。第7章7.3では
+ * IRQ0 timer interrupt entry到達後の完了通知位置を明示するために使い、
+ * `timer_tick()`、scheduler、dispatcher、context switchとは接続しない。
+ * APIC/IOAPIC/LAPIC対応時には、この境界の内側を置き換える想定である。
+ *
+ * @param irq EOIを送るIRQ line。0-15のみ有効。
+ */
+void arch_pic_send_eoi(unsigned int irq);
+
 #endif

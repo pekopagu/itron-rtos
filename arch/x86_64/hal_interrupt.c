@@ -56,3 +56,16 @@ void hal_interrupt_trigger_validation_exception(void)
 {
     arch_interrupt_trigger_validation_exception();
 }
+
+/**
+ * @brief timer IRQ entry validationをx86_64 arch実装へ委譲する。
+ *
+ * @details
+ * 明示validation build専用の境界である。通常bootでは呼ばれない。
+ * HAL層はPIC port、vector番号、entry stubの詳細を所有せず、arch-local helperへ
+ * 委譲するだけに留める。
+ */
+void hal_interrupt_enable_timer_entry_validation(void)
+{
+    arch_interrupt_enable_timer_entry_validation();
+}

@@ -7,9 +7,13 @@ OBJCOPY ?= llvm-objcopy
 QEMU ?= qemu-system-x86_64
 
 VALIDATE_EXCEPTION ?= 0
+VALIDATE_TIMER_IRQ_ENTRY ?= 0
 BUILD_DIR := build
 ifeq ($(VALIDATE_EXCEPTION),1)
 BUILD_DIR := build/validate-exception
+endif
+ifeq ($(VALIDATE_TIMER_IRQ_ENTRY),1)
+BUILD_DIR := build/validate-timer-irq-entry
 endif
 LOG_DIR := docs/logs
 KERNEL_ELF := $(BUILD_DIR)/kernel.elf
@@ -38,6 +42,10 @@ LDFLAGS := -nostdlib -T linker.ld
 
 ifeq ($(VALIDATE_EXCEPTION),1)
 CFLAGS += -DARCH_INTERRUPT_VALIDATE_EXCEPTION=1
+endif
+
+ifeq ($(VALIDATE_TIMER_IRQ_ENTRY),1)
+CFLAGS += -DARCH_TIMER_IRQ_ENTRY_VALIDATE=1
 endif
 
 .PHONY: all run clean dirs

@@ -40,4 +40,18 @@ int arch_interrupt_init(void);
  */
 void arch_interrupt_trigger_validation_exception(void);
 
+/**
+ * @brief timer IRQ entry到達確認用にIRQ0を開き、maskable interruptを有効化する。
+ *
+ * @details
+ * 第7章7.3の明示validation buildだけで使うarch-local helperである。
+ * IRQ0をlegacy PIC上でunmaskし、`sti` によってCPUのmaskable interruptを
+ * 受けられる状態にする。PIT programming、周期設定、`timer_tick()` 呼び出し、
+ * scheduler、dispatcher、context switch、task state変更は行わない。
+ *
+ * 通常bootでは呼び出さない。QEMU serial logでvector 32 handler到達だけを
+ * 観測するための一時的な入口であり、後続章のtimer subsystem接続で置き換える。
+ */
+void arch_interrupt_enable_timer_entry_validation(void);
+
 #endif

@@ -999,6 +999,14 @@ void kernel_main(void)
         }
     }
 
+#ifdef ARCH_TIMER_IRQ_ENTRY_VALIDATE
+    /*
+     * 第7章7.3の明示validation buildでは、IRQ0/vector 32 entryに到達できる構造だけを
+     * 観測する。PIT設定、timer_tick、scheduler、dispatcher、context switchには接続しない。
+     */
+    hal_interrupt_enable_timer_entry_validation();
+#endif
+
 #ifdef ARCH_INTERRUPT_VALIDATE_EXCEPTION
     /*
      * 明示的な検証buildでは、例外handler到達ログを出した後に停止する。
