@@ -86,6 +86,10 @@ static void arch_pic_io_wait(void)
  */
 static void arch_pic_write_masks(void)
 {
+    /*
+     * mask mirrorをPICのdata portへ反映する。hardware registerを直接source of truthに
+     * しないことで、mask/unmaskの意図をC側の状態更新として追跡しやすくする。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_DATA, pic_master_mask);
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_DATA, pic_slave_mask);
 }
@@ -101,6 +105,19 @@ static int arch_pic_irq_is_valid(unsigned int irq)
     return irq < ARCH_PIC_IRQ_COUNT;
 }
 
+/**
+ * @brief legacy PICを学習用の初期IRQ配置へremapし、全IRQをmaskする。
+ *
+ * @details
+ * master PICをvector 32、slave PICをvector 40へ移し、CPU exception vector 0-31と
+ * 外部IRQの観測範囲を分離する。初期化後も全IRQをmaskしたままにし、通常bootの
+ * smoke flowへhardware interruptが混入しないようにする。
+ *
+ * この処理は割り込みコントローラの準備だけを行う。PIT programming、timer ISR起動、
+ * `timer_tick()`、scheduler、dispatcher、context switch、preemptionへの接続は行わない。
+ *
+ * @return 現段階では常に0。port I/O失敗検出はまだ扱わない。
+ */
 int arch_pic_init(void)
 {
     hal_console_write("[pic] init begin\n");
@@ -118,6 +135,10 @@ int arch_pic_init(void)
      * vector 0-31 と IRQ vector の観測範囲を分離する。slave は master の IRQ2 に
      * cascade される構成だけを示し、SMP/APIC 系の配送モデルは扱わない。
      */
+    /*
+     * ICW1: master/slave PICを初期化モードへ入れる。
+     * ここからICW4までの連続したcommand sequenceでremap設定を投入する。
+     */
     arch_pic_outb(
         (arch_pic_u16_t)ARCH_PIC_MASTER_COMMAND,
         (arch_pic_u8_t)(ARCH_PIC_ICW1_INIT | ARCH_PIC_ICW1_EXPECT_ICW4)
@@ -129,68 +150,146 @@ int arch_pic_init(void)
     );
     arch_pic_io_wait();
 
+    /*
+     * ICW2: IRQ vector baseを設定する。masterを32に置くことで、
+     * CPU exception 0-31とIRQ0以降をserial log上でも区別しやすくする。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_DATA, ARCH_PIC_MASTER_VECTOR_BASE);
     arch_pic_io_wait();
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_DATA, ARCH_PIC_SLAVE_VECTOR_BASE);
     arch_pic_io_wait();
 
+    /*
+     * ICW3: master/slaveのcascade関係を明示する。
+     * legacy PIC構成ではslaveがmaster IRQ2に接続される前提だけを扱う。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_DATA, ARCH_PIC_MASTER_HAS_SLAVE_ON_IRQ2);
     arch_pic_io_wait();
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_DATA, ARCH_PIC_SLAVE_CASCADE_ID);
     arch_pic_io_wait();
 
+    /*
+     * ICW4: x86向けの8086/88 modeを選ぶ。ここではlegacy PICの最小利用に留め、
+     * APIC/IOAPIC/LAPICや高度な割り込み配送modelは導入しない。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_DATA, ARCH_PIC_ICW4_8086_MODE);
     arch_pic_io_wait();
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_DATA, ARCH_PIC_ICW4_8086_MODE);
     arch_pic_io_wait();
 
+    /*
+     * remap完了後も全IRQ maskedを維持する。第7章7.4では通常bootでtimer IRQ観測logを
+     * 出さないことが重要なので、validation入口だけが必要なIRQを個別にunmaskする。
+     */
     arch_pic_write_masks();
 
     hal_console_write("[pic] init done: master_base=32 slave_base=40 irqs=masked\n");
     return 0;
 }
 
+/**
+ * @brief 指定したlegacy PIC IRQ lineをmaskする。
+ *
+ * @details
+ * C側のmask mirrorを更新してからPIC data portへ反映する。範囲外IRQは無視し、
+ * 既存のmask状態を変えない。master/slaveのどちらに属するかだけをここで判定し、
+ * port番号の詳細はこのmodule内へ閉じ込める。
+ *
+ * @param irq maskするIRQ line。0-15のみ有効。
+ */
 void arch_pic_mask_irq(unsigned int irq)
 {
     arch_pic_u8_t bit;
 
     if (!arch_pic_irq_is_valid(irq)) {
+        /*
+         * 範囲外IRQを呼び出し側のエラーとして扱わず、状態を変えずに戻る。
+         * 学習用の最小APIとして、異常系logやpanicはまだ導入しない。
+         */
         return;
     }
 
     if (irq < ARCH_PIC_IRQS_PER_CHIP) {
+        /*
+         * IRQ0-7はmaster PICに属する。該当bitを1にして配送を止める。
+         */
         bit = (arch_pic_u8_t)(1U << irq);
         pic_master_mask = (arch_pic_u8_t)(pic_master_mask | bit);
     } else {
+        /*
+         * IRQ8-15はslave PICに属する。slave側のbit位置へ変換してmaskする。
+         */
         bit = (arch_pic_u8_t)(1U << (irq - ARCH_PIC_IRQS_PER_CHIP));
         pic_slave_mask = (arch_pic_u8_t)(pic_slave_mask | bit);
     }
 
+    /*
+     * mirror更新後にhardwareへ反映する。mask変更はこの1箇所に集約する。
+     */
     arch_pic_write_masks();
 }
 
+/**
+ * @brief 指定したlegacy PIC IRQ lineをunmaskする。
+ *
+ * @details
+ * 明示validationなど、限定された観測で必要なIRQだけを開くためのAPIである。
+ * 範囲外IRQは無視し、既存のmask状態を変えない。通常bootではIRQ0をunmaskしないため、
+ * timer IRQ観測は `VALIDATE_TIMER_IRQ_ENTRY=1` の経路に限定される。
+ *
+ * @param irq unmaskするIRQ line。0-15のみ有効。
+ */
 void arch_pic_unmask_irq(unsigned int irq)
 {
     arch_pic_u8_t bit;
 
     if (!arch_pic_irq_is_valid(irq)) {
+        /*
+         * 無効なIRQ番号ではmask mirrorにもhardwareにも触れない。
+         * これにより誤った呼び出しが別IRQの配送状態を壊さない。
+         */
         return;
     }
 
     if (irq < ARCH_PIC_IRQS_PER_CHIP) {
+        /*
+         * IRQ0-7はmaster PIC側のbitを0にして配送を許可する。
+         */
         bit = (arch_pic_u8_t)(1U << irq);
         pic_master_mask = (arch_pic_u8_t)(pic_master_mask & (arch_pic_u8_t)~bit);
     } else {
+        /*
+         * IRQ8-15はslave PIC側のbitを0にする。master IRQ2の扱いは
+         * この章では高度化せず、legacy PICの最小観測に留める。
+         */
         bit = (arch_pic_u8_t)(1U << (irq - ARCH_PIC_IRQS_PER_CHIP));
         pic_slave_mask = (arch_pic_u8_t)(pic_slave_mask & (arch_pic_u8_t)~bit);
     }
 
+    /*
+     * 更新したmirrorをPICへ書き戻し、以降のIRQ配送可否に反映する。
+     */
     arch_pic_write_masks();
 }
 
+/**
+ * @brief 指定したlegacy PIC IRQ lineの処理完了をPICへ通知する。
+ *
+ * @details
+ * IRQ handlerが最小観測を終えた後に呼ぶarch-local APIである。EOIは割り込み配送の
+ * 完了通知であり、mask mirrorを変更しない。IRQ8-15ではslaveへ通知してから
+ * cascade元のmasterへ通知する。IRQ0のtimer entry validationではmaster PICへだけ
+ * EOIを送る。
+ *
+ * @param irq EOIを送るIRQ line。0-15のみ有効。
+ */
 void arch_pic_send_eoi(unsigned int irq)
 {
     if (!arch_pic_irq_is_valid(irq)) {
+        /*
+         * 無効なIRQ番号ではEOIを送らない。誤ったcommand port書き込みを避け、
+         * unrelatedなPIC状態を変えないためである。
+         */
         return;
     }
 
@@ -199,8 +298,16 @@ void arch_pic_send_eoi(unsigned int irq)
      * mask mirrorは割り込み許可状態のsource of truthなので、EOIでは変更しない。
      */
     if (irq >= ARCH_PIC_IRQS_PER_CHIP) {
+        /*
+         * slave IRQでは先にslave PICへEOIを送る。未完了状態をslave側に残したまま
+         * masterだけを完了扱いにしないための順序である。
+         */
         arch_pic_outb((arch_pic_u16_t)ARCH_PIC_SLAVE_COMMAND, ARCH_PIC_EOI);
     }
 
+    /*
+     * master PICへEOIを送る。IRQ0-7ではこれだけで完了し、IRQ8-15ではcascade元の
+     * master IRQ2に対する完了通知にもなる。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_MASTER_COMMAND, ARCH_PIC_EOI);
 }

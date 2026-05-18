@@ -266,8 +266,26 @@ Chapter 7 Section 7.3 adds the timer interrupt entry boundary:
   `timer_tick()` from an interrupt, evaluate preemption, call scheduler or
   dispatcher, switch context, change task state, implement nested interrupts,
   or provide ITRON-compatible interrupt APIs.
-* The interrupt-time log is intentionally minimal. Chapter 7 Section 7.4 will
-  handle the logging constraints and observation model more explicitly.
+* The interrupt-time log is intentionally minimal and exists only as explicit
+  validation evidence.
+
+Chapter 7 Section 7.4 defines the interrupt-time log observation model:
+
+* Logs emitted while the CPU is handling an interrupt are constrained. In this
+  educational stage they use the same polling serial path as normal boot logs,
+  so a timer IRQ observation line can appear in the middle of an existing log
+  sequence.
+* `[timer-irq] entry reached: vector=32 irq=0` is a validation-only observation
+  log, not a normal boot smoke log and not evidence of a general
+  interrupt-safe logging subsystem.
+* Normal boot keeps IRQ0 masked and does not emit the timer IRQ observation
+  log. Only `make run VALIDATE_TIMER_IRQ_ENTRY=1` enables the temporary
+  observation path.
+* The observation handler still does not call `timer_tick()`, scheduler,
+  dispatcher, context switch, preemption logic, or task state transition logic.
+* This section does not implement nested interrupts, continuous interrupt
+  delivery, production interrupt return with `iretq`, PIT programming, APIC
+  support, SMP, or ITRON-compatible interrupt APIs.
 
 ---
 
@@ -470,6 +488,11 @@ That validation run observes the IRQ0/vector 32 entry point. It does not
 program the PIT, does not call `timer_tick()`, and does not connect the
 interrupt path to preemption, scheduler, dispatcher, context switching, or task
 state changes.
+
+Chapter 7 Section 7.4 narrows how that validation output should be read. The
+timer IRQ line is an interrupt-time observation log, so it may interleave with
+ordinary serial output. Treat it as handler-arrival evidence for the explicit
+validation build only; normal boot must remain free of `[timer-irq]` output.
 
 ### Build
 
@@ -953,6 +976,7 @@ See the LICENSE file for details.
 * [x] Interrupt and exception foundation
 * [x] PIC interrupt controller foundation
 * [x] Timer interrupt entry
+* [x] Interrupt log observation model
 * [ ] Timer interrupt
 
 ---

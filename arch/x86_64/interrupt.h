@@ -51,6 +51,12 @@ void arch_interrupt_trigger_validation_exception(void);
  *
  * 通常bootでは呼び出さない。QEMU serial logでvector 32 handler到達だけを
  * 観測するための一時的な入口であり、後続章のtimer subsystem接続で置き換える。
+ *
+ * @note この関数は第7章7.4の観測モデルに属する。目的はIRQ0/vector 32の
+ * handler到達をQEMU serial logで確認することであり、通常運用の割り込み開始ではない。
+ *
+ * @warning 割り込み中の観測ログは通常boot logへ混ざり得る。ログ順序の保証、
+ * nested interrupt、連続割り込み、通常の割り込み復帰、timer tick接続は扱わない。
  */
 void arch_interrupt_enable_timer_entry_validation(void);
 

@@ -311,29 +311,72 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
  * @brief IRQ0/vector 32 timer interrupt entry到達を最小限に観測する。
  *
  * @details
- * このhandlerは第7章7.3の一時的なentry-arrival observation handlerである。
- * serial logは7.4で本格的に制約を整理する前の最小出力に留める。
+ * このhandlerは第7章7.4で定義するvalidation専用のentry-arrival observation
+ * handlerである。割り込み中のserial logは通常boot logと同じ出力経路を使うため、
+ * 既存log列の途中に混ざり得る。従って、この出力は通常ログの順序保証や
+ * interrupt-safe logging基盤を示すものではなく、明示validation時のhandler到達証跡
+ * としてだけ扱う。
  * `timer_tick()`、scheduler、dispatcher、context switch、task state変更は
- * 呼び出さない。観測後にlegacy PICへIRQ0 EOIを送り、PIC完了通知位置だけを
- * 明示する。
+ * 呼び出さない。nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
+ * 観測後にlegacy PICへIRQ0 EOIを送り、PIC完了通知位置だけを明示する。
  */
 void arch_timer_irq_handle(void)
 {
+    /*
+     * 明示validationでIRQ0/vector 32へ到達した事実だけを残す。
+     * 割り込み中のserial出力は通常ログへ混ざり得るため、この行を
+     * 通常bootの順序保証されたログとして扱わない。
+     */
     hal_console_write("[timer-irq] entry reached: vector=32 irq=0\n");
+
+    /*
+     * 現段階ではtimer処理へ進まず、PICへ受理完了だけを通知する。
+     * EOI位置を明示しておくことで、後続章でtimer_tick接続を検討する際も
+     * 「観測」と「割り込み完了通知」の境界を追跡しやすくする。
+     */
     arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
 }
 
+/**
+ * @brief x86_64の割り込み・例外観測用IDTを初期化する。
+ *
+ * @details
+ * CPU例外用gateと、remap済みIRQ0/vector 32用gateをIDTへ登録してから
+ * `lidt` でCPUへ渡す。ここで行うのはentry到達を観測できる最小構造の準備であり、
+ * maskable interruptの有効化、PIT設定、timer tick、scheduler、dispatcher、
+ * context switch、preemptionへの接続は行わない。
+ *
+ * @return 成功時は0。IDT gate登録に失敗した場合は負値。
+ */
 int arch_interrupt_init(void)
 {
     arch_idtr_t idtr;
 
+    /*
+     * 初期化開始を通常boot logへ残す。ここではまだ割り込みは有効化されておらず、
+     * 以降の失敗位置をserial logから切り分けるための通常ログである。
+     */
     hal_console_write("[interrupt] init begin\n");
+
+    /*
+     * 前回の内容を持ち越さず、登録したgateだけが有効になる状態から組み立てる。
+     * 未登録vectorを誤ってhandlerへ接続しないための防御的な初期化である。
+     */
     arch_idt_clear();
 
+    /*
+     * CPU例外の観測経路を先に登録する。IRQ用vectorとは分けておくことで、
+     * 例外観測と外部割り込み観測の責務を混同しない。
+     */
     if (arch_idt_install_exception_gates() != ARCH_INTERRUPT_OK) {
         hal_console_write("[interrupt] init failed: gate install\n");
         return ARCH_INTERRUPT_ERR_INVAL;
     }
+
+    /*
+     * IRQ0/vector 32のentryだけを登録する。登録は到達可能性の準備であり、
+     * 通常bootでIRQ0をunmaskすることやtimer subsystemを開始することを意味しない。
+     */
     if (arch_idt_install_timer_irq_gate() != ARCH_INTERRUPT_OK) {
         hal_console_write("[interrupt] init failed: timer irq gate install\n");
         return ARCH_INTERRUPT_ERR_INVAL;
@@ -345,6 +388,11 @@ int arch_interrupt_init(void)
      */
     idtr.limit = (arch_u16_t)(sizeof(arch_idt) - 1U);
     idtr.base = (arch_u64_t)(arch_uptr_t)&arch_idt[0];
+
+    /*
+     * CPUへIDTの場所を知らせるだけで、割り込み配送はまだ開始しない。
+     * `sti` はvalidation専用入口に閉じ、通常bootのsmoke flowを安定させる。
+     */
     arch_lidt(&idtr);
 
     arch_interrupt_initialized = 1;
@@ -353,6 +401,14 @@ int arch_interrupt_init(void)
     return ARCH_INTERRUPT_OK;
 }
 
+/**
+ * @brief 例外entry到達確認用の同期trapを発生させる。
+ *
+ * @details
+ * 明示validation buildでだけ使う補助入口である。`int3` によりCPU例外handlerへの
+ * 到達を観測するが、外部IRQ、timer interrupt、scheduler、dispatcher、
+ * context switchへは接続しない。通常bootでは呼び出さない。
+ */
 void arch_interrupt_trigger_validation_exception(void)
 {
     if (!arch_interrupt_initialized) {
@@ -360,6 +416,10 @@ void arch_interrupt_trigger_validation_exception(void)
         return;
     }
 
+    /*
+     * trap発生直前に通常ログを出し、以降の例外handler logが意図したvalidationの
+     * 結果であることをQEMU serial log上で識別できるようにする。
+     */
     hal_console_write("[interrupt] validation trigger: int3\n");
     /*
      * int3はbreakpoint例外(vector 3)を同期的に発生させる。外部IRQやtimerを
@@ -368,6 +428,16 @@ void arch_interrupt_trigger_validation_exception(void)
     __asm__ volatile ("int3");
 }
 
+/**
+ * @brief timer IRQ entry観測用にIRQ0配送を一時的に許可する。
+ *
+ * @details
+ * `VALIDATE_TIMER_IRQ_ENTRY=1` のbuildでだけ呼ばれるx86_64固有のvalidation入口である。
+ * legacy PIC上のIRQ0をunmaskし、`sti` でCPUのmaskable interruptを受け付ける。
+ * これはhandler到達を観測するための一時的な構成であり、PIT programming、
+ * `timer_tick()`、scheduler、dispatcher、context switch、preemption、通常の
+ * interrupt return modelを開始しない。
+ */
 void arch_interrupt_enable_timer_entry_validation(void)
 {
     if (!arch_interrupt_initialized) {
@@ -375,11 +445,25 @@ void arch_interrupt_enable_timer_entry_validation(void)
         return;
     }
 
+    /*
+     * validation入口に入ったことを通常ログとして先に残す。
+     * この後に出る `[timer-irq] entry reached` は割り込み中観測ログであり、
+     * 通常ログ列へ混ざる可能性がある。
+     */
     hal_console_write("[timer-irq] validation enable: unmask irq0 and sti\n");
+
+    /*
+     * IRQ0だけを開く。PICのI/O portやmask bitの詳細はPIC moduleへ閉じ込め、
+     * interrupt.c側は「IRQ0を観測対象にする」という意図だけを表す。
+     */
     arch_pic_unmask_irq(ARCH_TIMER_IRQ_LINE);
     /*
      * PIT programmingは行わない。QEMUの既定状態で届くIRQ0がvector 32 entryへ
      * 到達できることだけを観測するため、CPU側のmaskable interruptを開く。
+     */
+    /*
+     * CPU側でmaskable interruptを受け付ける。通常bootではここへ到達しないため、
+     * 既存smoke flowはtimer IRQ観測の影響を受けない。
      */
     __asm__ volatile ("sti");
 }

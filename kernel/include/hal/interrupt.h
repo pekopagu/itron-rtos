@@ -61,6 +61,12 @@ void hal_interrupt_trigger_validation_exception(void);
  * interrupt enableを行うが、kernel commonはPIC port、vector 32、entry stubの
  * 詳細を知らない。PIT programming、`timer_tick()`、scheduler、dispatcher、
  * context switchへの接続は行わない。
+ *
+ * @note kernel commonが知ってよいのは「明示validationを開始する」ことだけである。
+ * PICのI/O port、IRQ0のmask bit、vector 32、entry stubの詳細はHAL実装より下へ閉じ込める。
+ *
+ * @warning 通常bootから呼び出してはならない。これはtimer interrupt subsystem、
+ * preemption、scheduler、dispatcher、context switchを開始するAPIではない。
  */
 void hal_interrupt_enable_timer_entry_validation(void);
 
