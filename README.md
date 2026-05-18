@@ -283,6 +283,9 @@ Chapter 7 Section 7.4 defines the interrupt-time log observation model:
   observation path.
 * The observation handler still does not call `timer_tick()`, scheduler,
   dispatcher, context switch, preemption logic, or task state transition logic.
+* Doxygen comments in `arch/x86_64/interrupt.c` and `arch/x86_64/pic.c`
+  describe the intent of the observation path, PIC remap sequence, mask mirror,
+  IRQ0 unmask validation gate, and EOI placement.
 * This section does not implement nested interrupts, continuous interrupt
   delivery, production interrupt return with `iretq`, PIT programming, APIC
   support, SMP, or ITRON-compatible interrupt APIs.
@@ -493,6 +496,9 @@ Chapter 7 Section 7.4 narrows how that validation output should be read. The
 timer IRQ line is an interrupt-time observation log, so it may interleave with
 ordinary serial output. Treat it as handler-arrival evidence for the explicit
 validation build only; normal boot must remain free of `[timer-irq]` output.
+The related Doxygen comments now document why the PIC remap keeps all IRQs
+masked, why validation opens only IRQ0, and why the handler sends EOI without
+calling timer or scheduler logic.
 
 ### Build
 
@@ -775,6 +781,8 @@ The current kernel includes:
 * PIC mask/unmask API in the x86_64 arch boundary
 * Fully masked PIC state after boot-time initialization
 * PIC initialization observation through QEMU serial log
+* Interrupt-time log observation model for timer IRQ validation
+* Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
 
@@ -823,7 +831,12 @@ The following features are intentionally not implemented yet:
 ## Documentation
 
 Source files now include Doxygen-style comments for the current low-level
-kernel, serial, HAL, and initial task-management APIs.
+kernel, serial, HAL, interrupt, PIC, and initial task-management APIs. Recent
+interrupt/PIC comments are written in Japanese and focus on execution intent:
+why the IDT/PIC setup remains observation-only, why normal boot keeps IRQs
+masked, why `VALIDATE_TIMER_IRQ_ENTRY=1` opens only IRQ0, and why the timer IRQ
+handler sends EOI without connecting to timer, scheduler, dispatcher,
+preemption, or context switching.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
