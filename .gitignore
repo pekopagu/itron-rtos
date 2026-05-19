@@ -22,7 +22,8 @@ build/
 # =========================
 docs/logs/*
 !docs/logs/
-!docs/logs/qemu-serial.log   # Keep only the QEMU serial verification log
+# Keep only the QEMU serial verification log
+!docs/logs/qemu-serial.log
 
 # =========================
 # Temporary

@@ -39,6 +39,10 @@ void timer_init(void);
  * 第6章6.2ではkernel boot verificationから明示的に呼び出す。
  * tickを進めるだけで、preemption、time slice、context switch、
  * delay/timeout wakeupは実行しない。
+ *
+ * @note 第8章8.1ではtimer interrupt handlerからも呼ばれる。ただし、この関数は
+ * tickを1つ進めるだけで、scheduler、dispatcher、context switch、preemption、
+ * task state変更、delay/timeout wakeupは起動しない。
  */
 void timer_tick(void);
 

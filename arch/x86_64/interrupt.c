@@ -17,6 +17,7 @@
 
 #include "hal/console.h"
 #include "pic.h"
+#include "timer.h"
 
 #include <stddef.h>
 
@@ -246,8 +247,8 @@ static int arch_idt_install_exception_gates(void)
  * @brief remap済みIRQ0に対応するvector 32 timer IRQ gateを登録する。
  *
  * @details
- * 第7章7.3では割り込み入口に到達できる構造だけを作る。ここで登録するgateは
- * `timer_tick()`、scheduler、dispatcher、context switchへ接続しない。
+ * 第8章8.1では、このgateから到達するhandlerが `timer_tick()` を呼ぶ。
+ * ただしscheduler、dispatcher、context switch、preemptionへは接続しない。
  */
 static int arch_idt_install_timer_irq_gate(void)
 {
@@ -311,14 +312,13 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
  * @brief IRQ0/vector 32 timer interrupt entry到達を最小限に観測する。
  *
  * @details
- * このhandlerは第7章7.4で定義するvalidation専用のentry-arrival observation
- * handlerである。割り込み中のserial logは通常boot logと同じ出力経路を使うため、
+ * このhandlerは第8章8.1で定義するvalidation専用のtick接続観測handlerである。
+ * 割り込み中のserial logは通常boot logと同じ出力経路を使うため、
  * 既存log列の途中に混ざり得る。従って、この出力は通常ログの順序保証や
- * interrupt-safe logging基盤を示すものではなく、明示validation時のhandler到達証跡
- * としてだけ扱う。
- * `timer_tick()`、scheduler、dispatcher、context switch、task state変更は
- * 呼び出さない。nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
- * 観測後にlegacy PICへIRQ0 EOIを送り、PIC完了通知位置だけを明示する。
+ * interrupt-safe logging基盤を示すものではなく、明示validation時のhandler到達と
+ * tick更新の証跡としてだけ扱う。handlerの責務は `timer_tick()` 1回とEOIまでであり、
+ * scheduler、dispatcher、context switch、preemption、task state変更は呼び出さない。
+ * nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
  */
 void arch_timer_irq_handle(void)
 {
@@ -330,11 +330,14 @@ void arch_timer_irq_handle(void)
     hal_console_write("[timer-irq] entry reached: vector=32 irq=0\n");
 
     /*
-     * 現段階ではtimer処理へ進まず、PICへ受理完了だけを通知する。
-     * EOI位置を明示しておくことで、後続章でtimer_tick接続を検討する際も
-     * 「観測」と「割り込み完了通知」の境界を追跡しやすくする。
+     * 第8章8.1では、hardware timer interrupt起点でkernel timerのtickを1つ進める。
+     * timer_tick()はpublic timer APIであり、scheduler、dispatcher、context switch、
+     * preemption、task state変更へは接続しない。
      */
+    timer_tick();
+
     arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
+    hal_console_write("[timer-irq] eoi sent: irq=0\n");
 }
 
 /**
@@ -429,14 +432,13 @@ void arch_interrupt_trigger_validation_exception(void)
 }
 
 /**
- * @brief timer IRQ entry観測用にIRQ0配送を一時的に許可する。
+ * @brief timer IRQ tick接続観測用にIRQ0配送を一時的に許可する。
  *
  * @details
  * `VALIDATE_TIMER_IRQ_ENTRY=1` のbuildでだけ呼ばれるx86_64固有のvalidation入口である。
  * legacy PIC上のIRQ0をunmaskし、`sti` でCPUのmaskable interruptを受け付ける。
- * これはhandler到達を観測するための一時的な構成であり、PIT programming、
- * `timer_tick()`、scheduler、dispatcher、context switch、preemption、通常の
- * interrupt return modelを開始しない。
+ * これはhandler到達とtick更新を観測するための一時的な構成であり、PIT programming、
+ * scheduler、dispatcher、context switch、preemption、通常のinterrupt return modelを開始しない。
  */
 void arch_interrupt_enable_timer_entry_validation(void)
 {

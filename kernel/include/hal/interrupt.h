@@ -54,13 +54,13 @@ int hal_interrupt_controller_init(void);
 void hal_interrupt_trigger_validation_exception(void);
 
 /**
- * @brief timer IRQ entry到達確認をHAL境界越しに開始する。
+ * @brief timer IRQ tick接続確認をHAL境界越しに開始する。
  *
  * @details
- * 第7章7.3の明示validation buildだけで呼び出す。実装側ではIRQ0 unmaskと
+ * 第8章8.1の明示validation buildだけで呼び出す。実装側ではIRQ0 unmaskと
  * interrupt enableを行うが、kernel commonはPIC port、vector 32、entry stubの
- * 詳細を知らない。PIT programming、`timer_tick()`、scheduler、dispatcher、
- * context switchへの接続は行わない。
+ * 詳細を知らない。handler内では `timer_tick()` まで進むが、PIT programming、
+ * scheduler、dispatcher、context switch、preemptionへの接続は行わない。
  *
  * @note kernel commonが知ってよいのは「明示validationを開始する」ことだけである。
  * PICのI/O port、IRQ0のmask bit、vector 32、entry stubの詳細はHAL実装より下へ閉じ込める。

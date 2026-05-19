@@ -82,7 +82,7 @@ $(TASK_CONTEXT_OBJ): kernel/task_context.c kernel/include/task_context.h kernel/
 $(ARCH_CONTEXT_SWITCH_OBJ): arch/x86_64/context_switch.asm arch/x86_64/context_switch.h kernel/include/task.h | dirs
 	$(NASM) -f elf64 arch/x86_64/context_switch.asm -o $(ARCH_CONTEXT_SWITCH_OBJ)
 
-$(ARCH_INTERRUPT_OBJ): arch/x86_64/interrupt.c arch/x86_64/interrupt.h kernel/include/hal/console.h | dirs
+$(ARCH_INTERRUPT_OBJ): arch/x86_64/interrupt.c arch/x86_64/interrupt.h kernel/include/hal/console.h kernel/include/timer.h | dirs
 	$(CLANG) $(CFLAGS) -c arch/x86_64/interrupt.c -o $(ARCH_INTERRUPT_OBJ)
 
 $(ARCH_INTERRUPT_ENTRY_OBJ): arch/x86_64/interrupt_entry.asm | dirs

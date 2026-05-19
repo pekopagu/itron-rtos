@@ -246,8 +246,8 @@ Chapter 7 Section 7.2 adds the interrupt controller foundation:
 * The boot log shows PIC initialization completion before the existing task,
   timer, semaphore, preemption-decision, context-switch, and cooperative smoke
   flows.
-* This chapter still does not implement PIT timer interrupt delivery, a timer
-  ISR, EOI handling, `timer_tick()` from an ISR, scheduler or dispatcher calls
+* At the Chapter 7.2 point, the project still did not implement PIT timer
+  interrupt delivery, `timer_tick()` from an ISR, scheduler or dispatcher calls
   from an interrupt handler, preemption execution, context switching from an
   interrupt handler, nested interrupts, SMP, or ITRON-compatible interrupt APIs.
 
@@ -289,6 +289,25 @@ Chapter 7 Section 7.4 defines the interrupt-time log observation model:
 * This section does not implement nested interrupts, continuous interrupt
   delivery, production interrupt return with `iretq`, PIT programming, APIC
   support, SMP, or ITRON-compatible interrupt APIs.
+
+Chapter 8 Section 8.1 connects the timer IRQ handler to the kernel timer tick:
+
+* The IRQ0/vector 32 timer interrupt handler calls `timer_tick()` once after
+  the validation arrival log, then sends IRQ0 EOI.
+* `make run VALIDATE_TIMER_IRQ_ENTRY=1` observes handler arrival, the
+  interrupt-originated tick update through `[timer] tick: N`, and
+  `[timer-irq] eoi sent: irq=0`.
+* Following the Chapter 7 Section 7.4 observation model, logs emitted inside
+  the timer IRQ handler are validation-only observation logs. They are not part
+  of the normal boot log ordering guarantee. Normal boot keeps IRQ0 masked and
+  does not emit timer IRQ handler logs.
+* Chapter 8 Section 8.1 is the tick-connection step, not the preemption
+  implementation step. The handler still does not connect to scheduler,
+  dispatcher, context switching, dispatch pending, task state changes,
+  sleep or delay queues, timeout handling, time slicing, or μITRON APIs.
+* PIT programming, hardware timer period configuration, normal interrupt return
+  via `iretq`, nested interrupts, stable continuous interrupt operation,
+  APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
 
 ---
 
@@ -496,9 +515,15 @@ Chapter 7 Section 7.4 narrows how that validation output should be read. The
 timer IRQ line is an interrupt-time observation log, so it may interleave with
 ordinary serial output. Treat it as handler-arrival evidence for the explicit
 validation build only; normal boot must remain free of `[timer-irq]` output.
-The related Doxygen comments now document why the PIC remap keeps all IRQs
-masked, why validation opens only IRQ0, and why the handler sends EOI without
-calling timer or scheduler logic.
+The related Doxygen comments document why the PIC remap keeps all IRQs masked,
+why validation opens only IRQ0, and why the Chapter 7 observation handler sent
+EOI without calling timer or scheduler logic.
+
+Chapter 8 Section 8.1 advances that validation path by calling `timer_tick()`
+from the IRQ0/vector 32 handler before sending EOI. This confirms the first
+hardware-interrupt-originated kernel tick update while still stopping before
+preemption, scheduler selection, dispatcher commit, context switching, task
+state changes, timeout processing, or a normal `iretq` return model.
 
 ### Build
 
@@ -782,6 +807,8 @@ The current kernel includes:
 * Fully masked PIC state after boot-time initialization
 * PIC initialization observation through QEMU serial log
 * Interrupt-time log observation model for timer IRQ validation
+* Timer IRQ handler to `timer_tick()` connection for explicit validation
+* IRQ-originated tick update observation through QEMU serial log
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -793,13 +820,13 @@ The following features are intentionally not implemented yet:
 * Full task-to-task execution by context switching
 * RUNNING as CPU execution state
 * Continuous independent task stack execution
-* Timer interrupt
+* Full timer interrupt subsystem
 * Full interrupt-driven preemption
 * IRQ routing
 * APIC, IOAPIC, and LAPIC support
 * PIT timer interrupt delivery
 * Timer ISR
-* EOI handling
+* Interrupt return with `iretq`
 * Recoverable exception handling
 * Time slice
 * `dly_tsk`
@@ -837,6 +864,9 @@ why the IDT/PIC setup remains observation-only, why normal boot keeps IRQs
 masked, why `VALIDATE_TIMER_IRQ_ENTRY=1` opens only IRQ0, and why the timer IRQ
 handler sends EOI without connecting to timer, scheduler, dispatcher,
 preemption, or context switching.
+For Chapter 8 Section 8.1, comments additionally document that the handler now
+calls `timer_tick()` before EOI while still not connecting to scheduler,
+dispatcher, context switching, preemption, or task state changes.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -990,7 +1020,8 @@ See the LICENSE file for details.
 * [x] PIC interrupt controller foundation
 * [x] Timer interrupt entry
 * [x] Interrupt log observation model
-* [ ] Timer interrupt
+* [x] Timer interrupt tick connection
+* [ ] Full timer interrupt subsystem
 
 ---
 
@@ -1031,6 +1062,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
 | 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
 | 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
+| 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
 
 ---
 

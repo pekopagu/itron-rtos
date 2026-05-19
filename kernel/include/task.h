@@ -45,6 +45,14 @@ typedef void (*task_entry_t)(void);
  * timer、preemption、task stack上でのentry実行を意味しない。
  */
 typedef struct {
+    /**
+     * @brief 将来の最小context switchで復元対象にするstack pointer保存欄。
+     *
+     * @details
+     * 第8章8.1のtimer IRQ tick接続では、この欄に割り込み時の実CPU RSPを保存しない。
+     * timer IRQ handlerは `timer_tick()` とEOIだけを行い、task_context_tの保存・復元や
+     * interrupt-time context switchには進まない。
+     */
     unsigned long rsp; /**< 将来のstack pointer復元候補。第5章5.2ではCPU RSPへロードしない。 */
     unsigned long rbp; /**< 将来保存対象にするbase pointer領域。現段階では実register値ではない。 */
     unsigned long rbx; /**< 将来保存対象にする汎用register領域。現段階では実register値ではない。 */
