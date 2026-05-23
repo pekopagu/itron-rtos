@@ -17,6 +17,7 @@
 
 #include "hal/console.h"
 #include "pic.h"
+#include "preemption.h"
 #include "timer.h"
 
 #include <stddef.h>
@@ -320,6 +321,12 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
  * scheduler、dispatcher、context switch、preemption、task state変更は呼び出さない。
  * nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
  */
+/**
+ * @note 第8章8.2では、下の処理は `timer_tick()` 後に preemption decision
+ * entry を呼ぶ形へ進んでいる。ただしこの decision は観測専用であり、
+ * dispatcher commit、context switch、task state変更、dispatch pending更新は
+ * まだ行わない。
+ */
 void arch_timer_irq_handle(void)
 {
     /*
@@ -335,6 +342,13 @@ void arch_timer_irq_handle(void)
      * preemption、task state変更へは接続しない。
      */
     timer_tick();
+
+    /*
+     * 第8章8.2では、tick更新後にpreemption decisionの入口だけを呼ぶ。
+     * この境界は判断結果を観測するだけで、dispatcher commit、context switch、
+     * task state変更、dispatch pending更新は行わない。
+     */
+    preemption_evaluate_from_irq();
 
     arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
     hal_console_write("[timer-irq] eoi sent: irq=0\n");

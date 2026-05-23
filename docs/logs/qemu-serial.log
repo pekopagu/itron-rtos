@@ -91,6 +91,8 @@ kernel_main reached
 [entry] returned current: id=2 name=task_b prio=1 state=RUNNING
 [cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
 [cooperative] ready again: result=ok id=2 name=task_b state=READY
-[cooperative] stop: reason=[timer-irq] entry reached: vector=32 irq=0
+[cooperative] stop: reason=limit-reached
+[timer-irq] entry reached: vector=32 irq=0
 [timer] tick: 7
+[preempt-irq] decision evaluated: result=no-switch reason=invalid-current
 [timer-irq] eoi sent: irq=0

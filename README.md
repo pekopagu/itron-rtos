@@ -62,6 +62,8 @@ The current implementation covers the following milestones:
 | 7       | 7.1     | Interrupt and exception foundation         | v7.1-interrupt-exception-foundation | Completed |
 | 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
 | 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
+| 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
+| 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -309,6 +311,24 @@ Chapter 8 Section 8.1 connects the timer IRQ handler to the kernel timer tick:
   via `iretq`, nested interrupts, stable continuous interrupt operation,
   APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
 
+Chapter 8 Section 8.2 connects the timer IRQ handler to the preemption
+decision entry:
+
+* The IRQ0/vector 32 timer interrupt handler still calls `timer_tick()` once
+  after the validation arrival log.
+* Immediately after `timer_tick()`, the handler calls the kernel-side
+  preemption decision boundary, then sends IRQ0 EOI.
+* The arch handler depends only on the kernel public preemption boundary; the
+  scheduler and dispatcher details stay inside the kernel side.
+* `make run VALIDATE_TIMER_IRQ_ENTRY=1` observes handler arrival, the
+  interrupt-originated tick update, `[preempt-irq] decision evaluated: ...`,
+  and `[timer-irq] eoi sent: irq=0`.
+* The decision result is observation only. Chapter 8 Section 8.2 does not call
+  the dispatcher, perform a context switch, change task state, or implement
+  dispatch pending.
+* Following the Chapter 7 Section 7.4 policy, interrupt-time logs remain
+  validation-only and may interleave with normal boot logs.
+
 ---
 
 ## Development Environment
@@ -411,6 +431,13 @@ Chapter 7 Section 7.3 adds this timer IRQ entry validation path:
 ```text
 kernel_main -> hal_interrupt_enable_timer_entry_validation
 IRQ0/vector 32 -> arch timer IRQ stub -> timer IRQ observation handler -> PIC EOI
+```
+
+Chapter 8 Section 8.2 extends the validation path without performing a switch:
+
+```text
+IRQ0/vector 32 -> arch timer IRQ handler -> timer_tick
+                 -> preemption_evaluate_from_irq -> PIC EOI
 ```
 
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
@@ -703,11 +730,13 @@ itron-rtos/
 │  ├─ timer.c
 │  ├─ task.c
 │  ├─ scheduler.c
+│  ├─ preemption.c
 │  └─ include/
 │     ├─ semaphore.h
 │     ├─ timer.h
 │     ├─ task.h
 │     ├─ scheduler.h
+│     ├─ preemption.h
 │     └─ hal/
 │        ├─ console.h
 │        └─ interrupt.h
@@ -809,6 +838,9 @@ The current kernel includes:
 * Interrupt-time log observation model for timer IRQ validation
 * Timer IRQ handler to `timer_tick()` connection for explicit validation
 * IRQ-originated tick update observation through QEMU serial log
+* IRQ-originated preemption decision entry for explicit validation
+* `preemption_evaluate_from_irq()` as a thin kernel boundary around the
+  existing scheduler decision helper
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -822,6 +854,7 @@ The following features are intentionally not implemented yet:
 * Continuous independent task stack execution
 * Full timer interrupt subsystem
 * Full interrupt-driven preemption
+* Dispatch pending observation and implementation
 * IRQ routing
 * APIC, IOAPIC, and LAPIC support
 * PIT timer interrupt delivery
@@ -867,6 +900,10 @@ preemption, or context switching.
 For Chapter 8 Section 8.1, comments additionally document that the handler now
 calls `timer_tick()` before EOI while still not connecting to scheduler,
 dispatcher, context switching, preemption, or task state changes.
+For Chapter 8 Section 8.2, comments document that the handler now calls the
+preemption decision entry after `timer_tick()` and before EOI, while still not
+performing dispatcher commit, context switching, task state changes, or
+dispatch pending updates.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1021,6 +1058,7 @@ See the LICENSE file for details.
 * [x] Timer interrupt entry
 * [x] Interrupt log observation model
 * [x] Timer interrupt tick connection
+* [x] Timer IRQ preemption decision entry
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1063,6 +1101,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 7       | 7.2     | PIC interrupt controller foundation        | v7.2-interrupt-controller-foundation | Completed |
 | 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
 | 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
+| 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 
 ---
 
