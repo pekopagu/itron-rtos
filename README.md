@@ -65,6 +65,7 @@ The current implementation covers the following milestones:
 | 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
+| 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -351,6 +352,27 @@ Chapter 8 Section 8.3 records and observes dispatch pending:
 * Interrupt-time dispatch pending logs follow the Chapter 7 Section 7.4 policy:
   they are validation-only and may interleave with normal boot logs.
 
+Chapter 8 Section 8.4 separates the timer IRQ path into entry, kernel handler,
+and exit boundary responsibilities:
+
+* Interrupt entry is the CPU arrival at IRQ0/vector 32 and the transfer from
+  `arch_timer_irq_stub` to the C-side timer IRQ handler. The temporary stub
+  still does not perform full register save/restore or normal `iretq` return.
+* The kernel IRQ handler responsibility is limited to `timer_tick()`,
+  `preemption_evaluate_from_irq()`, `dispatch_pending_log_state_from_irq()`,
+  interrupt exit boundary observation, and IRQ0 EOI.
+* The interrupt exit boundary is now visible in validation logs as
+  `[timer-irq] exit boundary: dispatch-pending=... action=...`.
+* If dispatch pending is requested, Chapter 8 Section 8.4 still does not
+  consume it. The action remains `not-dispatched-yet`, and the kernel does not
+  call the dispatcher, commit current, perform a context switch, switch task
+  stacks, save or restore live registers, or change task states.
+* If dispatch pending is not requested, the exit boundary reports
+  `action=defer`. This is still only a future connection point for Chapter 9
+  and later.
+* Interrupt-time logs remain validation-only observations and may interleave
+  with normal boot logs.
+
 ---
 
 ## Development Environment
@@ -468,6 +490,23 @@ Chapter 8 Section 8.3 extends that path by observing the held dispatch request:
 IRQ0/vector 32 -> arch timer IRQ handler -> timer_tick
                  -> preemption_evaluate_from_irq
                  -> dispatch_pending_log_state_from_irq -> PIC EOI
+```
+
+Chapter 8 Section 8.4 names the entry/handler/exit responsibilities without
+performing a switch:
+
+```text
+interrupt entry:
+  IRQ0/vector 32 -> arch_timer_irq_stub -> arch_timer_irq_handle
+
+kernel IRQ handler:
+  timer_tick -> preemption_evaluate_from_irq
+             -> dispatch_pending_log_state_from_irq
+             -> arch_timer_irq_exit_observe_boundary
+             -> PIC EOI
+
+interrupt exit boundary:
+  dispatch pending is observed, but not consumed or dispatched
 ```
 
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
@@ -877,6 +916,8 @@ The current kernel includes:
 * `dispatch_pending_clear_for_test_or_later_boundary()`
 * `dispatch_pending_log_state_from_irq()`
 * IRQ-originated dispatch pending observation through QEMU serial log
+* Timer IRQ interrupt entry / kernel IRQ handler / interrupt exit boundary responsibility split
+* Interrupt exit boundary observation without dispatch pending consumption
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -944,6 +985,10 @@ For Chapter 8 Section 8.3, comments document that a switch-target decision can
 set a kernel-owned dispatch pending observation state, but that the state is not
 consumed by a dispatcher and still does not cause context switching or task
 state changes.
+For Chapter 8 Section 8.4, comments document the interrupt entry, kernel IRQ
+handler, and interrupt exit boundary responsibilities. The exit boundary reads
+dispatch pending only for validation logging and explicitly does not consume it,
+dispatch a task, switch context, or change task states.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1143,6 +1188,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
+| 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 
 ---
 

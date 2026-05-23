@@ -72,9 +72,11 @@ EXCEPTION_STUB_WITH_ERROR arch_exception_stub_general_protection, 13
 EXCEPTION_STUB_WITH_ERROR arch_exception_stub_page_fault, 14
 
 arch_timer_irq_stub:
-    ; 第8章8.1のtimer IRQ tick接続観測用stub。
-    ; C handler側でtimer_tick()とIRQ0 EOIまで行う。ただし本格的なinterrupt frame、
-    ; register保存、iretq復帰、preemption接続はまだ行わない。
+    ; 第8章8.4のtimer IRQ interrupt entry観測用stub。
+    ; CPUがIRQ0/vector 32へ入った後、C側のkernel IRQ handlerへ渡す境界である。
+    ; C handler側でtimer_tick()、preemption decision、dispatch pending観測、
+    ; interrupt exit boundary観測、IRQ0 EOIまで行う。ただし本格的なinterrupt frame、
+    ; register保存/復元、iretq復帰、dispatch pending消費、実task切り替えはまだ行わない。
     call arch_timer_irq_handle
 .halt:
     ; interrupt gate entry後にiretqしないため、validation runは到達log後に停止する。

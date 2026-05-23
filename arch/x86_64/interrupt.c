@@ -10,7 +10,9 @@
  * このmoduleは第7章7.1のx86_64向けinterrupt/exception foundationを担当する。
  * 小さなIDTを構築して `lidt` でloadし、CPU例外handlerへの到達をHAL consoleへ
  * 出力する。PIC、APIC、PIT、HPET、IRQ routing、preemption、scheduling、
- * dispatching、context switchingは意図的に初期化・接続しない。
+ * dispatching、context switchingは意図的に初期化・接続しない。第8章8.4では
+ * timer IRQ pathをinterrupt entry、kernel IRQ handler、interrupt exit boundaryへ
+ * 分けて観測するが、実際のtask切り替えにはまだ接続しない。
  */
 
 #include "interrupt.h"
@@ -249,8 +251,9 @@ static int arch_idt_install_exception_gates(void)
  * @brief remap済みIRQ0に対応するvector 32 timer IRQ gateを登録する。
  *
  * @details
- * 第8章8.1では、このgateから到達するhandlerが `timer_tick()` を呼ぶ。
- * ただしscheduler、dispatcher、context switch、preemptionへは接続しない。
+ * 第8章8.4では、このgateがinterrupt entryの入口である。CPUはIRQ0/vector 32へ
+ * 入り、ASM stubからC側のkernel IRQ handlerへ渡す。ただし、この登録自体は
+ * 本格的なregister save/restore、通常のinterrupt return、dispatcher接続を意味しない。
  */
 static int arch_idt_install_timer_irq_gate(void)
 {
@@ -311,22 +314,41 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
 }
 
 /**
+ * @brief timer IRQのinterrupt exit boundaryを観測する。
+ *
+ * @details
+ * 第8章8.4では、dispatch pendingをinterrupt exit直前で消費しない。
+ * この関数は将来の第9章以降でdispatcher/context switchへ接続する候補境界を
+ * serial logに残すだけである。`dispatch_pending_is_requested()` を読むだけに
+ * 留め、dispatcher commit、context switch、task state変更、register save/restore、
+ * pending clearは行わない。
+ */
+static void arch_timer_irq_exit_observe_boundary(void)
+{
+    hal_console_write("[timer-irq] exit boundary: dispatch-pending=");
+    if (dispatch_pending_is_requested()) {
+        hal_console_write("requested action=not-dispatched-yet\n");
+        return;
+    }
+
+    hal_console_write("not-requested action=defer\n");
+}
+
+/**
  * @brief IRQ0/vector 32 timer interrupt entry到達を最小限に観測する。
  *
  * @details
- * このhandlerは第8章8.1で定義するvalidation専用のtick接続観測handlerである。
- * 割り込み中のserial logは通常boot logと同じ出力経路を使うため、
- * 既存log列の途中に混ざり得る。従って、この出力は通常ログの順序保証や
- * interrupt-safe logging基盤を示すものではなく、明示validation時のhandler到達と
- * tick更新の証跡としてだけ扱う。handlerの責務は `timer_tick()` 1回とEOIまでであり、
- * scheduler、dispatcher、context switch、preemption、task state変更は呼び出さない。
+ * このhandlerは第8章8.4で整理するkernel IRQ handlerである。割り込み中のserial logは
+ * 通常boot logと同じ出力経路を使うため、既存log列の途中に混ざり得る。従って、
+ * この出力は通常ログの順序保証やinterrupt-safe logging基盤を示すものではなく、
+ * 明示validation時のhandler到達、tick更新、preemption decision、dispatch pending観測、
+ * exit boundary観測の証跡としてだけ扱う。
+ *
+ * handlerの責務は `timer_tick()`、`preemption_evaluate_from_irq()`、
+ * `dispatch_pending_log_state_from_irq()`、interrupt exit boundary観測、IRQ0 EOIまでである。
+ * dispatch pendingがrequestedでも8.4では消費せず、dispatcher、context switch、
+ * register save/restore、task state変更、interrupt return直前の実切替は呼び出さない。
  * nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
- */
-/**
- * @note 第8章8.2では、下の処理は `timer_tick()` 後に preemption decision
- * entry を呼ぶ形へ進んでいる。ただしこの decision は観測専用であり、
- * dispatcher commit、context switch、task state変更、dispatch pending更新は
- * まだ行わない。
  */
 void arch_timer_irq_handle(void)
 {
@@ -347,9 +369,9 @@ void arch_timer_irq_handle(void)
     timer_tick();
 
     /*
-     * 第8章8.2では、tick更新後にpreemption decisionの入口だけを呼ぶ。
-     * この境界は判断結果を観測するだけで、dispatcher commit、context switch、
-     * task state変更、dispatch pending更新は行わない。
+     * 第8章8.2では、tick更新後にpreemption decisionの入口を呼ぶ。
+     * 第8章8.3では、switch-target decisionをdispatch pendingへ記録する。
+     * ただし、ここではdispatcher commit、context switch、task state変更へ進まない。
      */
     dispatch_not_requested_reason = preemption_evaluate_from_irq();
 
@@ -359,6 +381,12 @@ void arch_timer_irq_handle(void)
      * task state変更、interrupt return直前の切替には接続しない。
      */
     dispatch_pending_log_state_from_irq(dispatch_not_requested_reason);
+
+    /*
+     * 第8章8.4では、interrupt exit boundaryを将来のdispatch pending消費候補として
+     * 観測するだけに留める。requestedでもnot-requestedでも実dispatchは行わない。
+     */
+    arch_timer_irq_exit_observe_boundary();
 
     arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
     hal_console_write("[timer-irq] eoi sent: irq=0\n");
