@@ -644,25 +644,26 @@ static void kernel_run_preemption_smoke(int low_task_id, int high_task_id)
 }
 
 /**
- * @brief 第5章5.3の最小context switch smokeを1回だけ実行する。
+ * @brief 第9章9.1のtask間context switch smokeを1回だけ実行する。
  *
  * @details
  * schedulerはREADY task選択だけ、dispatcherはcurrent commitだけを担当する。
- * このhelperはcommit済みtaskのcontextを初回stack frameとして準備し、boot
- * contextからそのtask contextへ明示的にswitchする。task entryは復元された
- * task stack上のtrampolineから1回呼ばれ、return後にboot contextへ戻る。
+ * このhelperはcommit済みtaskと次taskのcontextを初回stack frameとして準備し、
+ * boot contextからfirst taskへ入り、first taskのentry return観測点から
+ * second task contextへ一度だけswitchする。second taskのreturn後はbootへ戻る。
  *
  * これはtimer interrupt、preemption、割り込みハンドラ連携、yield API、
  * 本格task lifecycleを導入しないためのboot-time verification modelである。
  *
  * @param selected schedulerが選択したREADY task。
+ * @param next_selected task間切替先として使うREADY task。
  * @return 成功時は0、失敗時は負の値。
  */
-static int kernel_run_minimal_context_switch_smoke(const tcb_t *selected)
+static int kernel_run_minimal_context_switch_smoke(const tcb_t *selected, const tcb_t *next_selected)
 {
     tcb_t *current_task;
+    tcb_t *next_task;
     int commit_result;
-    int prepare_result;
     int switch_result;
 
     hal_console_write("[context-smoke] begin\n");
@@ -680,13 +681,23 @@ static int kernel_run_minimal_context_switch_smoke(const tcb_t *selected)
         return TASK_CONTEXT_ERR_INVAL;
     }
 
-    prepare_result = task_context_prepare_initial_frame(current_task);
-    if (prepare_result != TASK_CONTEXT_OK) {
-        hal_console_write("[context-smoke] stop: reason=prepare-failed\n");
-        return prepare_result;
+    if (next_selected == NULL || next_selected->id == selected->id) {
+        hal_console_write("[context-smoke] stop: reason=next-not-found\n");
+        return TASK_CONTEXT_ERR_INVAL;
     }
 
-    switch_result = task_context_switch_to_task(current_task);
+    next_task = task_get_mutable_by_id(next_selected->id);
+    if (next_task == NULL) {
+        hal_console_write("[context-smoke] stop: reason=next-not-found\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    /*
+     * task_context層に渡す時点では、scheduler選択とdispatcher commitは
+     * すでに完了している。ここから先は「準備済みcontextをどう切り替えるか」
+     * だけを確認する9.1のsmokeであり、次taskの選び直しは行わない。
+     */
+    switch_result = task_context_switch_to_task_pair(current_task, next_task);
     if (switch_result != TASK_CONTEXT_OK) {
         hal_console_write("[context-smoke] stop: reason=switch-failed\n");
         return switch_result;
@@ -970,6 +981,7 @@ void kernel_main(void)
     int task_b_id;
     int task_c_id;
     const tcb_t *selected_task;
+    const tcb_t *context_next_task;
 
     hal_console_init();
     hal_console_write("itron-rtos booting...\n");
@@ -1096,12 +1108,23 @@ void kernel_main(void)
     kernel_log_scheduler_selection("after_register", selected_task);
 
     /*
-     * 第5章5.3では、timer/preemptionなしの明示的な最小context switch経路を
-     * 1回だけ確認する。既存のcooperative runnerは後続の比較用に残すが、
-     * このsmokeではboot contextからtask stackへ入り、entry return後にbootへ戻る。
+     * 第9章9.1では、既存のboot-to-task smokeをtask-to-taskへ拡張する。
+     * selected taskでentry returnを観測した後、もう1つのREADY task contextへ
+     * 一度だけ切り替え、second taskのreturn後にbootへ戻る。これは起動時smokeであり、
+     * IRQ exit、dispatch pending、yield API、preemptionとは接続しない。
      */
-    if (selected_task != NULL) {
-        (void)kernel_run_minimal_context_switch_smoke(selected_task);
+    context_next_task = task_get_by_id(task_c_id);
+    if (selected_task != NULL && context_next_task != NULL &&
+        context_next_task->id == selected_task->id) {
+        /*
+         * 現在の優先度設定ではselected_taskはtask_b、切替先はtask_cになる。
+         * 将来priorityや登録順を変えた場合でも、同じtaskへ切り替える
+         * 無意味なsmokeにならないよう別taskへ退避する。
+         */
+        context_next_task = task_get_by_id(task_b_id);
+    }
+    if (selected_task != NULL && context_next_task != NULL) {
+        (void)kernel_run_minimal_context_switch_smoke(selected_task, context_next_task);
     }
 
     /*

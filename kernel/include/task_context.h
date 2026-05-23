@@ -63,6 +63,24 @@ int task_context_switch(tcb_t *from, tcb_t *to);
 int task_context_switch_to_task(tcb_t *to);
 
 /**
+ * @brief boot contextからfirst taskへ入り、firstからsecond taskへ一度だけ切り替える。
+ *
+ * @details
+ * 第9章9.1の起動時smoke専用APIである。2つのtask stack frameを準備し、
+ * first taskのentry return観測点でsecond task contextへ切り替える。
+ * second taskのentry return後は既存のboot復帰経路へ戻る。
+ *
+ * これはtask間context switchを観測するための教育用モデルであり、
+ * dispatcher_switch_to相当の正式境界、割り込みexitからの切替、
+ * dispatch pending消費、yield API、preemption、time sliceは実装しない。
+ *
+ * @param first boot contextから最初に入るtask。dispatcherでRUNNING確定済みであること。
+ * @param second first taskから切り替えるtask。READY状態からsmoke用にRUNNINGへ遷移させる。
+ * @return bootへ戻った場合はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second);
+
+/**
  * @note 第6章6.3のpreemption判断は、この層へcontext switchを依頼する前段で行う。
  * task context層の責務は、準備済みstack/contextの検証とregister save/restoreの
  * arch層への委譲だけである。timer tickの解釈、READY task選択、dispatcher current

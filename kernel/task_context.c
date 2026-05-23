@@ -17,6 +17,13 @@ extern void task_context_trampoline(void);
 
 static task_context_t boot_context;
 static tcb_t *active_task;
+/*
+ * 第9章9.1の起動時smokeだけで使う一時的な切替予約である。
+ * first taskのentry return観測点まで保持し、そこでsecond taskへ進むかを判定する。
+ * 汎用dispatcher状態ではないため、通常のtask選択や割り込み経路からは参照しない。
+ */
+static tcb_t *task_to_task_smoke_from;
+static tcb_t *task_to_task_smoke_to;
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進数で出力する。
@@ -344,6 +351,58 @@ int task_context_switch_to_task(tcb_t *to)
 }
 
 /**
+ * @brief bootからfirstへ入り、firstのentry return後にsecondへ一度だけ切り替える。
+ *
+ * @details
+ * 第9章9.1の起動時smoke専用helperである。既存のboot-to-task smokeを
+ * 再利用しつつ、first task上のreturn観測点でsecond task contextへ進む
+ * 候補を設定する。これは正式なdispatcher境界ではなく、dispatch pending、
+ * timer IRQ、yield API、preemption、time sliceとは接続しない。
+ *
+ * @param first boot contextから最初に入るtask。
+ * @param second first taskから切り替えるtask。
+ * @return bootへ戻った場合はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
+ */
+int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second)
+{
+    int result;
+
+    if (first == NULL || second == NULL || first == second) {
+        hal_console_write("[context] task-to-task smoke failed: invalid task pair\n");
+        return TASK_CONTEXT_ERR_INVAL;
+    }
+
+    result = task_context_prepare_initial_frame(first);
+    if (result != TASK_CONTEXT_OK) {
+        return result;
+    }
+
+    /*
+     * firstとsecondの両方をあらかじめret可能なstack frameにしておく。
+     * firstからsecondへ切り替えた直後はsecond側のtrampolineへretするため、
+     * secondのframe準備をfirst実行後に遅らせることはできない。
+     */
+    result = task_context_prepare_initial_frame(second);
+    if (result != TASK_CONTEXT_OK) {
+        return result;
+    }
+
+    /*
+     * boot -> first の既存経路を再利用するため、ここでは予約だけを置く。
+     * 実際の first -> second switch はtask_context_enter()内の
+     * entry return観測点で行う。
+     */
+    task_to_task_smoke_from = first;
+    task_to_task_smoke_to = second;
+
+    result = task_context_switch_to_task(first);
+
+    task_to_task_smoke_from = NULL;
+    task_to_task_smoke_to = NULL;
+    return result;
+}
+
+/**
  * @brief trampolineから呼ばれ、task entryを1回実行してbootへ戻す。
  *
  * @details
@@ -383,6 +442,53 @@ void task_context_enter(tcb_t *task)
     context_write_int(ready_result);
     context_log_task_prefix(" task", task);
     hal_console_write("\n");
+
+    if (ready_result == TASK_CONTEXT_OK &&
+        task_to_task_smoke_from == task &&
+        task_to_task_smoke_to != NULL) {
+        tcb_t *next_task = task_to_task_smoke_to;
+        int running_result;
+
+        /*
+         * 第9章9.1の起動時smokeでは、firstのentry return観測後に
+         * READYへ戻してからsecondをRUNNINGへ進める。これは正式な
+         * dispatcher_switch_to境界ではなく、割り込み・dispatch pending・
+         * yield APIとは接続しない一度きりの観測経路である。
+         */
+        task_to_task_smoke_from = NULL;
+        task_to_task_smoke_to = NULL;
+        running_result = task_mark_running(next_task->id);
+        if (running_result == 0) {
+            /*
+             * ここでactive_taskをsecondへ移すことで、secondからbootへ戻った後の
+             * resumedログが「最後にbootへ戻したtask」を示せるようにする。
+             * dispatcherのcurrent pointerを更新する正式処理ではない。
+             */
+            active_task = next_task;
+            hal_console_write("[context] task-to-task switch begin:");
+            context_log_task_prefix(" from", task);
+            context_log_task_prefix(" to", next_task);
+            context_log_rsp(" from.rsp.before=", task->context.rsp);
+            context_log_rsp(" to.rsp.restore=", next_task->context.rsp);
+            hal_console_write("\n");
+
+            arch_context_switch(&task->context, &next_task->context);
+
+            /*
+             * 現在の9.1 smokeでは通常ここへ戻らない。将来secondからfirstへ戻る
+             * 経路を作った場合に、保存済みrspを観測できるようログだけ残す。
+             */
+            hal_console_write("[context] task-to-task switch resumed:");
+            context_log_task_prefix(" task", task);
+            context_log_rsp(" from.rsp.after=", task->context.rsp);
+            hal_console_write("\n");
+        } else {
+            hal_console_write("[context] task-to-task switch skipped: mark-running failed result=");
+            context_write_int(running_result);
+            context_log_task_prefix(" task", next_task);
+            hal_console_write("\n");
+        }
+    }
 
     hal_console_write("[context] switch back:");
     context_log_task_prefix(" from", task);

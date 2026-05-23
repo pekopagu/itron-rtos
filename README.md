@@ -66,6 +66,7 @@ The current implementation covers the following milestones:
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
+| 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -372,6 +373,23 @@ and exit boundary responsibilities:
   and later.
 * Interrupt-time logs remain validation-only observations and may interleave
   with normal boot logs.
+
+Chapter 9 Section 9.1 extends the boot-time context switch smoke from a
+boot-to-task check into a minimal task-to-task observation:
+
+* The context smoke prepares initial stack frames for two distinct tasks.
+* The smoke first switches from the boot context to the selected task context.
+* After the first task entry returns, the smoke marks that task READY again and
+  switches once from the first task context to the second task context.
+* The second task entry runs through the existing trampoline path, then returns
+  to the boot context through the existing switch-back model.
+* This is still a boot-time verification model. It is not
+  `dispatcher_switch_to()`, interrupt-exit dispatch, dispatch pending
+  consumption, yield API behavior, preemption, time slicing, semaphore wakeup
+  dispatch, or a complete task lifecycle model.
+* The expected observation includes
+  `[context] task-to-task switch begin: ...`, followed by the second task entry
+  log and the boot resume log.
 
 ---
 
@@ -1189,6 +1207,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
+| 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 
 ---
 
