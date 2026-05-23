@@ -32,6 +32,17 @@
  * @note 割り込み中の serial log は第7章7.4の観測方針どおり validation 専用であり、
  *       通常 boot log へ混ざる可能性がある。
  */
-void preemption_evaluate_from_irq(void);
+/**
+ * @brief IRQ由来のpreemption decisionを評価し、dispatch pendingを更新する。
+ *
+ * @details
+ * 第8章8.3の境界として、scheduler/dispatcher状態は既存のkernel API経由で
+ * 読み取るだけにする。switch-target decisionの場合は後続観測用に
+ * dispatch pendingを記録するが、dispatcher commit、context switch、
+ * stack切り替え、register保存・復元、task状態変更は行わない。
+ *
+ * @return dispatch pending観測用のnot-requested reason。pending要求時はNULL。
+ */
+const char *preemption_evaluate_from_irq(void);
 
 #endif

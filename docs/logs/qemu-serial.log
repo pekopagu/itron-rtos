@@ -95,4 +95,5 @@ kernel_main reached
 [timer-irq] entry reached: vector=32 irq=0
 [timer] tick: 7
 [preempt-irq] decision evaluated: result=no-switch reason=invalid-current
+[dispatch-pending] not-requested: reason=invalid-current
 [timer-irq] eoi sent: irq=0

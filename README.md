@@ -64,6 +64,7 @@ The current implementation covers the following milestones:
 | 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
 | 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
+| 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -329,6 +330,27 @@ decision entry:
 * Following the Chapter 7 Section 7.4 policy, interrupt-time logs remain
   validation-only and may interleave with normal boot logs.
 
+Chapter 8 Section 8.3 records and observes dispatch pending:
+
+* The IRQ0/vector 32 timer interrupt handler keeps the 8.1 and 8.2 ordering:
+  validation arrival log, `timer_tick()`, preemption decision evaluation,
+  dispatch pending observation, then IRQ0 EOI.
+* The kernel owns the dispatch pending state. The x86_64 handler calls only a
+  public dispatch pending observation API and does not depend on scheduler or
+  dispatcher internals.
+* A `switch-target` preemption decision records dispatch pending as requested
+  from IRQ context. `no-switch`, `invalid-current`, and `no-current` decisions
+  do not request dispatch pending.
+* `make run VALIDATE_TIMER_IRQ_ENTRY=1` observes `[dispatch-pending] ...`
+  between `[preempt-irq] decision evaluated: ...` and
+  `[timer-irq] eoi sent: irq=0`.
+* Dispatch pending is still observation-only. Chapter 8 Section 8.3 does not
+  call the dispatcher, commit current, perform a context switch, switch task
+  stacks, save or restore registers, change task states, or complete an
+  interrupt-return dispatch model.
+* Interrupt-time dispatch pending logs follow the Chapter 7 Section 7.4 policy:
+  they are validation-only and may interleave with normal boot logs.
+
 ---
 
 ## Development Environment
@@ -438,6 +460,14 @@ Chapter 8 Section 8.2 extends the validation path without performing a switch:
 ```text
 IRQ0/vector 32 -> arch timer IRQ handler -> timer_tick
                  -> preemption_evaluate_from_irq -> PIC EOI
+```
+
+Chapter 8 Section 8.3 extends that path by observing the held dispatch request:
+
+```text
+IRQ0/vector 32 -> arch timer IRQ handler -> timer_tick
+                 -> preemption_evaluate_from_irq
+                 -> dispatch_pending_log_state_from_irq -> PIC EOI
 ```
 
 Chapter 3 Section 3.1 registers sample tasks during boot and dumps the registered task table
@@ -841,6 +871,12 @@ The current kernel includes:
 * IRQ-originated preemption decision entry for explicit validation
 * `preemption_evaluate_from_irq()` as a thin kernel boundary around the
   existing scheduler decision helper
+* Kernel-owned dispatch pending observation state
+* `dispatch_request_from_irq()`
+* `dispatch_pending_is_requested()`
+* `dispatch_pending_clear_for_test_or_later_boundary()`
+* `dispatch_pending_log_state_from_irq()`
+* IRQ-originated dispatch pending observation through QEMU serial log
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -854,7 +890,7 @@ The following features are intentionally not implemented yet:
 * Continuous independent task stack execution
 * Full timer interrupt subsystem
 * Full interrupt-driven preemption
-* Dispatch pending observation and implementation
+* Dispatch pending consumption by a real dispatcher
 * IRQ routing
 * APIC, IOAPIC, and LAPIC support
 * PIT timer interrupt delivery
@@ -904,6 +940,10 @@ For Chapter 8 Section 8.2, comments document that the handler now calls the
 preemption decision entry after `timer_tick()` and before EOI, while still not
 performing dispatcher commit, context switching, task state changes, or
 dispatch pending updates.
+For Chapter 8 Section 8.3, comments document that a switch-target decision can
+set a kernel-owned dispatch pending observation state, but that the state is not
+consumed by a dispatcher and still does not cause context switching or task
+state changes.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1102,6 +1142,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 7       | 7.3     | Timer interrupt entry                      | v7.3-timer-interrupt-entry | Completed |
 | 8       | 8.1     | Timer tick from hardware IRQ               | v8.1-timer-tick-from-hardware-irq | Completed |
 | 8       | 8.2     | Timer IRQ preemption decision entry        | v8.2-timer-irq-preemption-decision | Completed |
+| 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 
 ---
 

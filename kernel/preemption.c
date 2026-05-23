@@ -16,6 +16,7 @@
 
 #include "preemption.h"
 
+#include "dispatch_pending.h"
 #include "dispatcher.h"
 #include "hal/console.h"
 #include "scheduler.h"
@@ -92,16 +93,37 @@ static void preemption_irq_log_decision(scheduler_preempt_decision_t decision)
  * @param なし。
  * @return なし。
  */
-void preemption_evaluate_from_irq(void)
+/**
+ * @brief IRQ由来のpreemption decisionを評価し、dispatch pendingを更新する。
+ *
+ * @details
+ * この関数は第8章8.3の観測境界である。scheduler decisionがswitch-targetを
+ * 示した場合だけdispatch pending requestを記録する。それ以外の結果では
+ * dispatch pendingをclearしたままにし、IRQ handlerのvalidation logへ渡す
+ * 短い理由文字列を返す。
+ *
+ * @return not-requested時の最小理由文字列。dispatch pending要求時はNULL。
+ */
+const char *preemption_evaluate_from_irq(void)
 {
     const tcb_t *current;
     scheduler_preempt_decision_t decision;
+    const char *not_requested_reason;
 
     /*
      * dispatcher から current を読み取るだけに留める。ここで commit し直したり、
      * task state を補正したりしないため、8.2 の責務は decision 評価に限定される。
      */
+    dispatch_pending_clear_for_test_or_later_boundary();
     current = dispatcher_get_current();
     decision = scheduler_select_preemption_candidate(current);
     preemption_irq_log_decision(decision);
+
+    if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {
+        dispatch_request_from_irq(decision.candidate);
+        return NULL;
+    }
+
+    not_requested_reason = preemption_irq_reason_to_string(decision);
+    return not_requested_reason;
 }

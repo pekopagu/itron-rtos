@@ -15,6 +15,7 @@
 
 #include "interrupt.h"
 
+#include "dispatch_pending.h"
 #include "hal/console.h"
 #include "pic.h"
 #include "preemption.h"
@@ -329,6 +330,8 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
  */
 void arch_timer_irq_handle(void)
 {
+    const char *dispatch_not_requested_reason;
+
     /*
      * 明示validationでIRQ0/vector 32へ到達した事実だけを残す。
      * 割り込み中のserial出力は通常ログへ混ざり得るため、この行を
@@ -348,7 +351,14 @@ void arch_timer_irq_handle(void)
      * この境界は判断結果を観測するだけで、dispatcher commit、context switch、
      * task state変更、dispatch pending更新は行わない。
      */
-    preemption_evaluate_from_irq();
+    dispatch_not_requested_reason = preemption_evaluate_from_irq();
+
+    /*
+     * 第8章8.3では dispatch pending を観測専用の論理状態として扱う。
+     * ここでは log に出すだけで、dispatcher commit、context switch、
+     * task state変更、interrupt return直前の切替には接続しない。
+     */
+    dispatch_pending_log_state_from_irq(dispatch_not_requested_reason);
 
     arch_pic_send_eoi(ARCH_TIMER_IRQ_LINE);
     hal_console_write("[timer-irq] eoi sent: irq=0\n");
