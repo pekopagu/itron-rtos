@@ -15,7 +15,9 @@
 #include <stddef.h>
 
 #include "dispatcher.h"
+#include "hal/console.h"
 #include "task.h"
+#include "task_context.h"
 
 /*
  * 現在タスクはdispatcherだけが保持する。
@@ -23,6 +25,67 @@
  * 追加するときも、選択結果を確定する責務をこの境界に集約できる。
  */
 static const tcb_t *current_task;
+
+/**
+ * @brief dispatcher log用に符号付き整数を10進数で出力する。
+ *
+ * @details
+ * freestanding環境ではprintfを使わないため、境界観測に必要な最小限の
+ * 数値出力だけをdispatcher内に持つ。状態変更やtask選択は行わない。
+ *
+ * @param value 出力する整数。
+ */
+static void dispatcher_write_int(int value)
+{
+    char buffer[20];
+    int index = 0;
+    unsigned int magnitude;
+
+    if (value < 0) {
+        hal_console_putc('-');
+        magnitude = (unsigned int)(-value);
+    } else {
+        magnitude = (unsigned int)value;
+    }
+
+    if (magnitude == 0) {
+        hal_console_putc('0');
+        return;
+    }
+
+    while (magnitude > 0) {
+        buffer[index++] = (char)('0' + (magnitude % 10U));
+        magnitude /= 10U;
+    }
+
+    while (index > 0) {
+        hal_console_putc(buffer[--index]);
+    }
+}
+
+/**
+ * @brief dispatcher boundary log用にtask識別情報を出力する。
+ *
+ * @details
+ * NULL taskでもログの形を崩さないようにし、失敗時にfrom/toどちらが
+ * 不正だったかを追跡しやすくする。TCBの状態変更は行わない。
+ *
+ * @param label `from` または `to` などの表示名。
+ * @param task 表示対象task。NULLも許容する。
+ */
+static void dispatcher_log_task(const char *label, const tcb_t *task)
+{
+    hal_console_write(label);
+    if (task == NULL) {
+        hal_console_write(" none");
+        return;
+    }
+
+    hal_console_write(" id=");
+    dispatcher_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write((task->name != NULL) ? task->name : "(unnamed)");
+}
 
 /**
  * @brief dispatcherのcurrent task保持状態を初期化する。
@@ -122,4 +185,65 @@ const tcb_t *dispatcher_get_current(void)
      * 呼び出し側には読み取り専用pointerだけを返し、TCB変更はtask層APIへ集約する。
      */
     return current_task;
+}
+
+/**
+ * @brief dispatcher層からtask context switch smokeへ進む境界を実行する。
+ *
+ * @details
+ * 第9章9.2では、ここをdispatcherのswitch boundaryとして観測可能にする。
+ * 実際のboot-time task-to-task smokeはtask_context層の補助APIへ委譲する。
+ * この関数はdispatch pendingを消費せず、interrupt exit boundaryやtimer IRQ
+ * handlerからも呼ばれない。RUNNING/READY状態遷移の正式接続もまだ行わない。
+ *
+ * @param from 切替元task。
+ * @param to 切替先task。
+ * @return 成功時はDISPATCHER_OK、失敗時は負の値。
+ */
+int dispatcher_switch_to(tcb_t *from, tcb_t *to)
+{
+    int result;
+
+    if (from == NULL || to == NULL) {
+        hal_console_write("[dispatcher] switch boundary failed: reason=null-task");
+        dispatcher_log_task(" from", from);
+        dispatcher_log_task(" to", to);
+        hal_console_write("\n");
+        return DISPATCHER_ERR_INVAL;
+    }
+
+    if (from == to) {
+        hal_console_write("[dispatcher] switch boundary failed: reason=same-task");
+        dispatcher_log_task(" from", from);
+        dispatcher_log_task(" to", to);
+        hal_console_write("\n");
+        return DISPATCHER_ERR_INVAL;
+    }
+
+    if (from->state != TASK_STATE_RUNNING) {
+        hal_console_write("[dispatcher] switch boundary failed: reason=from-not-running");
+        dispatcher_log_task(" from", from);
+        hal_console_write("\n");
+        return DISPATCHER_ERR_BAD_STATE;
+    }
+
+    if (to->state != TASK_STATE_READY) {
+        hal_console_write("[dispatcher] switch boundary failed: reason=to-not-ready");
+        dispatcher_log_task(" to", to);
+        hal_console_write("\n");
+        return DISPATCHER_ERR_BAD_STATE;
+    }
+
+    hal_console_write("[dispatcher] switch boundary begin:");
+    dispatcher_log_task(" from", from);
+    dispatcher_log_task(" to", to);
+    hal_console_write("\n");
+
+    result = task_context_switch_to_task_pair(from, to);
+
+    hal_console_write("[dispatcher] switch boundary end: result=");
+    dispatcher_write_int(result);
+    hal_console_write("\n");
+
+    return result;
 }

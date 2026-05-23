@@ -73,4 +73,23 @@ const tcb_t *dispatcher_get_current(void);
  * このinterfaceの外側に残す。
  */
 
+/**
+ * @brief dispatcher層からtask context切替へ進む境界を実行する。
+ *
+ * @details
+ * 第9章9.2では、dispatcherがcurrent commitだけでなく「切替先へ進める
+ * 境界」を持つことを明確化する。このAPIは、9.1で追加した起動時
+ * task-to-task context switch smoke補助APIへ委譲する薄い境界である。
+ *
+ * ここではRUNNING/READY状態遷移の正式完成、dispatch pending消費、
+ * interrupt exit boundaryからの接続、timer IRQからの実切替、yield API、
+ * preemption、time slice、task終了状態確定は行わない。
+ *
+ * @param from 切替元task。9.2 smokeではdispatcher commit済みRUNNING task。
+ * @param to 切替先task。9.2 smokeではREADY task。
+ * @return 成功時はDISPATCHER_OK、失敗時は負のDISPATCHER_ERR_*または
+ * task_context層から返された負の値。
+ */
+int dispatcher_switch_to(tcb_t *from, tcb_t *to);
+
 #endif

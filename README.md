@@ -67,6 +67,7 @@ The current implementation covers the following milestones:
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
+| 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -390,6 +391,27 @@ boot-to-task check into a minimal task-to-task observation:
 * The expected observation includes
   `[context] task-to-task switch begin: ...`, followed by the second task entry
   log and the boot resume log.
+
+Chapter 9 Section 9.2 adds a dispatcher-layer switch boundary on top of the
+9.1 smoke flow:
+
+* `dispatcher_switch_to(from, to)` is now the visible boundary for starting
+  the boot-time task-to-task smoke from the dispatcher layer.
+* The kernel context smoke no longer calls `task_context_switch_to_task_pair()`
+  directly. It commits the current task, obtains mutable TCBs, and then enters
+  the switch path through `dispatcher_switch_to()`.
+* `task_context_switch_to_task_pair()` remains as a task-context-layer
+  boot-time smoke helper. It is not the public dispatcher boundary.
+* The dispatcher boundary logs begin/end events around the task context helper,
+  including source and destination task identities and the result code.
+* This still does not complete formal RUNNING/READY transition integration,
+  consume dispatch pending, connect interrupt exit to dispatch, switch from the
+  timer IRQ handler, implement yield, preemption, time slicing, semaphore
+  wakeup dispatch, task termination, or a complete μITRON API.
+* The expected observation includes
+  `[dispatcher] switch boundary begin: ...`,
+  `[context] task-to-task switch begin: ...`, and
+  `[dispatcher] switch boundary end: result=0`.
 
 ---
 
@@ -730,14 +752,22 @@ kernel_main reached
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
 [context-smoke] begin
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
+[dispatcher] switch boundary begin: from id=2 name=task_b to id=3 name=task_c
 [context] prepared initial frame: task id=2 name=task_b context.rsp=0x...
+[context] prepared initial frame: task id=3 name=task_c context.rsp=0x...
 [context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x...
 [context] entered task stack: task id=2 name=task_b current.rsp=0x...
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
 [context] task ready after switch entry: result=0 task id=2 name=task_b
-[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x... boot.rsp.restore=0x...
-[context] switch resumed: task=boot boot.rsp.after=0x... from id=2 name=task_b from.rsp.saved=0x...
+[context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x... to.rsp.restore=0x...
+[context] entered task stack: task id=3 name=task_c current.rsp=0x...
+[task_c] executed
+[context] task entry returned: task id=3 name=task_c
+[context] task ready after switch entry: result=0 task id=3 name=task_c
+[context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x... boot.rsp.restore=0x...
+[context] switch resumed: task=boot boot.rsp.after=0x... from id=3 name=task_c from.rsp.saved=0x...
+[dispatcher] switch boundary end: result=0
 [context-smoke] end
 [cooperative] iteration=1 begin
 [scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
@@ -1208,6 +1238,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 8       | 8.3     | Timer IRQ dispatch pending observation     | v8.3-timer-irq-dispatch-pending-observation | Completed |
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
+| 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 
 ---
 

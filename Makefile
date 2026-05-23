@@ -75,7 +75,7 @@ $(TIMER_OBJ): kernel/timer.c kernel/include/timer.h kernel/include/hal/console.h
 $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/task.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/scheduler.c -o $(SCHEDULER_OBJ)
 
-$(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/include/task.h | dirs
+$(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/include/task.h kernel/include/task_context.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/dispatcher.c -o $(DISPATCHER_OBJ)
 
 $(PREEMPTION_OBJ): kernel/preemption.c kernel/include/preemption.h kernel/include/dispatch_pending.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/task.h kernel/include/hal/console.h | dirs

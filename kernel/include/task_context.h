@@ -78,6 +78,11 @@ int task_context_switch_to_task(tcb_t *to);
  * @param second first taskから切り替えるtask。READY状態からsmoke用にRUNNINGへ遷移させる。
  * @return bootへ戻った場合はTASK_CONTEXT_OK、失敗時はTASK_CONTEXT_ERR_*。
  */
+/*
+ * 第9章9.2以降、上位層からの切替開始点はdispatcher_switch_to()境界へ
+ * 寄せる。この関数はtask_context層に残るboot-time smoke補助APIであり、
+ * 正式なdispatcher境界として直接依存する対象ではない。
+ */
 int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second);
 
 /**

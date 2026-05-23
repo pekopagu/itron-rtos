@@ -693,11 +693,11 @@ static int kernel_run_minimal_context_switch_smoke(const tcb_t *selected, const 
     }
 
     /*
-     * task_context層に渡す時点では、scheduler選択とdispatcher commitは
-     * すでに完了している。ここから先は「準備済みcontextをどう切り替えるか」
-     * だけを確認する9.1のsmokeであり、次taskの選び直しは行わない。
+     * 第9章9.2では、切替開始点をtask_context smoke補助APIへ直接置かず、
+     * dispatcherのswitch boundary経由に寄せる。ここでは次taskの選び直し、
+     * dispatch pending消費、interrupt exit接続、正式な状態遷移完成は行わない。
      */
-    switch_result = task_context_switch_to_task_pair(current_task, next_task);
+    switch_result = dispatcher_switch_to(current_task, next_task);
     if (switch_result != TASK_CONTEXT_OK) {
         hal_console_write("[context-smoke] stop: reason=switch-failed\n");
         return switch_result;
