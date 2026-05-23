@@ -83,6 +83,12 @@ int task_context_switch_to_task(tcb_t *to);
  * 寄せる。この関数はtask_context層に残るboot-time smoke補助APIであり、
  * 正式なdispatcher境界として直接依存する対象ではない。
  */
+/**
+ * @note 第9章9.3以降、RUNNING/READY状態遷移とdispatcher current更新は
+ * dispatcher_switch_to()側の責務である。このtask_context層は、9.1 smokeの
+ * stack/register context観測を補助するだけで、entry return時の正式な
+ * DORMANT/READY確定も行わない。
+ */
 int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second);
 
 /**

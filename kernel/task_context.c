@@ -414,8 +414,6 @@ int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second)
  */
 void task_context_enter(tcb_t *task)
 {
-    int ready_result;
-
     if (task == NULL || task->entry == NULL) {
         hal_console_write("[context] task entry skipped: invalid task\n");
         for (;;) {
@@ -437,17 +435,15 @@ void task_context_enter(tcb_t *task)
     context_log_task_prefix(" task", task);
     hal_console_write("\n");
 
-    ready_result = task_mark_ready_from_running(task->id);
-    hal_console_write("[context] task ready after switch entry: result=");
-    context_write_int(ready_result);
-    context_log_task_prefix(" task", task);
-    hal_console_write("\n");
-
-    if (ready_result == TASK_CONTEXT_OK &&
-        task_to_task_smoke_from == task &&
+    /*
+     * 第9章9.3ではRUNNING/READY遷移をdispatcher_switch_to()境界へ移した。
+     * ここではentry returnを正式な終了状態として確定せず、9.1 smoke補助の
+     * first -> second切替だけを続行する。DORMANT/READYの最終扱いは9.4以降で
+     * task lifecycleとして設計する。
+     */
+    if (task_to_task_smoke_from == task &&
         task_to_task_smoke_to != NULL) {
         tcb_t *next_task = task_to_task_smoke_to;
-        int running_result;
 
         /*
          * 第9章9.1の起動時smokeでは、firstのentry return観測後に
@@ -457,8 +453,6 @@ void task_context_enter(tcb_t *task)
          */
         task_to_task_smoke_from = NULL;
         task_to_task_smoke_to = NULL;
-        running_result = task_mark_running(next_task->id);
-        if (running_result == 0) {
             /*
              * ここでactive_taskをsecondへ移すことで、secondからbootへ戻った後の
              * resumedログが「最後にbootへ戻したtask」を示せるようにする。
@@ -482,12 +476,6 @@ void task_context_enter(tcb_t *task)
             context_log_task_prefix(" task", task);
             context_log_rsp(" from.rsp.after=", task->context.rsp);
             hal_console_write("\n");
-        } else {
-            hal_console_write("[context] task-to-task switch skipped: mark-running failed result=");
-            context_write_int(running_result);
-            context_log_task_prefix(" task", next_task);
-            hal_console_write("\n");
-        }
     }
 
     hal_console_write("[context] switch back:");

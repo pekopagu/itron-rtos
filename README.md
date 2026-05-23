@@ -68,6 +68,7 @@ The current implementation covers the following milestones:
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
+| 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -411,6 +412,26 @@ Chapter 9 Section 9.2 adds a dispatcher-layer switch boundary on top of the
 * The expected observation includes
   `[dispatcher] switch boundary begin: ...`,
   `[context] task-to-task switch begin: ...`, and
+  `[dispatcher] switch boundary end: result=0`.
+
+Chapter 9 Section 9.3 connects RUNNING/READY state transitions to that
+dispatcher switch boundary:
+
+* `dispatcher_switch_to(from, to)` verifies `from` is RUNNING and `to` is READY
+  before advancing the switch boundary.
+* The dispatcher logs `from` as RUNNING->READY and `to` as READY->RUNNING before
+  delegating to the task-context smoke helper.
+* The destination task becomes the dispatcher current task at this boundary.
+* `task_context_switch_to_task_pair()` remains as the boot-time smoke helper for
+  stack/register-context observation and does not own dispatcher current state.
+* This still does not finalize entry-return task termination or DORMANT/READY
+  lifecycle handling, consume dispatch pending, connect interrupt exit to
+  dispatch, switch from the timer IRQ handler, implement yield, preemption, time
+  slicing, semaphore wakeup dispatch, or a complete μITRON API.
+* The expected observation includes
+  `[dispatcher] state transition: from ... RUNNING->READY`,
+  `[dispatcher] state transition: to ... READY->RUNNING`,
+  the existing task-to-task switch log, and
   `[dispatcher] switch boundary end: result=0`.
 
 ---
@@ -1239,6 +1260,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 8       | 8.4     | Timer IRQ entry/exit responsibility        | v8.4-timer-irq-entry-exit-responsibility | Completed |
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
+| 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 
 ---
 

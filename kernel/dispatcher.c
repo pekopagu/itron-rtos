@@ -239,6 +239,22 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
     dispatcher_log_task(" to", to);
     hal_console_write("\n");
 
+    /*
+     * 第9章9.3では、dispatcherの実切替境界へRUNNING/READY状態遷移を
+     * 接続する。dispatch pending消費、interrupt exit接続、timer IRQからの
+     * 実切替、entry return時の最終状態確定はまだ行わない。
+     */
+    hal_console_write("[dispatcher] state transition:");
+    dispatcher_log_task(" from", from);
+    hal_console_write(" RUNNING->READY\n");
+    from->state = TASK_STATE_READY;
+
+    hal_console_write("[dispatcher] state transition:");
+    dispatcher_log_task(" to", to);
+    hal_console_write(" READY->RUNNING\n");
+    to->state = TASK_STATE_RUNNING;
+    current_task = to;
+
     result = task_context_switch_to_task_pair(from, to);
 
     hal_console_write("[dispatcher] switch boundary end: result=");

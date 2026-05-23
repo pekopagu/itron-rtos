@@ -90,6 +90,12 @@ const tcb_t *dispatcher_get_current(void);
  * @return 成功時はDISPATCHER_OK、失敗時は負のDISPATCHER_ERR_*または
  * task_context層から返された負の値。
  */
+/**
+ * @note 第9章9.3では、この境界でfrom taskをRUNNINGからREADYへ戻し、
+ * to taskをREADYからRUNNINGへ進める。entry return時の最終状態確定、
+ * dispatch pending消費、interrupt exit接続、timer IRQからの実切替は
+ * まだ行わない。
+ */
 int dispatcher_switch_to(tcb_t *from, tcb_t *to);
 
 #endif
