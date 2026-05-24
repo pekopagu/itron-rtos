@@ -241,8 +241,9 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
 
     /*
      * 第9章9.3では、dispatcherの実切替境界へRUNNING/READY状態遷移を
-     * 接続する。dispatch pending消費、interrupt exit接続、timer IRQからの
-     * 実切替、entry return時の最終状態確定はまだ行わない。
+     * 接続する。第9章9.4でもこの境界責務は維持し、entry return後の
+     * DORMANT最終化はtask_context層のlifecycle確定として分離する。
+     * dispatch pending消費、interrupt exit接続、timer IRQからの実切替はまだ行わない。
      */
     hal_console_write("[dispatcher] state transition:");
     dispatcher_log_task(" from", from);

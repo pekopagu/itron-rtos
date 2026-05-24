@@ -66,36 +66,38 @@ kernel_main reached
 [context] entered task stack: task id=2 name=task_b current.rsp=0x1117f8
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
+[context] task entry finalized: task id=2 name=task_b READY->DORMANT
 [context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x1117f8 to.rsp.restore=0x111bf8
 [context] entered task stack: task id=3 name=task_c current.rsp=0x111bf8
 [task_c] executed
 [context] task entry returned: task id=3 name=task_c
+[context] task entry finalized: task id=3 name=task_c RUNNING->DORMANT
 [context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x111bf8 boot.rsp.restore=0x110f08
-[context] switch resumed: task=boot boot.rsp.after=0x110f08 from id=3 name=task_c from.rsp.saved=0x111bd8
+[context] switch resumed: task=boot boot.rsp.after=0x110f08 from id=3 name=task_c from.rsp.saved=0x111bc8
 [dispatcher] switch boundary end: result=0
 [context-smoke] end
 [cooperative] iteration=1 begin
-[scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
-[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
-[entry] calling current: id=2 name=task_b prio=1 state=RUNNING
-[task_b] executed
-[entry] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] ready again: result=ok id=2 name=task_b state=READY
+[scheduler] cooperative selected: id=1 name=task_a prio=5 state=READY
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[entry] calling current: id=1 name=task_a prio=5 state=RUNNING
+[task_a] executed
+[entry] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] ready again: result=ok id=1 name=task_a state=READY
 [cooperative] iteration=2 begin
-[scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
-[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
-[entry] calling current: id=2 name=task_b prio=1 state=RUNNING
-[task_b] executed
-[entry] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] ready again: result=ok id=2 name=task_b state=READY
+[scheduler] cooperative selected: id=1 name=task_a prio=5 state=READY
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[entry] calling current: id=1 name=task_a prio=5 state=RUNNING
+[task_a] executed
+[entry] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] ready again: result=ok id=1 name=task_a state=READY
 [cooperative] iteration=3 begin
-[scheduler] cooperative selected: id=2 name=task_b prio=1 state=READY
-[dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
-[entry] calling current: id=2 name=task_b prio=1 state=RUNNING
-[task_b] executed
-[entry] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] returned current: id=2 name=task_b prio=1 state=RUNNING
-[cooperative] ready again: result=ok id=2 name=task_b state=READY
+[scheduler] cooperative selected: id=1 name=task_a prio=5 state=READY
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[entry] calling current: id=1 name=task_a prio=5 state=RUNNING
+[task_a] executed
+[entry] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] returned current: id=1 name=task_a prio=5 state=RUNNING
+[cooperative] ready again: result=ok id=1 name=task_a state=READY
 [cooperative] stop: reason=limit-reached

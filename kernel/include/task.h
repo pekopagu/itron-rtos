@@ -83,10 +83,12 @@ typedef struct {
  * 再びscheduler候補にする。ただし、これはtask restartではなく、
  * CPU実行中状態からの退避や正式なyield APIでもない。
  * WAITINGへの待ち入り、コンテキストスイッチ、割り込み連動は将来拡張として残す。
+ * 第9章9.4では、context switch smoke上のentry returnを「READY復帰」ではなく
+ * その起動分の実行完了として扱い、task_context層の観測点からDORMANTへ最終化する。
  */
 typedef enum {
     TASK_STATE_UNUSED = 0, /**< 未使用スロット。空き判定はこの値だけで行う内部管理状態。 */
-    TASK_STATE_DORMANT,    /**< 生成済みだが未開始の状態。第3章3.2では将来拡張用に定義のみ行う。 */
+    TASK_STATE_DORMANT,    /**< 生成済みだが未開始、または第9章9.4でentry return後の起動分完了として最終化された状態。 */
     TASK_STATE_READY,      /**< 実行可能な状態。第3章3.2のscheduler_select_next()が唯一の選択対象にする。 */
     TASK_STATE_RUNNING,    /**< currentとしてcommit済みの論理状態。4.1/4.2/4.3ではentry直接呼び出しとreturn観測の対象だが、正式終了、独立stack実行、CPU context復元は意味しない。 */
     TASK_STATE_WAITING,    /**< 待ち状態。第3章3.2では待ちキューや待ち解除を実装せず、将来拡張用に残す。 */
@@ -278,6 +280,26 @@ int task_mark_running(int task_id);
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
  */
 int task_mark_ready_from_running(int task_id);
+
+/**
+ * @brief entry returnしたtaskをDORMANTへ最終化する。
+ *
+ * @details
+ * 第9章9.4のtask_context層から呼ばれる状態変更APIである。
+ * task entry関数がreturnした時点で、その起動分は完了したものとして扱い、
+ * 対象taskをREADY候補へ戻さずDORMANTへ遷移させる。
+ *
+ * RUNNINGを許すのは、現在実行中としてentry returnしたtaskを直接完了させるためである。
+ * READYを許すのは、第9章9.3のdispatcher_switch_to()がtask-to-task smoke開始前に
+ * from taskをRUNNINGからREADYへ戻すためであり、READY復帰を継続する意味ではない。
+ *
+ * この関数はtask entry呼び出し、dispatcher current更新、scheduler選択、
+ * dispatch pending消費、interrupt exit接続、context switchを行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_dormant_from_entry_return(int task_id);
 
 /**
  * @brief 指定taskをセマフォ待ちのWAITING状態へ変更する。

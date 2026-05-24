@@ -69,6 +69,7 @@ The current implementation covers the following milestones:
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
+| 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -433,6 +434,24 @@ dispatcher switch boundary:
   `[dispatcher] state transition: to ... READY->RUNNING`,
   the existing task-to-task switch log, and
   `[dispatcher] switch boundary end: result=0`.
+
+Chapter 9 Section 9.4 finalizes the task state after a task entry function
+returns in the context-switch smoke path:
+
+* The 9.1 task_b -> task_c task-to-task context switch smoke remains in place.
+* The 9.2 `dispatcher_switch_to(from, to)` boundary remains the visible switch
+  entry and end boundary.
+* The 9.3 dispatcher-owned `from RUNNING->READY` and `to READY->RUNNING`
+  transition logs remain unchanged.
+* After entry return, `task_context_enter()` treats the returned entry as the
+  completion of that activation and finalizes the task to `TASK_STATE_DORMANT`.
+* In the current smoke flow, task_b is finalized from READY to DORMANT because
+  the dispatcher already moved the switch source from RUNNING to READY; task_c
+  is finalized from RUNNING to DORMANT.
+* This is limited to entry-return lifecycle finalization in the task_context
+  layer. Dispatch pending consumption, interrupt-exit dispatch, timer IRQ
+  switching, preemptive context switching, task restart, and ITRON-like
+  `sta_tsk`/`ext_tsk`/`exd_tsk` APIs remain unimplemented.
 
 ---
 
@@ -987,6 +1006,7 @@ The current kernel includes:
 * IRQ-originated dispatch pending observation through QEMU serial log
 * Timer IRQ interrupt entry / kernel IRQ handler / interrupt exit boundary responsibility split
 * Interrupt exit boundary observation without dispatch pending consumption
+* Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1020,9 +1040,9 @@ The following features are intentionally not implemented yet:
 * Round-robin scheduling
 * Mutex
 * Event flag
-* Formal task termination state
 * `TASK_STATE_EXITED`
 * Task restart
+* Full ITRON-like task lifecycle APIs such as `sta_tsk`, `ext_tsk`, and `exd_tsk`
 * Interrupt-driven task management
 * Interrupt nesting control
 * SMP scheduling
@@ -1058,6 +1078,10 @@ For Chapter 8 Section 8.4, comments document the interrupt entry, kernel IRQ
 handler, and interrupt exit boundary responsibilities. The exit boundary reads
 dispatch pending only for validation logging and explicitly does not consume it,
 dispatch a task, switch context, or change task states.
+For Chapter 9 Section 9.4, comments document that `task_context_enter()`
+finalizes entry-returned tasks to `TASK_STATE_DORMANT` while keeping dispatcher
+switch-boundary responsibility, dispatch pending consumption, interrupt exit
+dispatch, timer IRQ switching, and ITRON-like task lifecycle APIs out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1261,6 +1285,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 9       | 9.1     | Task-to-task context switch smoke          | v9.1-task-to-task-context-switch-smoke | Completed |
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
+| 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 
 ---
 

@@ -10,6 +10,8 @@
  * この層はtask contextの検証、初回task stack frameの準備、学習用serial logの
  * 出力を行い、CPU register保存・復元はx86_64 arch primitiveへ委譲する。
  * READY task選択、current commit、割り込み処理、timer導入、preemptionは行わない。
+ * 第9章9.4ではentry return後のtask lifecycle確定だけをこの層に追加し、
+ * dispatcherのswitch boundary責務とは分離したままDORMANTへ最終化する。
  */
 
 #ifndef ITRON_RTOS_TASK_CONTEXT_H
@@ -85,9 +87,9 @@ int task_context_switch_to_task(tcb_t *to);
  */
 /**
  * @note 第9章9.3以降、RUNNING/READY状態遷移とdispatcher current更新は
- * dispatcher_switch_to()側の責務である。このtask_context層は、9.1 smokeの
- * stack/register context観測を補助するだけで、entry return時の正式な
- * DORMANT/READY確定も行わない。
+ * dispatcher_switch_to()側の責務である。第9章9.4では、このtask_context層が
+ * entry return後の起動分完了をDORMANTへ最終化するが、dispatcher current更新、
+ * READY task選択、dispatch pending消費、interrupt exit接続は行わない。
  */
 int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second);
 

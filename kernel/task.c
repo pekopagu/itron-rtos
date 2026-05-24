@@ -660,6 +660,65 @@ int task_mark_ready_from_running(int task_id)
 }
 
 /**
+ * @brief entry returnしたtaskをDORMANTへ最終化する。
+ *
+ * @details
+ * 第9章9.4で、task entry関数のreturnを「READYへの再投入」ではなく
+ * その起動分の実行完了として扱うための状態変更APIである。
+ * RUNNINGは通常のentry return対象として、READYは9.3のdispatcher_switch_to()が
+ * from taskへ適用したRUNNING->READY遷移後の最終化対象として受け付ける。
+ *
+ * この関数はTCB状態だけを更新し、entry呼び出し、scheduler選択、
+ * dispatcher current更新、dispatch pending消費、interrupt exit接続は行わない。
+ *
+ * @param task_id 登録済みタスクID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*値。
+ */
+int task_mark_dormant_from_entry_return(int task_id)
+{
+    int index;
+
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        /*
+         * UNUSEDは未登録スロットであり、entry returnという実行履歴を持たない。
+         * 未登録領域をDORMANTへ変えると「生成済みtask」と誤認されるため対象外にする。
+         */
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        /* task idが一致するTCBだけを状態変更対象にし、task tableの所有権はtask.cに閉じる。 */
+        if (task->id != task_id) {
+            continue;
+        }
+
+        /*
+         * entry return後の最終化元として許す状態をRUNNING/READYに限定する。
+         * READYを許すのは9.3のdispatcherがswitch元taskを先にREADYへ戻すためであり、
+         * WAITINGやDORMANTからの再完了、未設計の再起動APIを暗黙に認めないためである。
+         */
+        if (task->state != TASK_STATE_RUNNING && task->state != TASK_STATE_READY) {
+            return TASK_ERR_BAD_STATE;
+        }
+
+        /*
+         * ここで行うのはTCB上のlifecycle確定だけである。
+         * ready queue操作、scheduler再選択、dispatcher current更新、context保存復元は行わない。
+         */
+        task->state = TASK_STATE_DORMANT;
+        return 0;
+    }
+
+    return TASK_ERR_NOT_FOUND;
+}
+
+/**
  * @brief セマフォ待ちによるWAITING遷移をtask module内で実行する。
  *
  * @details

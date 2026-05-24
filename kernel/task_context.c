@@ -135,6 +135,35 @@ static const char *context_task_name(const tcb_t *task)
 }
 
 /**
+ * @brief task stateをentry return最終化ログ用の短い文字列へ変換する。
+ *
+ * @details
+ * 第9章9.4では、dispatcher_switch_to()が行ったRUNNING/READY遷移とは別に、
+ * task_context層がentry return後の最終状態をDORMANTへ確定する。
+ * その直前状態をログへ残すための表示補助であり、TCB状態は変更しない。
+ *
+ * @param state 表示するtask状態。
+ * @return 状態名を表す静的文字列。
+ */
+static const char *context_task_state_name(task_state_t state)
+{
+    switch (state) {
+    case TASK_STATE_UNUSED:
+        return "UNUSED";
+    case TASK_STATE_DORMANT:
+        return "DORMANT";
+    case TASK_STATE_READY:
+        return "READY";
+    case TASK_STATE_RUNNING:
+        return "RUNNING";
+    case TASK_STATE_WAITING:
+        return "WAITING";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+/**
  * @brief task識別情報をprefix付きでserial logへ出力する。
  *
  * @details
@@ -407,13 +436,18 @@ int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second)
  *
  * @details
  * arch primitiveがtask stackを復元した後、trampoline経由でこの関数へ入る。
- * entry returnは正式なtask終了ではなく、boot contextへ戻るための観測点として扱う。
+ * 第9章9.4では、entry returnをREADY復帰ではなく、その起動分の実行完了として
+ * DORMANTへ最終化する。ここで行うのはentry return後のtask lifecycle確定だけであり、
+ * scheduler選択、dispatcher current更新、dispatch pending消費、interrupt exit接続は行わない。
  *
  * @param task 実行対象task。
  * @return なし。正常系ではboot contextへswitch backする。
  */
 void task_context_enter(tcb_t *task)
 {
+    task_state_t returned_state;
+    int finalize_result;
+
     if (task == NULL || task->entry == NULL) {
         hal_console_write("[context] task entry skipped: invalid task\n");
         for (;;) {
@@ -430,26 +464,66 @@ void task_context_enter(tcb_t *task)
 
     task->entry();
 
-    /* entry returnは正式なtask終了ではなく、bootへ戻るための観測点として扱う。 */
+    /* entry returnを観測し、9.4のtask lifecycle確定点としてDORMANTへ落とす。 */
     hal_console_write("[context] task entry returned:");
     context_log_task_prefix(" task", task);
     hal_console_write("\n");
 
     /*
      * 第9章9.3ではRUNNING/READY遷移をdispatcher_switch_to()境界へ移した。
-     * ここではentry returnを正式な終了状態として確定せず、9.1 smoke補助の
-     * first -> second切替だけを続行する。DORMANT/READYの最終扱いは9.4以降で
-     * task lifecycleとして設計する。
+     * 第9章9.4では、その境界責務は維持したまま、entry returnしたtaskを
+     * task_context層でDORMANTへ最終化する。READYを受け付けるのは、
+     * dispatcherがfrom taskへRUNNING->READYを適用済みの9.1 smoke経路を
+     * 最終的にDORMANTへ落とすためであり、READY復帰として継続実行させるためではない。
      */
+    /*
+     * 最終化前の状態を先に保存する。
+     * DORMANTへ更新した後では、ログ上で「RUNNINGから完了したのか」
+     * 「9.3のfrom遷移でREADYへ戻った後に完了したのか」を判別できなくなるためである。
+     */
+    returned_state = task->state;
+
+    /*
+     * entry returnは再スケジュール可能なREADY復帰ではなく、この起動分の完了として扱う。
+     * 実際のTCB更新はtask管理層へ委譲し、task_context層はentry return観測点から
+     * lifecycle確定を依頼するだけに留める。
+     */
+    finalize_result = task_mark_dormant_from_entry_return(task->id);
+    if (finalize_result == 0) {
+        /*
+         * 成功時は「直前状態->DORMANT」を明示する。
+         * task_bは9.3のdispatcher遷移によりREADY->DORMANT、
+         * task_cは実行中entryのreturnとしてRUNNING->DORMANTになる。
+         */
+        hal_console_write("[context] task entry finalized:");
+        context_log_task_prefix(" task", task);
+        hal_console_write(" ");
+        hal_console_write(context_task_state_name(returned_state));
+        hal_console_write("->DORMANT\n");
+    } else {
+        /*
+         * ここへ来る場合は、task_context層が想定外の状態を完了扱いにしようとした
+         * 可能性がある。異常を隠してswitchを続けるとstate modelの崩れを追えないため、
+         * 元状態と結果コードを必ずログへ残す。
+         */
+        hal_console_write("[context] task entry finalize failed:");
+        context_log_task_prefix(" task", task);
+        hal_console_write(" state=");
+        hal_console_write(context_task_state_name(returned_state));
+        hal_console_write(" result=");
+        context_write_int(finalize_result);
+        hal_console_write("\n");
+    }
+
     if (task_to_task_smoke_from == task &&
         task_to_task_smoke_to != NULL) {
         tcb_t *next_task = task_to_task_smoke_to;
 
         /*
-         * 第9章9.1の起動時smokeでは、firstのentry return観測後に
-         * READYへ戻してからsecondをRUNNINGへ進める。これは正式な
-         * dispatcher_switch_to境界ではなく、割り込み・dispatch pending・
-         * yield APIとは接続しない一度きりの観測経路である。
+         * 第9章9.4では、first taskはすでにDORMANTへ最終化済みである。
+         * それでも9.1のtask-to-task smokeを維持するため、予約済みsecond contextへ
+         * 一度だけ進む。これはDORMANT taskを再起動する処理ではなく、準備済みstack間の
+         * 観測を継続するための限定経路である。
          */
         task_to_task_smoke_from = NULL;
         task_to_task_smoke_to = NULL;
