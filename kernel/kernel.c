@@ -33,6 +33,7 @@
 #include "dispatcher.h"
 #include "hal/console.h"
 #include "hal/interrupt.h"
+#include "itron_api.h"
 #include "scheduler.h"
 #include "semaphore.h"
 #include "task.h"
@@ -1126,6 +1127,14 @@ void kernel_main(void)
     if (selected_task != NULL && context_next_task != NULL) {
         (void)kernel_run_minimal_context_switch_smoke(selected_task, context_next_task);
     }
+
+    /*
+     * 第10章10.1では、μITRON風API層の入口としてyield_tsk()を1回だけ観測する。
+     * ここでは9.1-9.4のcontext switch smoke後のcurrentを読むだけに留め、
+     * RUNNING taskのREADY復帰、次task選択、dispatcher_switch_to()接続、
+     * task_context層への接続はまだ行わない。
+     */
+    (void)yield_tsk();
 
     /*
      * 第4章4.3では、cooperative runner側でREADY選択、current commit、

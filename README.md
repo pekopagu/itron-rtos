@@ -70,6 +70,7 @@ The current implementation covers the following milestones:
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
+| 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -452,6 +453,22 @@ returns in the context-switch smoke path:
   layer. Dispatch pending consumption, interrupt-exit dispatch, timer IRQ
   switching, preemptive context switching, task restart, and ITRON-like
   `sta_tsk`/`ext_tsk`/`exd_tsk` APIs remain unimplemented.
+
+Chapter 10 Section 10.1 adds the first μITRON-like cooperative API entry:
+
+* `yield_tsk()` is now exposed from the kernel common API layer.
+* The API logs that it was called and observes the dispatcher current task.
+* When the current task is RUNNING, the log includes task id, name, and state,
+  then records `switch-not-connected-yet`.
+* When no current task exists, or the current task is not RUNNING, the API
+  rejects the call as `invalid-current-state` and returns a negative value.
+* This is an API-entry foundation only. `yield_tsk()` does not move RUNNING
+  tasks back to READY, select the next task, call `dispatcher_switch_to()`,
+  call `task_context_switch_to_task_pair()`, consume dispatch pending, or
+  connect to interrupt exit or timer IRQ dispatch.
+* The 9.1 task_b -> task_c smoke, 9.2 dispatcher switch boundary, 9.3
+  RUNNING/READY transition logs, and 9.4 entry return -> DORMANT finalization
+  remain in place.
 
 ---
 
@@ -1007,6 +1024,8 @@ The current kernel includes:
 * Timer IRQ interrupt entry / kernel IRQ handler / interrupt exit boundary responsibility split
 * Interrupt exit boundary observation without dispatch pending consumption
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
+* μITRON-like `yield_tsk()` API entry foundation
+* `yield_tsk()` current-task observation and invalid-current-state logging
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1029,7 +1048,7 @@ The following features are intentionally not implemented yet:
 * Recoverable exception handling
 * Time slice
 * `dly_tsk`
-* `yield_tsk` compatible API
+* Complete `yield_tsk` dispatch behavior
 * Dynamic memory allocation
 * Timer-driven stack switching
 * Timeout wait (`twai_sem`)
@@ -1082,6 +1101,11 @@ For Chapter 9 Section 9.4, comments document that `task_context_enter()`
 finalizes entry-returned tasks to `TASK_STATE_DORMANT` while keeping dispatcher
 switch-boundary responsibility, dispatch pending consumption, interrupt exit
 dispatch, timer IRQ switching, and ITRON-like task lifecycle APIs out of scope.
+For Chapter 10 Section 10.1, comments document that `yield_tsk()` is only a
+μITRON-like API entry and observation point. The comments explicitly keep
+RUNNING->READY transition, scheduler selection, dispatcher switch connection,
+context switch connection, dispatch pending consumption, interrupt-exit
+dispatch, and timer IRQ dispatch out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1286,6 +1310,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 9       | 9.2     | Dispatcher switch boundary                 | v9.2-dispatcher-switch-boundary | Completed |
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
+| 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 
 ---
 

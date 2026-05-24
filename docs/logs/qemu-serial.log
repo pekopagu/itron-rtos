@@ -76,6 +76,8 @@ kernel_main reached
 [context] switch resumed: task=boot boot.rsp.after=0x110f08 from id=3 name=task_c from.rsp.saved=0x111bc8
 [dispatcher] switch boundary end: result=0
 [context-smoke] end
+[yield] called: current id=3 name=task_c state=DORMANT
+[yield] rejected: reason=invalid-current-state current id=3 name=task_c state=DORMANT
 [cooperative] iteration=1 begin
 [scheduler] cooperative selected: id=1 name=task_a prio=5 state=READY
 [dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
