@@ -645,6 +645,65 @@ static void kernel_run_preemption_smoke(int low_task_id, int high_task_id)
 }
 
 /**
+ * @brief RUNNING current taskからの `yield_tsk()` を10.2の限定観測として実行する。
+ *
+ * @details
+ * 指定されたREADY taskをdispatcherでcurrent/RUNNINGへcommitした直後に
+ * `yield_tsk()` を呼び、RUNNING->READY遷移を観測する。
+ * これは10.2の検証用経路であり、READY化後にscheduler_select_next()で次taskを選ばず、
+ * dispatcher_switch_to()やtask_context_switch_to_task_pair()へも接続しない。
+ *
+ * @param selected RUNNINGへcommitしてからyield対象にするREADY task。
+ * @return 成功時は0、失敗時は負の値。
+ */
+static int kernel_run_yield_running_smoke(const tcb_t *selected)
+{
+    int commit_result;
+    int yield_result;
+
+    hal_console_write("[yield-smoke] begin\n");
+
+    if (selected == NULL) {
+        /*
+         * yield検証はREADY taskをいったんcurrentへcommitする前提で行う。
+         * 対象がなければ検証経路を作らず、schedulerを再実行して補わない。
+         */
+        hal_console_write("[yield-smoke] stop: reason=no-selected-task\n");
+        return DISPATCHER_ERR_INVAL;
+    }
+
+    /*
+     * yield_tsk()自身はcurrentを選ばないため、smoke側で既存dispatcher境界を使って
+     * RUNNING currentを明示的に用意する。これは検証準備であり、yield内の責務ではない。
+     */
+    commit_result = dispatcher_commit_current(selected);
+    kernel_log_dispatcher_commit_result(commit_result);
+    if (commit_result != DISPATCHER_OK) {
+        hal_console_write("[yield-smoke] stop: reason=commit-failed\n");
+        return commit_result;
+    }
+
+    /*
+     * 10.2ではyield_tsk()がRUNNING current taskをREADYへ戻すところまでを確認する。
+     * この後に次task選択や実切替へ進めると、協調スケジューリング完成回になってしまう。
+     */
+    yield_result = yield_tsk();
+    if (yield_result != YIELD_TSK_OK) {
+        hal_console_write("[yield-smoke] stop: reason=yield-failed err=");
+        kernel_write_int(yield_result);
+        hal_console_write("\n");
+        return yield_result;
+    }
+
+    /*
+     * 成功後のtaskはREADYに戻っているが、このhelperでは再選択しない。
+     * 後続の9.1-9.4 smokeが同じREADY taskを従来どおり選べることも確認対象になる。
+     */
+    hal_console_write("[yield-smoke] end\n");
+    return 0;
+}
+
+/**
  * @brief 第9章9.1のtask間context switch smokeを1回だけ実行する。
  *
  * @details
@@ -1109,6 +1168,15 @@ void kernel_main(void)
     kernel_log_scheduler_selection("after_register", selected_task);
 
     /*
+     * 第10章10.2では、9.1-9.4のtask-to-task smokeへ進む前に、
+     * RUNNING current taskからのyield要求がREADY化まで進むことを限定的に観測する。
+     * READY化後もここでは次task選択やdispatcher_switch_to()接続を行わない。
+     */
+    if (selected_task != NULL) {
+        (void)kernel_run_yield_running_smoke(selected_task);
+    }
+
+    /*
      * 第9章9.1では、既存のboot-to-task smokeをtask-to-taskへ拡張する。
      * selected taskでentry returnを観測した後、もう1つのREADY task contextへ
      * 一度だけ切り替え、second taskのreturn後にbootへ戻る。これは起動時smokeであり、
@@ -1129,10 +1197,9 @@ void kernel_main(void)
     }
 
     /*
-     * 第10章10.1では、μITRON風API層の入口としてyield_tsk()を1回だけ観測する。
+     * 第10章10.1/10.2では、μITRON風API層の入口としてyield_tsk()を観測する。
      * ここでは9.1-9.4のcontext switch smoke後のcurrentを読むだけに留め、
-     * RUNNING taskのREADY復帰、次task選択、dispatcher_switch_to()接続、
-     * task_context層への接続はまだ行わない。
+     * DORMANT current taskがREADYへ戻されずrejectされることを確認する。
      */
     (void)yield_tsk();
 

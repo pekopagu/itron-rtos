@@ -265,16 +265,18 @@ tcb_t *task_get_mutable_by_id(int task_id);
 int task_mark_running(int task_id);
 
 /**
- * @brief RUNNING taskを協調実行用のREADY候補へ戻す。
+ * @brief RUNNING taskをREADY候補へ戻す。
  *
  * @details
  * 第4章4.3のboot-time verification modelで使用する状態変更APIである。
  * cooperative return eventを観測した後、currentとして採用されていた
  * RUNNING taskをREADYへ戻し、再びschedulerの選択候補にする。
+ * 第10章10.2では `yield_tsk()` がRUNNING current taskをREADYへ戻すためにも
+ * このAPIを使う。
  *
- * この遷移はcooperative re-candidacyであり、task restartではない。
- * 正式なtask終了、`yield_tsk`互換API、DORMANT遷移、コンテキストスイッチ、
- * スタック切り替え、レジスタ保存・復元は行わない。
+ * この遷移はtask restartではない。10.2のyield用途でもREADY化までに限定し、
+ * 正式なtask終了、DORMANT遷移、次task選択、dispatcher switch、
+ * コンテキストスイッチ、スタック切り替え、レジスタ保存・復元は行わない。
  *
  * @param task_id 登録済みタスクID。0以下は不正。
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。

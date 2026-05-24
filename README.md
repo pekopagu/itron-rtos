@@ -71,6 +71,7 @@ The current implementation covers the following milestones:
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
+| 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -466,6 +467,24 @@ Chapter 10 Section 10.1 adds the first μITRON-like cooperative API entry:
   tasks back to READY, select the next task, call `dispatcher_switch_to()`,
   call `task_context_switch_to_task_pair()`, consume dispatch pending, or
   connect to interrupt exit or timer IRQ dispatch.
+* The 9.1 task_b -> task_c smoke, 9.2 dispatcher switch boundary, 9.3
+  RUNNING/READY transition logs, and 9.4 entry return -> DORMANT finalization
+  remain in place.
+
+Chapter 10 Section 10.2 lets `yield_tsk()` return the RUNNING current task to
+READY:
+
+* `yield_tsk()` now calls the task-management transition boundary for the
+  current task only when the current task exists and is `TASK_STATE_RUNNING`.
+* A successful call logs `RUNNING->READY`, then records
+  `scheduler-not-connected-yet`.
+* DORMANT current tasks, including tasks finalized by the 9.4 entry-return
+  path, are still rejected as `invalid-current-state` and are not moved back to
+  READY.
+* This is still not complete cooperative scheduling. `yield_tsk()` does not
+  call `scheduler_select_next()`, `dispatcher_switch_to()`, or
+  `task_context_switch_to_task_pair()`, and it does not consume dispatch
+  pending or connect interrupt exit/timer IRQ paths to dispatch.
 * The 9.1 task_b -> task_c smoke, 9.2 dispatcher switch boundary, 9.3
   RUNNING/READY transition logs, and 9.4 entry return -> DORMANT finalization
   remain in place.
@@ -1026,6 +1045,7 @@ The current kernel includes:
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
+* `yield_tsk()` RUNNING current task to READY transition
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1101,11 +1121,13 @@ For Chapter 9 Section 9.4, comments document that `task_context_enter()`
 finalizes entry-returned tasks to `TASK_STATE_DORMANT` while keeping dispatcher
 switch-boundary responsibility, dispatch pending consumption, interrupt exit
 dispatch, timer IRQ switching, and ITRON-like task lifecycle APIs out of scope.
-For Chapter 10 Section 10.1, comments document that `yield_tsk()` is only a
-μITRON-like API entry and observation point. The comments explicitly keep
-RUNNING->READY transition, scheduler selection, dispatcher switch connection,
-context switch connection, dispatch pending consumption, interrupt-exit
-dispatch, and timer IRQ dispatch out of scope.
+For Chapter 10 Section 10.1, comments introduced `yield_tsk()` as a
+μITRON-like API entry and observation point without connecting it to dispatch.
+For Chapter 10 Section 10.2, comments document that `yield_tsk()` now returns
+only a RUNNING current task to READY through the task-management boundary. They
+continue to keep next-task selection, dispatcher switch connection, context
+switch connection, dispatch pending consumption, interrupt-exit dispatch, and
+timer IRQ dispatch out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1311,6 +1333,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 9       | 9.3     | Dispatcher state transition switch         | v9.3-dispatcher-state-transition-switch | Completed |
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
+| 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 
 ---
 

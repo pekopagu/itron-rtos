@@ -611,16 +611,18 @@ int task_mark_running(int task_id)
 }
 
 /**
- * @brief RUNNING taskを協調実行用にREADYへ戻す。
+ * @brief RUNNING taskをREADY候補へ戻す。
  *
  * @details
  * 第4章4.3のboot-time verification modelで、entry returnを
  * cooperative return eventとして観測した後に使用する。
+ * 第10章10.2では `yield_tsk()` からも呼び出され、RUNNING current taskだけを
+ * READYへ戻す状態遷移APIとして使う。
  * 対象taskがRUNNINGの場合だけREADYへ戻し、再びscheduler候補にする。
  *
- * これはtask restartではなく、正式なyield APIでもない。
- * コンテキストスイッチ、スタック切り替え、レジスタ保存・復元、
- * 割り込み、タイマ、プリエンプションは行わない。
+ * これはtask restartではない。10.2時点のyield用途でもREADY化までに限定し、
+ * 次task選択、dispatcher switch、コンテキストスイッチ、スタック切り替え、
+ * レジスタ保存・復元、割り込み、タイマ、プリエンプションは行わない。
  *
  * @param task_id 登録済みタスクID。0以下は不正。
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
@@ -645,8 +647,9 @@ int task_mark_ready_from_running(int task_id)
         }
 
         /*
-         * 4.3のcooperative re-candidacyはRUNNINGからREADYだけを許す。
-         * DORMANTや終了状態への遷移、task restartはここでは扱わない。
+         * 4.3のcooperative re-candidacyと10.2のyield READY化はいずれも
+         * RUNNINGからREADYだけを許す。DORMANTや終了状態への遷移、
+         * task restartはここでは扱わない。
          */
         if (task->state != TASK_STATE_RUNNING) {
             return TASK_ERR_BAD_STATE;
