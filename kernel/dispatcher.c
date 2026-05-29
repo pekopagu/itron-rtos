@@ -194,7 +194,8 @@ const tcb_t *dispatcher_get_current(void)
  * 第9章9.2では、ここをdispatcherのswitch boundaryとして観測可能にする。
  * 実際のboot-time task-to-task smokeはtask_context層の補助APIへ委譲する。
  * この関数はdispatch pendingを消費せず、interrupt exit boundaryやtimer IRQ
- * handlerからも呼ばれない。RUNNING/READY状態遷移の正式接続もまだ行わない。
+ * handlerからも呼ばれない。第10章10.4では `yield_tsk()` がRUNNING currentを
+ * READYへ戻した後にこの境界へ入るため、fromがREADY化済みの協調API経路も受け付ける。
  *
  * @param from 切替元task。
  * @param to 切替先task。
@@ -220,7 +221,14 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
         return DISPATCHER_ERR_INVAL;
     }
 
-    if (from->state != TASK_STATE_RUNNING) {
+    /*
+     * 通常のdispatcher smokeではfromはRUNNINGで入る。
+     * 10.4のyield経路だけは、API層が「RUNNING currentをREADYへ戻す」
+     * という協調API固有の観測を先に済ませてからここへ来るため、READYも許可する。
+     * DORMANT/WAITINGは実行中taskではなく、ここで受け付けると9.4のDORMANT確定や
+     * wait状態の意味を壊すため拒否する。
+     */
+    if (from->state != TASK_STATE_RUNNING && from->state != TASK_STATE_READY) {
         hal_console_write("[dispatcher] switch boundary failed: reason=from-not-running");
         dispatcher_log_task(" from", from);
         hal_console_write("\n");
@@ -241,14 +249,17 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
 
     /*
      * 第9章9.3では、dispatcherの実切替境界へRUNNING/READY状態遷移を
-     * 接続する。第9章9.4でもこの境界責務は維持し、entry return後の
+     * 接続する。第10章10.4のyield経路では、API層がRUNNING currentをREADYへ
+     * 戻してからここへ来るため、fromがすでにREADYの場合は再度READY化しない。
      * DORMANT最終化はtask_context層のlifecycle確定として分離する。
      * dispatch pending消費、interrupt exit接続、timer IRQからの実切替はまだ行わない。
      */
-    hal_console_write("[dispatcher] state transition:");
-    dispatcher_log_task(" from", from);
-    hal_console_write(" RUNNING->READY\n");
-    from->state = TASK_STATE_READY;
+    if (from->state == TASK_STATE_RUNNING) {
+        hal_console_write("[dispatcher] state transition:");
+        dispatcher_log_task(" from", from);
+        hal_console_write(" RUNNING->READY\n");
+        from->state = TASK_STATE_READY;
+    }
 
     hal_console_write("[dispatcher] state transition:");
     dispatcher_log_task(" to", to);
@@ -256,6 +267,11 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
     to->state = TASK_STATE_RUNNING;
     current_task = to;
 
+    /*
+     * dispatcherはswitch境界までを担当し、実際のstack frame準備とarch context switchは
+     * task_context層へ委譲する。timer IRQやdispatch pendingからここへ来たわけではないため、
+     * interrupt-time状態は消費しない。
+     */
     result = task_context_switch_to_task_pair(from, to);
 
     hal_console_write("[dispatcher] switch boundary end: result=");

@@ -10,8 +10,8 @@
  * このヘッダは、学習用RTOSのkernel共通部へμITRON風API名を公開する。
  * 現段階の `yield_tsk()` は、実行中タスクからの自発的yield要求を
  * 観測可能にし、RUNNING current taskだけをREADYへ戻した後、
- * schedulerで次READY候補を選ぶ入口である。
- * 候補選択後のdispatcher接続、CPU context switchはまだ行わない。
+ * schedulerで次READY候補を選び、協調API経由でdispatcher/context switch境界へ進む入口である。
+ * timer IRQ、interrupt exit boundary、dispatch pending、preemptive switchへは接続しない。
  */
 
 #ifndef ITRON_RTOS_ITRON_API_H
@@ -43,7 +43,8 @@
  * dispatcherが保持するcurrent taskを読み取り、HAL consoleへ呼び出し事実と
  * current taskの観測情報を出力する。RUNNING current taskの場合はtask管理層を通じて
  * READYへ戻し、`scheduler_select_next()` で次READY候補を選ぶ。
- * 選択結果はログへ出すだけで、dispatcher switch、context switchは実行しない。
+ * 候補が存在する場合はdispatcher境界へ接続し、task_context層の協調switch smokeへ進む。
+ * 候補が存在しない場合はswitchせず、no-nextとして観測を止める。
  *
  * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化と次候補選択境界到達。
  *         負値はcurrent task未設定または非RUNNINGの不正状態。

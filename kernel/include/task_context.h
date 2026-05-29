@@ -72,9 +72,10 @@ int task_context_switch_to_task(tcb_t *to);
  * first taskのentry return観測点でsecond task contextへ切り替える。
  * second taskのentry return後は既存のboot復帰経路へ戻る。
  *
- * これはtask間context switchを観測するための教育用モデルであり、
- * dispatcher_switch_to相当の正式境界、割り込みexitからの切替、
- * dispatch pending消費、yield API、preemption、time sliceは実装しない。
+ * これはtask間context switchを観測するための教育用モデルである。
+ * 第10章10.4では `yield_tsk()` がdispatcher境界へ接続された結果として
+ * この補助経路へ到達できる。ただし割り込みexitからの切替、dispatch pending消費、
+ * timer IRQからの切替、preemption、time sliceは実装しない。
  *
  * @param first boot contextから最初に入るtask。dispatcherでRUNNING確定済みであること。
  * @param second first taskから切り替えるtask。READY状態からsmoke用にRUNNINGへ遷移させる。

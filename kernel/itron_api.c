@@ -9,8 +9,8 @@
  * @details
  * このファイルは `yield_tsk()` の観測入口を提供する。
  * dispatcherからcurrent taskを読み取り、RUNNING current taskだけをtask管理層へ委譲して
- * READYへ戻す。READY化後はschedulerによる次タスク候補選択までを観測するが、
- * dispatcher/context switchへの接続は意図的に行わない。
+ * READYへ戻す。READY化後はschedulerによる次タスク候補選択を観測し、
+ * 第10章10.4では協調API経由でdispatcher/context switch境界へ接続する。
  */
 
 #include <stddef.h>
@@ -158,10 +158,11 @@ static void itron_api_log_next_candidate(const tcb_t *task)
  * task管理層の `task_mark_ready_from_running()` を通じてREADYへ戻す。
  * current未設定または非RUNNINGの場合は不正状態としてログを出し、負値を返す。
  *
- * この関数は10.3時点でRUNNING current taskをREADYへ戻した後、
- * `scheduler_select_next()` で次のREADY候補を選ぶところまでを担当する。
- * 選択結果はログへ出すだけで、dispatcher切替、task context切替は呼び出さない。
- * dispatcher current pointerとCPU contextは更新せず、dispatch pendingも消費しない。
+ * この関数は10.4時点でRUNNING current taskをREADYへ戻した後、
+ * `scheduler_select_next()` で次のREADY候補を選び、候補が存在する場合だけ
+ * `dispatcher_switch_to()` へ接続する。yield_tskはentry returnではないため、
+ * DORMANT taskをREADYへ戻さない。timer IRQ、interrupt exit boundary、
+ * dispatch pending、preemptive switchとは接続しない。
  *
  * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化と候補選択境界到達。
  *         `YIELD_TSK_ERR_INVALID_CURRENT_STATE` はcurrent未設定または非RUNNING。
@@ -170,7 +171,10 @@ int yield_tsk(void)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *next;
+    tcb_t *current_mutable;
+    tcb_t *next_mutable;
     int ready_result;
+    int switch_result;
 
     if (current == NULL) {
         /*
@@ -209,9 +213,8 @@ int yield_tsk(void)
     hal_console_write("\n");
 
     /*
-     * 10.3でもREADY化対象はRUNNING current taskだけに限定する。
-     * 状態変更の所有権はtask管理層に残し、yield API層はarch/x86_64のcontext switch詳細にも
-     * dispatcher switchにも触れない。
+     * 10.4でもREADY化対象はRUNNING current taskだけに限定する。
+     * 状態変更の所有権はtask管理層に残し、yield API層はarch/x86_64のcontext switch詳細に触れない。
      */
     ready_result = task_mark_ready_from_running(current->id);
     if (ready_result != 0) {
@@ -239,8 +242,15 @@ int yield_tsk(void)
      * READY taskを読むだけで、RUNNING遷移、dispatcher current更新、context switchは行わない。
      */
     next = scheduler_select_next();
-    if (next == NULL) {
+    if (next == NULL || next->id == current->id) {
+        /*
+         * READYへ戻したcurrent自身しか候補がない場合は、10.4では「切替先なし」と扱う。
+         * 自分自身へdispatcher_switch_to()を呼ぶと、協調yieldの観測ではなく
+         * same-task失敗経路になり、no-next分岐の意図がログから読みにくくなるためである。
+         */
         hal_console_write("[yield] no next task: reason=no-ready-task\n");
+        hal_console_write("[yield] deferred: reason=no-next-task\n");
+        return YIELD_TSK_OK;
     } else {
         hal_console_write("[yield] next selected:");
         itron_api_log_next_candidate(next);
@@ -248,10 +258,38 @@ int yield_tsk(void)
     }
 
     /*
-     * 10.3の到達点は次候補の観測までである。選択結果をdispatcher_switch_to()へ渡さず、
-     * dispatcher currentも次taskへcommitしないことをログ上で明示する。
+     * 10.4では協調API経由で初めてdispatcher境界へ接続する。yield_tsk()は
+     * x86_64の保存復元詳細を知らず、切替境界と実体はdispatcher/task_context層へ委譲する。
+     * currentはREADY化済みなので、dispatcher側は協調yield由来のfromとして扱う。
      */
-    hal_console_write("[yield] deferred: reason=dispatcher-switch-not-connected-yet\n");
+    /*
+     * schedulerとdispatcher_get_current()は読み取り専用TCBを返す。
+     * yield API層で直接状態を書き換えない方針を守るため、switch境界へ渡す直前に
+     * task管理層のID lookupで更新可能TCBを取り直す。
+     */
+    current_mutable = task_get_mutable_by_id(current->id);
+    next_mutable = task_get_mutable_by_id(next->id);
+    if (current_mutable == NULL || next_mutable == NULL) {
+        hal_console_write("[yield] deferred: reason=switch-task-not-found\n");
+        return YIELD_TSK_ERR_INVALID_CURRENT_STATE;
+    }
+
+    hal_console_write("[yield] switch begin: from");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" to");
+    itron_api_log_task_id_name(next);
+    hal_console_write("\n");
+
+    /*
+     * ここが10.4の接続点である。yield_tsk()は「協調APIからswitchを要求した」
+     * ことだけを示し、実際のRUNNING/READY整理、current更新、context switch実体は
+     * dispatcher/task_context層へ残す。
+     */
+    switch_result = dispatcher_switch_to(current_mutable, next_mutable);
+
+    hal_console_write("[yield] switch end: result=");
+    itron_api_write_int(switch_result);
+    hal_console_write("\n");
 
     return YIELD_TSK_OK;
 }

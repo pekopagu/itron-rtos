@@ -426,6 +426,13 @@ int task_context_switch_to_task_pair(tcb_t *first, tcb_t *second)
 
     result = task_context_switch_to_task(first);
 
+    /*
+     * bootへ戻ってきた時点で、予約したfirst -> secondの観測経路は完了している。
+     * 10.4ではyield_tsk()から到達したことをログだけで追えるよう、beginに対応する
+     * endをtask_context層で明示する。
+     */
+    hal_console_write("[context] task-to-task switch end\n");
+
     task_to_task_smoke_from = NULL;
     task_to_task_smoke_to = NULL;
     return result;

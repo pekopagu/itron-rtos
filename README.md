@@ -73,6 +73,7 @@ The current implementation covers the following milestones:
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
+| 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -509,6 +510,26 @@ READY task candidate after returning the RUNNING current task to READY:
   not commit dispatcher current to the selected candidate, and does not
   consume dispatch pending or connect interrupt exit/timer IRQ paths to
   dispatch.
+
+Chapter 10 Section 10.4 connects `yield_tsk()` to the existing dispatcher and
+task_context switch boundaries for the first cooperative API switch path:
+
+* `yield_tsk()` still accepts only a RUNNING current task and still rejects
+  DORMANT current tasks as `invalid-current-state`.
+* After RUNNING->READY succeeds, `yield_tsk()` calls `scheduler_select_next()`
+  and, when a different READY task exists, logs switch begin/end around
+  `dispatcher_switch_to()`.
+* `dispatcher_switch_to()` remains the visible switch boundary. It advances the
+  selected task READY->RUNNING, updates dispatcher current, and delegates the
+  switch body to `task_context_switch_to_task_pair()`.
+* The task_context layer logs task-to-task switch begin/end and still finalizes
+  entry return to `TASK_STATE_DORMANT`; `yield_tsk()` is not entry return and
+  does not restart DORMANT tasks.
+* If the only READY task is the just-yielded current task, `yield_tsk()` logs
+  `no-ready-task` and `deferred: reason=no-next-task` without switching.
+* This remains a cooperative API connection only. Timer IRQ, interrupt exit
+  dispatch, dispatch pending consumption, preemptive switch, and time slicing
+  are still not connected.
 
 ---
 
@@ -1075,6 +1096,8 @@ The current kernel includes:
 * `yield_tsk()` current-task observation and invalid-current-state logging
 * `yield_tsk()` RUNNING current task to READY transition
 * `yield_tsk()` scheduler candidate selection after READY transition
+* `yield_tsk()` cooperative connection to `dispatcher_switch_to()`
+* Cooperative API path to `task_context_switch_to_task_pair()`
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1097,9 +1120,6 @@ The following features are intentionally not implemented yet:
 * Recoverable exception handling
 * Time slice
 * `dly_tsk`
-* Complete `yield_tsk` dispatch behavior
-* `yield_tsk()` connection to `dispatcher_switch_to()`
-* `yield_tsk()` connection to `task_context_switch_to_task_pair()`
 * Dynamic memory allocation
 * Timer-driven stack switching
 * Timeout wait (`twai_sem`)
@@ -1164,6 +1184,11 @@ scheduler for a READY candidate after READY化 and logs that candidate, while
 still leaving dispatcher switch connection, context switch connection,
 dispatcher current commit, dispatch pending consumption, interrupt-exit
 dispatch, and timer IRQ dispatch out of scope.
+For Chapter 10 Section 10.4, comments document that `yield_tsk()` now connects
+to `dispatcher_switch_to()` and reaches the task_context task-to-task switch
+smoke from a cooperative API call, while still leaving timer IRQ dispatch,
+interrupt-exit dispatch, dispatch pending consumption, preemptive switch, and
+time slicing out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1371,6 +1396,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
+| 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 
 ---
 

@@ -272,8 +272,8 @@ int task_mark_running(int task_id);
  * cooperative return eventを観測した後、currentとして採用されていた
  * RUNNING taskをREADYへ戻し、再びschedulerの選択候補にする。
  * 第10章10.2以降では `yield_tsk()` がRUNNING current taskをREADYへ戻すためにも
- * このAPIを使う。第10章10.3では、READY化成功後にAPI層がschedulerで
- * 次READY候補を選ぶが、この関数はその選択を担当しない。
+ * このAPIを使う。第10章10.4では、READY化成功後にAPI層がschedulerで
+ * 次READY候補を選びdispatcher境界へ進むが、この関数はその選択や切替を担当しない。
  *
  * この遷移はtask restartではない。この関数はREADY化までに限定し、
  * 正式なtask終了、DORMANT遷移、次task選択、dispatcher switch、

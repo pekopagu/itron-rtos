@@ -81,18 +81,21 @@ const tcb_t *dispatcher_get_current(void);
  * 境界」を持つことを明確化する。このAPIは、9.1で追加した起動時
  * task-to-task context switch smoke補助APIへ委譲する薄い境界である。
  *
- * ここではRUNNING/READY状態遷移の正式完成、dispatch pending消費、
- * interrupt exit boundaryからの接続、timer IRQからの実切替、yield API、
+ * 第10章10.4では、yield APIからの協調switch入口としても使う。
+ * 通常のdispatcher smokeではfrom taskをRUNNINGからREADYへ戻すが、
+ * `yield_tsk()` が先にREADYへ戻した協調API経路ではREADY化済みfromを受け付ける。
+ * dispatch pending消費、interrupt exit boundaryからの接続、timer IRQからの実切替、
  * preemption、time slice、task終了状態確定は行わない。
  *
- * @param from 切替元task。9.2 smokeではdispatcher commit済みRUNNING task。
+ * @param from 切替元task。通常はRUNNING task。10.4のyield経路ではREADY化済みtask。
  * @param to 切替先task。9.2 smokeではREADY task。
  * @return 成功時はDISPATCHER_OK、失敗時は負のDISPATCHER_ERR_*または
  * task_context層から返された負の値。
  */
 /**
  * @note 第9章9.3では、この境界でfrom taskをRUNNINGからREADYへ戻し、
- * to taskをREADYからRUNNINGへ進める。entry return時の最終状態確定、
+ * to taskをREADYからRUNNINGへ進める。第10章10.4のyield経路では、
+ * from taskがすでにREADYへ戻っている場合にその状態を維持する。entry return時の最終状態確定、
  * dispatch pending消費、interrupt exit接続、timer IRQからの実切替は
  * まだ行わない。
  */
