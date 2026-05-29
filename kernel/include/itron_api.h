@@ -9,8 +9,9 @@
  * @details
  * このヘッダは、学習用RTOSのkernel共通部へμITRON風API名を公開する。
  * 現段階の `yield_tsk()` は、実行中タスクからの自発的yield要求を
- * 観測可能にし、RUNNING current taskだけをREADYへ戻す入口である。
- * READY化後の次タスク選択、dispatcher接続、CPU context switchはまだ行わない。
+ * 観測可能にし、RUNNING current taskだけをREADYへ戻した後、
+ * schedulerで次READY候補を選ぶ入口である。
+ * 候補選択後のdispatcher接続、CPU context switchはまだ行わない。
  */
 
 #ifndef ITRON_RTOS_ITRON_API_H
@@ -21,7 +22,8 @@
  *
  * @details
  * current taskが存在し、論理状態がRUNNINGであり、READYへ戻せた場合に返す。
- * これは「実切替成功」ではなく、「yield要求をREADY候補化まで処理した」ことを示す。
+ * これは「実切替成功」ではなく、「yield要求をREADY候補化し、
+ * schedulerの次候補選択境界まで到達した」ことを示す。
  */
 #define YIELD_TSK_OK 0
 
@@ -40,10 +42,10 @@
  * @details
  * dispatcherが保持するcurrent taskを読み取り、HAL consoleへ呼び出し事実と
  * current taskの観測情報を出力する。RUNNING current taskの場合はtask管理層を通じて
- * READYへ戻し、`scheduler-not-connected-yet` として延期理由を記録する。
- * 次task選択、dispatcher switch、context switchは実行しない。
+ * READYへ戻し、`scheduler_select_next()` で次READY候補を選ぶ。
+ * 選択結果はログへ出すだけで、dispatcher switch、context switchは実行しない。
  *
- * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化成功。
+ * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化と次候補選択境界到達。
  *         負値はcurrent task未設定または非RUNNINGの不正状態。
  */
 int yield_tsk(void);

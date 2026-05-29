@@ -72,6 +72,7 @@ The current implementation covers the following milestones:
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
+| 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -489,6 +490,26 @@ READY:
   RUNNING/READY transition logs, and 9.4 entry return -> DORMANT finalization
   remain in place.
 
+Chapter 10 Section 10.3 lets `yield_tsk()` ask the scheduler for the next
+READY task candidate after returning the RUNNING current task to READY:
+
+* `yield_tsk()` still accepts only a RUNNING current task and still rejects
+  DORMANT current tasks as `invalid-current-state`.
+* After the RUNNING->READY transition succeeds, `yield_tsk()` calls
+  `scheduler_select_next()` and logs the selected candidate's id, name,
+  priority, and state.
+* If no READY task is available, `yield_tsk()` logs
+  `no-ready-task`; the successful READY transition still returns
+  `YIELD_TSK_OK`.
+* The boot-time yield smoke keeps multiple READY tasks available and observes
+  the scheduler candidate, then stops at
+  `dispatcher-switch-not-connected-yet`.
+* This is still not complete cooperative scheduling. `yield_tsk()` does not
+  call `dispatcher_switch_to()` or `task_context_switch_to_task_pair()`, does
+  not commit dispatcher current to the selected candidate, and does not
+  consume dispatch pending or connect interrupt exit/timer IRQ paths to
+  dispatch.
+
 ---
 
 ## Development Environment
@@ -826,6 +847,13 @@ kernel_main reached
 [sem] dump end
 [sem-smoke] end
 [scheduler] after_register selected: id=2 name=task_b prio=1 state=READY
+[yield-smoke] begin
+[dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
+[yield] called: current id=1 name=task_a state=RUNNING
+[yield] state transition: current id=1 name=task_a RUNNING->READY
+[yield] next selected: id=2 name=task_b prio=1 state=READY
+[yield] deferred: reason=dispatcher-switch-not-connected-yet
+[yield-smoke] end
 [context-smoke] begin
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
 [dispatcher] switch boundary begin: from id=2 name=task_b to id=3 name=task_c
@@ -1046,6 +1074,7 @@ The current kernel includes:
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
 * `yield_tsk()` RUNNING current task to READY transition
+* `yield_tsk()` scheduler candidate selection after READY transition
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1069,6 +1098,8 @@ The following features are intentionally not implemented yet:
 * Time slice
 * `dly_tsk`
 * Complete `yield_tsk` dispatch behavior
+* `yield_tsk()` connection to `dispatcher_switch_to()`
+* `yield_tsk()` connection to `task_context_switch_to_task_pair()`
 * Dynamic memory allocation
 * Timer-driven stack switching
 * Timeout wait (`twai_sem`)
@@ -1128,6 +1159,11 @@ only a RUNNING current task to READY through the task-management boundary. They
 continue to keep next-task selection, dispatcher switch connection, context
 switch connection, dispatch pending consumption, interrupt-exit dispatch, and
 timer IRQ dispatch out of scope.
+For Chapter 10 Section 10.3, comments document that `yield_tsk()` now asks the
+scheduler for a READY candidate after READY化 and logs that candidate, while
+still leaving dispatcher switch connection, context switch connection,
+dispatcher current commit, dispatch pending consumption, interrupt-exit
+dispatch, and timer IRQ dispatch out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1334,6 +1370,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 9       | 9.4     | Task entry return finalization             | v9.4-task-entry-return-finalization | Completed |
 | 10      | 10.1    | yield_tsk API foundation                   | v10.1-yield-task-api-foundation | Completed |
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
+| 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 
 ---
 

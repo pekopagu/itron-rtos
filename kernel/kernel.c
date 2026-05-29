@@ -645,13 +645,15 @@ static void kernel_run_preemption_smoke(int low_task_id, int high_task_id)
 }
 
 /**
- * @brief RUNNING current taskからの `yield_tsk()` を10.2の限定観測として実行する。
+ * @brief RUNNING current taskからの `yield_tsk()` を10.3の限定観測として実行する。
  *
  * @details
  * 指定されたREADY taskをdispatcherでcurrent/RUNNINGへcommitした直後に
- * `yield_tsk()` を呼び、RUNNING->READY遷移を観測する。
- * これは10.2の検証用経路であり、READY化後にscheduler_select_next()で次taskを選ばず、
- * dispatcher_switch_to()やtask_context_switch_to_task_pair()へも接続しない。
+ * `yield_tsk()` を呼び、RUNNING->READY遷移とREADY化後のscheduler候補選択を観測する。
+ * これは10.3の検証用経路であり、候補選択後もdispatcher_switch_to()や
+ * task_context_switch_to_task_pair()へは接続しない。
+ * 起動時smokeでは低優先度taskをyield対象にし、高優先度READY taskが残っている状態で
+ * scheduler候補選択を観測する。
  *
  * @param selected RUNNINGへcommitしてからyield対象にするREADY task。
  * @return 成功時は0、失敗時は負の値。
@@ -684,8 +686,9 @@ static int kernel_run_yield_running_smoke(const tcb_t *selected)
     }
 
     /*
-     * 10.2ではyield_tsk()がRUNNING current taskをREADYへ戻すところまでを確認する。
-     * この後に次task選択や実切替へ進めると、協調スケジューリング完成回になってしまう。
+     * 10.3ではyield_tsk()がRUNNING current taskをREADYへ戻し、
+     * schedulerで次READY候補を選ぶところまでを確認する。
+     * この後に実切替へ進めると、協調スケジューリング完成回になってしまう。
      */
     yield_result = yield_tsk();
     if (yield_result != YIELD_TSK_OK) {
@@ -696,8 +699,9 @@ static int kernel_run_yield_running_smoke(const tcb_t *selected)
     }
 
     /*
-     * 成功後のtaskはREADYに戻っているが、このhelperでは再選択しない。
-     * 後続の9.1-9.4 smokeが同じREADY taskを従来どおり選べることも確認対象になる。
+     * 成功後のtaskはREADYに戻り、yield_tsk()内で次候補も観測済みである。
+     * このhelperでは選択結果をcommitせず、後続の9.1-9.4 smokeが従来どおり
+     * READY taskを選べることも確認対象になる。
      */
     hal_console_write("[yield-smoke] end\n");
     return 0;
@@ -1168,12 +1172,15 @@ void kernel_main(void)
     kernel_log_scheduler_selection("after_register", selected_task);
 
     /*
-     * 第10章10.2では、9.1-9.4のtask-to-task smokeへ進む前に、
-     * RUNNING current taskからのyield要求がREADY化まで進むことを限定的に観測する。
-     * READY化後もここでは次task選択やdispatcher_switch_to()接続を行わない。
+     * 第10章10.3では、9.1-9.4のtask-to-task smokeへ進む前に、
+     * 低優先度のRUNNING current taskからのyield要求がREADY化後の
+     * scheduler候補選択まで進むことを限定的に観測する。
+     * task_b/task_cはREADYのまま残るため、schedulerが次READY候補を
+     * 選べることをログで確認できる。選択結果はcommitせず、
+     * dispatcher_switch_to()接続も行わない。
      */
-    if (selected_task != NULL) {
-        (void)kernel_run_yield_running_smoke(selected_task);
+    if (task_a_id > 0) {
+        (void)kernel_run_yield_running_smoke(task_get_by_id(task_a_id));
     }
 
     /*
@@ -1197,7 +1204,7 @@ void kernel_main(void)
     }
 
     /*
-     * 第10章10.1/10.2では、μITRON風API層の入口としてyield_tsk()を観測する。
+     * 第10章10.1-10.3では、μITRON風API層の入口としてyield_tsk()を観測する。
      * ここでは9.1-9.4のcontext switch smoke後のcurrentを読むだけに留め、
      * DORMANT current taskがREADYへ戻されずrejectされることを確認する。
      */

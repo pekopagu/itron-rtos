@@ -271,10 +271,11 @@ int task_mark_running(int task_id);
  * 第4章4.3のboot-time verification modelで使用する状態変更APIである。
  * cooperative return eventを観測した後、currentとして採用されていた
  * RUNNING taskをREADYへ戻し、再びschedulerの選択候補にする。
- * 第10章10.2では `yield_tsk()` がRUNNING current taskをREADYへ戻すためにも
- * このAPIを使う。
+ * 第10章10.2以降では `yield_tsk()` がRUNNING current taskをREADYへ戻すためにも
+ * このAPIを使う。第10章10.3では、READY化成功後にAPI層がschedulerで
+ * 次READY候補を選ぶが、この関数はその選択を担当しない。
  *
- * この遷移はtask restartではない。10.2のyield用途でもREADY化までに限定し、
+ * この遷移はtask restartではない。この関数はREADY化までに限定し、
  * 正式なtask終了、DORMANT遷移、次task選択、dispatcher switch、
  * コンテキストスイッチ、スタック切り替え、レジスタ保存・復元は行わない。
  *

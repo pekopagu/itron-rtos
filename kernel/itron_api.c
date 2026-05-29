@@ -9,7 +9,7 @@
  * @details
  * このファイルは `yield_tsk()` の観測入口を提供する。
  * dispatcherからcurrent taskを読み取り、RUNNING current taskだけをtask管理層へ委譲して
- * READYへ戻す。READY化後も、schedulerによる次タスク選択、
+ * READYへ戻す。READY化後はschedulerによる次タスク候補選択までを観測するが、
  * dispatcher/context switchへの接続は意図的に行わない。
  */
 
@@ -18,6 +18,7 @@
 #include "dispatcher.h"
 #include "hal/console.h"
 #include "itron_api.h"
+#include "scheduler.h"
 #include "task.h"
 
 /**
@@ -126,6 +127,30 @@ static void itron_api_log_task_id_name(const tcb_t *task)
 }
 
 /**
+ * @brief yield APIの次task候補ログ用にtask識別情報を出力する。
+ *
+ * @details
+ * 10.3ではREADY化後にschedulerが選んだ候補を観測するだけであり、
+ * このhelperも表示専用である。候補taskをRUNNINGへ進めず、dispatcher currentを
+ * 更新せず、context switch層へ渡さない。
+ *
+ * @param task schedulerが選んだREADY候補。呼び出し側でNULLではないことを確認済み。
+ */
+static void itron_api_log_next_candidate(const tcb_t *task)
+{
+    const char *task_name = (task->name != NULL) ? task->name : "(null)";
+
+    hal_console_write(" id=");
+    itron_api_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" prio=");
+    itron_api_write_int(task->priority);
+    hal_console_write(" state=");
+    hal_console_write(itron_api_task_state_name(task->state));
+}
+
+/**
  * @brief μITRON風の自発的yield要求入口。
  *
  * @details
@@ -133,16 +158,18 @@ static void itron_api_log_task_id_name(const tcb_t *task)
  * task管理層の `task_mark_ready_from_running()` を通じてREADYへ戻す。
  * current未設定または非RUNNINGの場合は不正状態としてログを出し、負値を返す。
  *
- * この関数は10.2時点でRUNNING current taskをREADYへ戻すところまでを担当する。
- * READY化後も次タスク選択、dispatcher切替、task context切替は呼び出さない。
+ * この関数は10.3時点でRUNNING current taskをREADYへ戻した後、
+ * `scheduler_select_next()` で次のREADY候補を選ぶところまでを担当する。
+ * 選択結果はログへ出すだけで、dispatcher切替、task context切替は呼び出さない。
  * dispatcher current pointerとCPU contextは更新せず、dispatch pendingも消費しない。
  *
- * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化成功。
+ * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化と候補選択境界到達。
  *         `YIELD_TSK_ERR_INVALID_CURRENT_STATE` はcurrent未設定または非RUNNING。
  */
 int yield_tsk(void)
 {
     const tcb_t *current = dispatcher_get_current();
+    const tcb_t *next;
     int ready_result;
 
     if (current == NULL) {
@@ -182,8 +209,9 @@ int yield_tsk(void)
     hal_console_write("\n");
 
     /*
-     * 10.2ではRUNNING current taskだけをREADYへ戻す。状態変更の所有権はtask管理層に
-     * 残し、yield API層はarch/x86_64のcontext switch詳細にもdispatcher switchにも触れない。
+     * 10.3でもREADY化対象はRUNNING current taskだけに限定する。
+     * 状態変更の所有権はtask管理層に残し、yield API層はarch/x86_64のcontext switch詳細にも
+     * dispatcher switchにも触れない。
      */
     ready_result = task_mark_ready_from_running(current->id);
     if (ready_result != 0) {
@@ -207,10 +235,23 @@ int yield_tsk(void)
     itron_api_log_task_id_name(current);
     hal_console_write(" RUNNING->READY\n");
     /*
-     * READYへ戻しても10.2ではここで止める。次task選択やdispatcher switchへ進めないことを、
-     * 実行ログ上の到達点として残す。
+     * READY化後にschedulerへ候補選択だけを依頼する。scheduler_select_next()は
+     * READY taskを読むだけで、RUNNING遷移、dispatcher current更新、context switchは行わない。
      */
-    hal_console_write("[yield] deferred: reason=scheduler-not-connected-yet\n");
+    next = scheduler_select_next();
+    if (next == NULL) {
+        hal_console_write("[yield] no next task: reason=no-ready-task\n");
+    } else {
+        hal_console_write("[yield] next selected:");
+        itron_api_log_next_candidate(next);
+        hal_console_write("\n");
+    }
+
+    /*
+     * 10.3の到達点は次候補の観測までである。選択結果をdispatcher_switch_to()へ渡さず、
+     * dispatcher currentも次taskへcommitしないことをログ上で明示する。
+     */
+    hal_console_write("[yield] deferred: reason=dispatcher-switch-not-connected-yet\n");
 
     return YIELD_TSK_OK;
 }
