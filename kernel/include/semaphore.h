@@ -28,6 +28,7 @@
 #define SEM_ERR_NOT_FOUND (-3)
 #define SEM_ERR_OVERFLOW  (-4)
 #define SEM_ERR_TASK      (-5)
+#define SEM_WAIT_REQUIRED 1
 
 /**
  * @struct semaphore_t
@@ -66,18 +67,34 @@ int sem_init(void);
 int sem_create(const char *name, int initial_count, int max_count);
 
 /**
- * @brief wai_sem相当のセマフォ取得を行う。
+ * @brief 登録済みsemaphoreをIDで読み取り専用参照する。
  *
  * @details
- * countが残っている場合はcountを1減らす。countが0の場合はtask moduleへ委譲し、
- * 対象taskをセマフォ待ちのWAITING状態にする。ここではwait queue、timeout、
- * preemption、interrupt連携は行わない。
+ * 第12章12.1では `wai_sem()` のtask文脈制御をAPI層へ移すため、
+ * semaphore moduleはtable探索とcount保持だけを担当する。この関数は
+ * ログ表示と存在確認のための参照を返すだけで、task状態、scheduler、
+ * dispatcher、wait queue、timeout、preemptionには触れない。
  *
- * @param sem_id 対象セマフォID。
- * @param task_id 待ち入り対象task ID。
- * @return 成功またはWAITING化成功時はSEM_OK。失敗時はSEM_ERR_*。
+ * @param sem_id 参照するsemaphore ID。
+ * @return 見つかったsemaphore。存在しない場合はNULL。
  */
-int wai_sem(int sem_id, int task_id);
+const semaphore_t *sem_get_by_id(int sem_id);
+
+/**
+ * @brief semaphore countが残っていれば1つ取得する。
+ *
+ * @details
+ * countが1以上ならcountを1減らして `SEM_OK` を返す。countが0なら
+ * `SEM_WAIT_REQUIRED` を返し、task WAITING化は呼び出し側の `wai_sem()`
+ * task文脈APIに委ねる。ここでは `sig_sem()`、wait queue、timeout、
+ * wakeup後preemption、time slice、round-robinは実装しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param count_before 更新前countの格納先。NULL可。
+ * @param count_after 更新後countの格納先。NULL可。
+ * @return 取得成功はSEM_OK、待ち入りが必要ならSEM_WAIT_REQUIRED、失敗時はSEM_ERR_*。
+ */
+int sem_take_if_available(int sem_id, int *count_before, int *count_after);
 
 /**
  * @brief sig_sem相当のセマフォ返却を行う。

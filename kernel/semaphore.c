@@ -155,6 +155,22 @@ static semaphore_t *find_semaphore_by_id(int sem_id)
 }
 
 /**
+ * @brief 登録済みsemaphoreを読み取り専用で返す。
+ *
+ * @details
+ * 第12章12.1の `wai_sem()` はtask文脈API層でcurrent taskを扱う。
+ * semaphore moduleはID解決とcount保持だけを所有し、schedulerや
+ * dispatcherには依存しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 見つかったsemaphore。存在しない場合はNULL。
+ */
+const semaphore_t *sem_get_by_id(int sem_id)
+{
+    return find_semaphore_by_id(sem_id);
+}
+
+/**
  * @brief 静的semaphore tableを起動直後の状態へ戻す。
  *
  * @details
@@ -247,96 +263,60 @@ int sem_create(const char *name, int initial_count, int max_count)
 }
 
 /**
- * @brief wai_sem相当の取得処理を実行する。
+ * @brief semaphore countが残っていれば1つ取得する。
  *
  * @details
- * countが残っている場合は即時取得としてcountだけを減らす。countが0の場合は
- * task moduleへWAITING遷移を委譲する。semaphore moduleはTCBを直接更新せず、
- * wait queueやtimeoutの責務も持たない。
+ * この関数はcount操作だけを担当する。countが0の場合は待ち入りが必要な
+ * 事実を `SEM_WAIT_REQUIRED` で返すだけで、RUNNING->WAITING遷移、
+ * scheduler選択、dispatcher接続は `itron_api.c` の `wai_sem()` が行う。
+ * これにより、semaphore moduleはwait queue、timeout、preemption、
+ * interrupt、context switchの責務を持たない。
  *
- * @param sem_id 対象セマフォID。
- * @param task_id 取得または待ち入り対象task ID。
- * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ * @param sem_id 対象semaphore ID。
+ * @param count_before 更新前countの格納先。NULL可。
+ * @param count_after 更新後countの格納先。NULL可。
+ * @return 取得成功はSEM_OK、待ち入りが必要ならSEM_WAIT_REQUIRED、失敗時はSEM_ERR_*。
  */
-int wai_sem(int sem_id, int task_id)
+int sem_take_if_available(int sem_id, int *count_before, int *count_after)
 {
     semaphore_t *sem = find_semaphore_by_id(sem_id);
-    int count_before;
-    int result;
-    const tcb_t *task;
-    const char *task_name;
 
-    /*
-     * sem_idの解決とtask_idの基本検証を先に行い、不正入力ではcountもtask状態も
-     * 変更しない。失敗時に観測対象の状態が動かないことを保証する。
-     */
-    if (sem == NULL || task_id <= 0) {
+    if (sem == NULL) {
+        /*
+         * 存在しないsemaphoreではcountもtask状態も動かさない。
+         * 呼び出し側の `wai_sem()` がエラーとしてログ化する。
+         */
         return SEM_ERR_INVAL;
     }
 
-    /*
-     * ログにtask名を含めるため、状態変更前に読み取り専用でTCBを確認する。
-     * ここではTCBを書き換えない。
-     */
-    task = task_get_by_id(task_id);
-    if (task == NULL) {
-        return SEM_ERR_TASK;
+    if (count_before != NULL) {
+        /*
+         * 呼び出し側が「count 1->0」または「count=0」を説明できるよう、
+         * 判定前のcountを先に返す。
+         */
+        *count_before = sem->count;
     }
-
-    task_name = (task->name != NULL) ? task->name : "(null)";
-    count_before = sem->count;
 
     if (sem->count > 0) {
         /*
-         * 即時取得できる経路ではtask状態を変えない。
-         * 6.1では「countが減ること」を観測するだけで、owner管理は導入しない。
+         * 取得できる場合はsemaphore moduleの責務であるcountだけを更新する。
+         * task状態とdispatcher currentは変えず、no-switch経路を保つ。
          */
         sem->count--;
-        hal_console_write("[sem] wai_sem: task id=");
-        sem_write_int(task->id);
-        hal_console_write(" name=");
-        hal_console_write(task_name);
-        hal_console_write(" sem id=");
-        sem_write_int(sem->id);
-        hal_console_write(" name=");
-        hal_console_write(sem->name);
-        hal_console_write(" count_before=");
-        sem_write_int(count_before);
-        hal_console_write(" count_after=");
-        sem_write_int(sem->count);
-        hal_console_write(" result=ok\n");
+        if (count_after != NULL) {
+            *count_after = sem->count;
+        }
         return SEM_OK;
     }
 
-    /*
-     * count==0の経路では、まずsemaphore側の判定結果をログに出す。
-     * 直後にtask moduleがWAITING遷移ログを出すため、判断と状態変更の境界が追いやすい。
-     */
-    hal_console_write("[sem] wai_sem: task id=");
-    sem_write_int(task->id);
-    hal_console_write(" name=");
-    hal_console_write(task_name);
-    hal_console_write(" sem id=");
-    sem_write_int(sem->id);
-    hal_console_write(" name=");
-    hal_console_write(sem->name);
-    hal_console_write(" count_before=");
-    sem_write_int(count_before);
-    hal_console_write(" result=waiting\n");
-
-    /*
-     * WAITING遷移の所有者はtask moduleである。semaphore moduleは「どのsemを待つか」
-     * だけを渡し、TCB内部のstate/wait_sem_id更新は委譲する。
-     */
-    result = task_mark_waiting_on_sem(task_id, sem_id);
-    if (result != 0) {
-        hal_console_write("[sem] wai_sem: result=error err=");
-        sem_write_int(result);
-        hal_console_write("\n");
-        return SEM_ERR_TASK;
+    if (count_after != NULL) {
+        *count_after = sem->count;
     }
-
-    return SEM_OK;
+    /*
+     * count==0では待ち入りの必要性だけを返す。
+     * RUNNING->WAITING化、次READY選択、dispatcher接続はAPI層の責務として残す。
+     */
+    return SEM_WAIT_REQUIRED;
 }
 
 /**

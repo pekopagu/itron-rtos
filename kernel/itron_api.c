@@ -19,6 +19,7 @@
 #include "hal/console.h"
 #include "itron_api.h"
 #include "scheduler.h"
+#include "semaphore.h"
 #include "task.h"
 
 /**
@@ -292,4 +293,145 @@ int yield_tsk(void)
     hal_console_write("\n");
 
     return YIELD_TSK_OK;
+}
+
+/**
+ * @brief μITRON風 `wai_sem()` のtask文脈入口。
+ *
+ * @details
+ * dispatcherが保持するcurrent taskを呼び出し元として扱う。countが残る場合は
+ * semaphore moduleにcount減算だけを委譲し、context switchしない。countが0の
+ * 場合だけRUNNING current taskをWAITINGへ落とし、schedulerで次READY taskを
+ * 選んで既存の `dispatcher_switch_to()` 境界へ接続する。
+ *
+ * この入口は第12章12.1のboot-time verification modelである。`sig_sem()` による
+ * 待ちtask復帰、wait queue、timeout、wakeup後preemption、同一優先度time slice、
+ * round-robinはここでは実装しない。またtimer IRQ handler本体から呼ばれるAPIではない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はWAI_SEM_OK。失敗時はWAI_SEM_ERR_*。
+ */
+int wai_sem(int sem_id)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *next;
+    tcb_t *current_mutable;
+    tcb_t *next_mutable;
+    const semaphore_t *sem;
+    int count_before = 0;
+    int count_after = 0;
+    int take_result;
+    int wait_result;
+    int switch_result;
+
+    if (current == NULL) {
+        hal_console_write("[wai-sem] called: sem_id=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" current=none\n");
+        hal_console_write("[wai-sem] rejected: reason=invalid-current-state current=none\n");
+        return WAI_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    hal_console_write("[wai-sem] called: sem_id=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" current");
+    itron_api_log_task_identity(current);
+    hal_console_write("\n");
+
+    if (current->state != TASK_STATE_RUNNING) {
+        hal_console_write("[wai-sem] rejected: reason=invalid-current-state current");
+        itron_api_log_task_identity(current);
+        hal_console_write("\n");
+        return WAI_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    sem = sem_get_by_id(sem_id);
+    if (sem == NULL) {
+        hal_console_write("[wai-sem] rejected: reason=invalid-semaphore sem_id=");
+        itron_api_write_int(sem_id);
+        hal_console_write("\n");
+        return WAI_SEM_ERR_SEMAPHORE;
+    }
+
+    take_result = sem_take_if_available(sem_id, &count_before, &count_after);
+    if (take_result == SEM_OK) {
+        hal_console_write("[wai-sem] acquired: sem_id=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" count ");
+        itron_api_write_int(count_before);
+        hal_console_write("->");
+        itron_api_write_int(count_after);
+        hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=0 action=no-switch\n");
+        return WAI_SEM_OK;
+    }
+
+    if (take_result != SEM_WAIT_REQUIRED) {
+        hal_console_write("[wai-sem] rejected: reason=semaphore-error err=");
+        itron_api_write_int(take_result);
+        hal_console_write("\n");
+        return WAI_SEM_ERR_SEMAPHORE;
+    }
+
+    hal_console_write("[wai-sem] wait required: sem_id=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" count=");
+    itron_api_write_int(count_before);
+    hal_console_write("\n");
+
+    /*
+     * 12.1では待ち入り時だけRUNNING current taskをWAITINGへ落とす。
+     * ここではwait queueやtimeoutを作らず、TCBのstate/wait_sem_id更新だけを
+     * task moduleへ委譲する。
+     */
+    wait_result = task_mark_waiting_on_sem(current->id, sem_id);
+    if (wait_result != 0) {
+        hal_console_write("[wai-sem] rejected: reason=waiting-transition-failed err=");
+        itron_api_write_int(wait_result);
+        hal_console_write("\n");
+        return WAI_SEM_ERR_DISPATCH;
+    }
+
+    hal_console_write("[wai-sem] state transition: current");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" RUNNING->WAITING\n");
+
+    /*
+     * WAITING taskはscheduler_select_next()のREADY候補から自然に除外される。
+     * 次READY taskがない場合のidle/停止処理はまだ未実装なので、ログだけで止める。
+     */
+    next = scheduler_select_next();
+    if (next == NULL) {
+        hal_console_write("[wai-sem] no next task: reason=no-ready-task action=unsupported-stop\n");
+        return WAI_SEM_OK;
+    }
+
+    hal_console_write("[wai-sem] next selected:");
+    itron_api_log_next_candidate(next);
+    hal_console_write("\n");
+
+    current_mutable = task_get_mutable_by_id(current->id);
+    next_mutable = task_get_mutable_by_id(next->id);
+    if (current_mutable == NULL || next_mutable == NULL) {
+        hal_console_write("[wai-sem] rejected: reason=switch-task-not-found\n");
+        return WAI_SEM_ERR_DISPATCH;
+    }
+
+    hal_console_write("[wai-sem] switch begin: from");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" to");
+    itron_api_log_task_id_name(next);
+    hal_console_write("\n");
+
+    switch_result = dispatcher_switch_to(current_mutable, next_mutable);
+
+    hal_console_write("[wai-sem] switch end: result=");
+    itron_api_write_int(switch_result);
+    hal_console_write("\n");
+
+    if (switch_result != DISPATCHER_OK) {
+        return WAI_SEM_ERR_DISPATCH;
+    }
+
+    return WAI_SEM_OK;
 }

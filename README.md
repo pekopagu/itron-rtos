@@ -78,6 +78,7 @@ The current implementation covers the following milestones:
 | 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
 | 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
 | 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
+| 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -613,6 +614,23 @@ Chapter 11 Section 11.4 stabilizes the timer IRQ preemption event log sequence:
   time slice, round-robin, tick-count slice management, semaphore wakeup,
   sleep/delay queues, nested interrupts, complete interrupt-return-frame
   switching, APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
+
+Chapter 12 Section 12.1 connects the semaphore wait API to the running task
+state transition path:
+
+* `wai_sem()` is now a task-context API that reads the current task from the
+  dispatcher and rejects missing or non-RUNNING current tasks.
+* If the semaphore count is available, `wai_sem()` decrements the count and
+  completes with `action=no-switch`.
+* If the count is 0, `wai_sem()` moves the RUNNING current task to WAITING,
+  records the waited semaphore id, asks the scheduler for the next READY task,
+  and connects to `dispatcher_switch_to()`.
+* WAITING tasks remain outside scheduler READY candidates.
+* The 10.4 `yield_tsk()` cooperative switch path and 11.4 timer IRQ dispatch
+  pending log path remain separate.
+* `sig_sem()` wakeup integration, wait queues, timeout waits, wakeup-after
+  preemption checks, same-priority time slice, and round-robin remain
+  unimplemented.
 
 ---
 
@@ -1188,6 +1206,11 @@ The current kernel includes:
 * `yield_tsk()` scheduler candidate selection after READY transition
 * `yield_tsk()` cooperative connection to `dispatcher_switch_to()`
 * Cooperative API path to `task_context_switch_to_task_pair()`
+* `wai_sem()` task-context API entry for RUNNING current tasks
+* Semaphore count acquisition path with `action=no-switch`
+* RUNNING to WAITING transition when `wai_sem()` cannot acquire a semaphore
+* Scheduler selection after semaphore wait entry, excluding WAITING tasks
+* `wai_sem()` connection to the existing dispatcher switch boundary
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1303,6 +1326,12 @@ logs now have a fixed order, unified reason strings, and one-shot requested
 logging for each pending request. They also state that this log stabilization
 does not add same-priority time slicing, round-robin, semaphore wakeup, nested
 interrupts, or complete interrupt-return-frame switching.
+For Chapter 12 Section 12.1, comments document that `wai_sem()` is a
+task-context API, that available semaphore count completes without switching,
+and that an unavailable semaphore moves the RUNNING current task to WAITING
+before selecting the next READY task. They also state that `sig_sem()` wakeup,
+wait queues, timeout waits, wakeup-after-preemption checks, same-priority time
+slice, and round-robin remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1458,6 +1487,7 @@ See the LICENSE file for details.
 * [x] Interrupt log observation model
 * [x] Timer interrupt tick connection
 * [x] Timer IRQ preemption decision entry
+* [x] wai_sem RUNNING to WAITING transition
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1514,6 +1544,8 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 | 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
 | 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
+| 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
+| 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 
 ---
 

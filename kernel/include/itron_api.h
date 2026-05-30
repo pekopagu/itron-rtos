@@ -37,6 +37,41 @@
 #define YIELD_TSK_ERR_INVALID_CURRENT_STATE (-1)
 
 /**
+ * @brief `wai_sem()` の観測成功を示す戻り値。
+ *
+ * @details
+ * count取得成功、またはRUNNING current taskをWAITINGへ落として
+ * 次READY taskへのdispatcher境界へ到達した場合に返す。
+ */
+#define WAI_SEM_OK 0
+
+/**
+ * @brief `wai_sem()` のcurrent task不正状態を示す戻り値。
+ *
+ * @details
+ * currentが未確定、またはRUNNINGではない状態から呼ばれた場合に返す。
+ * `wai_sem()` はtask文脈APIであり、timer IRQ handlerからは呼ばない。
+ */
+#define WAI_SEM_ERR_INVALID_CURRENT_STATE (-1)
+
+/**
+ * @brief `wai_sem()` のsemaphore不正状態を示す戻り値。
+ *
+ * @details
+ * sem_idが存在しない場合など、semaphore table側で取得対象を解決できない
+ * 場合に返す。
+ */
+#define WAI_SEM_ERR_SEMAPHORE (-2)
+
+/**
+ * @brief `wai_sem()` のtask遷移またはswitch失敗を示す戻り値。
+ *
+ * @details
+ * RUNNING->WAITING遷移やdispatcher境界への接続で失敗した場合に返す。
+ */
+#define WAI_SEM_ERR_DISPATCH (-3)
+
+/**
  * @brief μITRON風の自発的yield要求入口。
  *
  * @details
@@ -50,5 +85,23 @@
  *         負値はcurrent task未設定または非RUNNINGの不正状態。
  */
 int yield_tsk(void);
+
+/**
+ * @brief μITRON風のsemaphore待ちAPI入口。
+ *
+ * @details
+ * dispatcherが保持するcurrent taskをtask文脈の呼び出し元として扱う。
+ * countが残っていればcountを減らしてswitchしない。countが0なら
+ * RUNNING current taskをWAITINGへ落とし、schedulerで次READY taskを選び、
+ * READY taskが存在する場合だけ既存の `dispatcher_switch_to()` 境界へ進む。
+ *
+ * この12.1入口は `sig_sem()`、wait queue、timeout、wakeup後preemption、
+ * 同一優先度time slice、round-robinを実装しない。timer IRQ handler本体から
+ * 呼ぶAPIでもない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はWAI_SEM_OK。失敗時はWAI_SEM_ERR_*。
+ */
+int wai_sem(int sem_id);
 
 #endif

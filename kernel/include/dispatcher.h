@@ -84,6 +84,8 @@ const tcb_t *dispatcher_get_current(void);
  * 第10章10.4では、yield APIからの協調switch入口としても使う。
  * 通常のdispatcher smokeではfrom taskをRUNNINGからREADYへ戻すが、
  * `yield_tsk()` が先にREADYへ戻した協調API経路ではREADY化済みfromを受け付ける。
+ * 第12章12.1の `wai_sem()` 経路ではRUNNING currentが先にWAITINGへ落ちてから
+ * 到達するため、WAITING化済みfromも切替元として受け付ける。
  * dispatch pending消費、interrupt exit boundaryからの接続、timer IRQからの実切替、
  * preemption、time slice、task終了状態確定は行わない。
  *

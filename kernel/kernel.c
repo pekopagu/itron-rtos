@@ -58,6 +58,8 @@ static unsigned char task_b_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_S
 static unsigned char task_c_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_yield_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_yield_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_wai_sem_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_wai_sem_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -915,16 +917,16 @@ static void kernel_run_cooperative_entries(void)
  * @brief 第6章6.1のセマフォ基盤smoke sequenceを実行する。
  *
  * @details
- * 静的セマフォを作成し、countが残る取得、count不足によるWAITING遷移、
- * sig_sem相当操作による1 task wakeup、task/semaphore dumpを観測する。
- * この検証はtimer、timeout、preemption、interrupt、wait queueとは接続しない。
- * WAITING taskはこのhelper内でREADYへ戻してから既存のminimal context switch
- * smoke pathへ進むため、後続のscheduler/cooperative runnerの前提を壊さない。
+ * 静的セマフォを作成し、RUNNING current taskから `wai_sem()` を2回呼ぶ。
+ * 1回目はcountを取得してswitchせず、2回目はcount不足によりcurrentをWAITINGへ
+ * 落として次READY taskへdispatcher境界経由で進む。
  *
- * @param task_b_id wai_sem成功確認に使うtask id。
- * @param task_c_id WAITING遷移確認に使うtask id。
+ * この検証は `sig_sem()` wakeup、wait queue、timeout、preemption、
+ * wakeup後preemption、同一優先度time slice、round-robinとは接続しない。
+ *
+ * @param current_task_id `wai_sem()` を呼ぶRUNNING current taskのid。
  */
-static void kernel_run_semaphore_smoke(int task_b_id, int task_c_id)
+static void kernel_run_semaphore_smoke(int current_task_id)
 {
     int sem_a_id;
 
@@ -946,21 +948,19 @@ static void kernel_run_semaphore_smoke(int task_b_id, int task_c_id)
     }
 
     /*
-     * task_bでcountを消費し、task_cでcount==0の待ち入りを観測する。
-     * これは本格的なtask間同期ではなく、boot-timeの状態遷移確認である。
+     * task文脈APIとしてcurrentを確定してから呼ぶ。1回目はcountを消費し、
+     * 2回目は同じRUNNING current taskをWAITINGへ落として次READY taskを選ぶ。
      */
-    (void)wai_sem(sem_a_id, task_b_id);
-    (void)wai_sem(sem_a_id, task_c_id);
+    if (dispatcher_commit_current(task_get_by_id(current_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[sem-smoke] stop: reason=current-commit-failed\n");
+        return;
+    }
+    (void)wai_sem(sem_a_id);
+    (void)wai_sem(sem_a_id);
 
     /*
-     * sig_semでtask_cをREADYへ戻す。後続のminimal context switch smokeと
-     * cooperative runnerにWAITING taskを残さないため、このhelper内で復帰まで行う。
-     */
-    (void)sig_sem(sem_a_id);
-
-    /*
-     * task dumpとsemaphore dumpを続けて出すことで、wait_sem_idが0へ戻ったことと
-     * セマフォcount/max_countが維持されていることを同じQEMUログで確認できる。
+     * task dumpとsemaphore dumpを続けて出すことで、WAITING taskがREADY候補から
+     * 外れ、セマフォcount/max_countが維持されていることを同じQEMUログで確認できる。
      */
     task_dump();
     sem_dump();
@@ -1059,6 +1059,38 @@ static void task_yield_to(void)
 }
 
 /**
+ * @brief 12.1 wai_sem smokeでセマフォ待ちへ入る側のtask entry。
+ *
+ * @details
+ * このentryは登録とcontext switch smokeの到達確認だけに使う。`wai_sem()` の呼び出しは
+ * task文脈APIの観測としてkernel smoke側から行い、ここではwait queue、timeout、
+ * `sig_sem()` wakeup、time slice、round-robinを開始しない。
+ *
+ * @param なし。
+ * @return なし。
+ */
+static void task_wai_sem_from(void)
+{
+    hal_console_write("[task_wai_sem_from] executed\n");
+}
+
+/**
+ * @brief 12.1 wai_sem smokeでWAITING後に選ばれるREADY task entry。
+ *
+ * @details
+ * `wai_sem()` がRUNNING current taskをWAITINGへ落とした後、schedulerが選ぶ
+ * READY候補として使う。これはboot-time verification modelであり、完全な
+ * semaphore wakeupや割り込み復帰フレーム切替ではない。
+ *
+ * @param なし。
+ * @return なし。
+ */
+static void task_wai_sem_to(void)
+{
+    hal_console_write("[task_wai_sem_to] executed\n");
+}
+
+/**
  * @brief kernelのメインエントリポイント。
  *
  * @details
@@ -1082,6 +1114,8 @@ void kernel_main(void)
     int task_c_id;
     int task_yield_from_id;
     int task_yield_to_id;
+    int task_wai_sem_from_id;
+    int task_wai_sem_to_id;
     const tcb_t *selected_task;
     const tcb_t *context_next_task;
 
@@ -1225,13 +1259,6 @@ void kernel_main(void)
     kernel_run_preemption_smoke(task_a_id, task_b_id);
 
     /*
-     * 第6章6.1では、セマフォのcount変化とWAITING遷移をboot-time verification
-     * modelとして観測する。sig_semでWAITING taskをREADYへ戻してから既存の
-     * minimal-context-switch smoke pathへ進むため、後続のログ順序を壊さない。
-     */
-    kernel_run_semaphore_smoke(task_b_id, task_c_id);
-
-    /*
      * 第3章3.2では「どのタスクが次に実行対象になるか」を選ぶだけで、
      * 選択されたentry関数を呼び出したりRUNNINGへ遷移させたりしない。
      */
@@ -1313,6 +1340,33 @@ void kernel_main(void)
      * schedulerはREADY選択だけを維持する。専用task_runner層は導入しない。
      */
     kernel_run_cooperative_entries();
+
+    /*
+     * 第12章12.1では、専用のREADY taskを追加して `wai_sem()` のtask文脈APIを
+     * 観測する。ここでは `sig_sem()` wakeup、wait queue、timeout、wakeup後preemption、
+     * 同一優先度time slice、round-robinはまだ導入しない。
+     */
+    task_wai_sem_from_id = task_register(
+        "task_wai_sem_from",
+        task_wai_sem_from,
+        5,
+        task_wai_sem_from_stack,
+        sizeof(task_wai_sem_from_stack)
+    );
+    kernel_log_task_register_result("task_wai_sem_from", task_wai_sem_from_id);
+
+    task_wai_sem_to_id = task_register(
+        "task_wai_sem_to",
+        task_wai_sem_to,
+        1,
+        task_wai_sem_to_stack,
+        sizeof(task_wai_sem_to_stack)
+    );
+    kernel_log_task_register_result("task_wai_sem_to", task_wai_sem_to_id);
+
+    if (task_wai_sem_from_id > 0 && task_wai_sem_to_id > 0) {
+        kernel_run_semaphore_smoke(task_wai_sem_from_id);
+    }
 
     for (;;) {
         __asm__ volatile ("hlt");

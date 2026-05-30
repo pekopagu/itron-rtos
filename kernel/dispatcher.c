@@ -228,7 +228,14 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
      * DORMANT/WAITINGは実行中taskではなく、ここで受け付けると9.4のDORMANT確定や
      * wait状態の意味を壊すため拒否する。
      */
-    if (from->state != TASK_STATE_RUNNING && from->state != TASK_STATE_READY) {
+    /*
+     * 第12章12.1では `wai_sem()` がRUNNING currentをWAITINGへ落としてから、
+     * 次READY taskへの切替開始点としてこの境界へ到達する。WAITING fromは
+     * すでに待ち入り済みなので、dispatcherではREADYへ戻さない。
+     */
+    if (from->state != TASK_STATE_RUNNING &&
+        from->state != TASK_STATE_READY &&
+        from->state != TASK_STATE_WAITING) {
         hal_console_write("[dispatcher] switch boundary failed: reason=from-not-running");
         dispatcher_log_task(" from", from);
         hal_console_write("\n");
@@ -266,6 +273,22 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
     hal_console_write(" READY->RUNNING\n");
     to->state = TASK_STATE_RUNNING;
     current_task = to;
+
+    if (from->state == TASK_STATE_WAITING) {
+        /*
+         * `wai_sem()` 経路ではfrom taskはすでにWAITINGなので、task entryを
+         * 再実行しない。12.1では次READY taskへ進む入口の観測が目的であり、
+         * WAITING taskの復帰、wait queue、timeout、wakeup後preemptionはまだ扱わない。
+         */
+        result = task_context_prepare_initial_frame(to);
+        if (result == DISPATCHER_OK) {
+            result = task_context_switch_to_task(to);
+        }
+        hal_console_write("[dispatcher] switch boundary end: result=");
+        dispatcher_write_int(result);
+        hal_console_write("\n");
+        return result;
+    }
 
     /*
      * dispatcherはswitch境界までを担当し、実際のstack frame準備とarch context switchは
