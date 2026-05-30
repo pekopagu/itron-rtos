@@ -4,13 +4,14 @@
 
 /**
  * @file dispatch_pending.h
- * @brief dispatch pending を観測するための kernel 側境界。
+ * @brief dispatch pending を要求・観測・後段消費するための kernel 側境界。
  *
  * @details
  * 第8章8.3では、dispatch pending を「将来のdispatch要求が保留された」
  * という論理状態として導入する。ただし、この状態がtrueになっても
- * dispatcher commit、context switch、stack切り替え、register復元、
- * task状態変更は行わない。
+ * 第11章11.2では、保存済みのfrom/toをinterrupt exit boundary側で一度だけ
+ * consumeし、妥当な場合だけdispatcherのtask-to-task switch境界へ接続する。
+ * ただし、timer IRQ handler本体から直接dispatcherやyield APIを呼ぶ形にはしない。
  *
  * 状態管理はkernel common側に閉じ込める。これによりarch/x86_64側は
  * schedulerやdispatcherの内部構造へ依存せず、public APIだけで
@@ -32,6 +33,22 @@ typedef enum {
     DISPATCH_PENDING_NONE = 0, /**< dispatch要求は保留されていない。 */
     DISPATCH_PENDING_FROM_IRQ  /**< timer IRQ由来のpreemption decisionがdispatchを要求した。 */
 } dispatch_pending_reason_t;
+
+/**
+ * @struct dispatch_pending_snapshot_t
+ * @brief 後段dispatch境界で消費するpending要求の最小snapshot。
+ *
+ * @details
+ * pending state本体はdispatch_pending moduleが所有する。consume処理では、
+ * request時に保存したreason/from/toの識別情報をこのsnapshotへ写し、
+ * switch前にtask管理層から更新可能TCBを取り直す。保存済みpointerをそのまま
+ * dispatcherへ渡さないことで、境界間で状態が変化した場合も検証できる。
+ */
+typedef struct {
+    dispatch_pending_reason_t reason; /**< pending要求理由。 */
+    int from_task_id;                 /**< 切替元としてrequestされたtask id。 */
+    int to_task_id;                   /**< 切替先としてrequestされたtask id。 */
+} dispatch_pending_snapshot_t;
 
 /**
  * @brief IRQ由来のdispatch要求を、実dispatchせずに記録する。
@@ -75,5 +92,19 @@ void dispatch_pending_clear_for_test_or_later_boundary(void);
  * @param not_requested_reason not-requested時に表示する最小限の理由文字列。
  */
 void dispatch_pending_log_state_from_irq(const char *not_requested_reason);
+
+/**
+ * @brief interrupt exit後段境界でpendingを一度だけ消費し、妥当ならdispatcherへ接続する。
+ *
+ * @details
+ * 第11章11.2の到達点である。timer IRQ handler本体から直接
+ * `dispatcher_switch_to()` を呼ばず、exit boundaryがこのAPIへ委譲する。
+ * pendingがない場合は何も切り替えず、from/toが不正な場合も安全側にclearする。
+ * これは完全な割り込み復帰frame切替ではなく、既存のtask-to-task context switch
+ * smokeへ接続する教育用の後段dispatch境界である。
+ *
+ * @return dispatcher_switch_to()へ進んだ場合はその戻り値。no-pendingやinvalid時は負値。
+ */
+int dispatch_pending_consume_at_deferred_boundary(void);
 
 #endif

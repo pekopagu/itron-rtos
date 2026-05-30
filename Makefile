@@ -85,7 +85,7 @@ $(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/d
 $(PREEMPTION_OBJ): kernel/preemption.c kernel/include/preemption.h kernel/include/dispatch_pending.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/preemption.c -o $(PREEMPTION_OBJ)
 
-$(DISPATCH_PENDING_OBJ): kernel/dispatch_pending.c kernel/include/dispatch_pending.h kernel/include/task.h kernel/include/hal/console.h | dirs
+$(DISPATCH_PENDING_OBJ): kernel/dispatch_pending.c kernel/include/dispatch_pending.h kernel/include/dispatcher.h kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/dispatch_pending.c -o $(DISPATCH_PENDING_OBJ)
 
 $(TASK_CONTEXT_OBJ): kernel/task_context.c kernel/include/task_context.h kernel/include/task.h kernel/include/hal/console.h arch/x86_64/context_switch.h | dirs

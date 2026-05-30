@@ -4,18 +4,20 @@
 
 /**
  * @file dispatch_pending.c
- * @brief 第8章8.3用の最小限のkernel-owned dispatch pending状態。
+ * @brief kernel-owned dispatch pending状態と第11章11.2の後段消費境界。
  *
  * @details
- * この実装は、論理的なpending要求だけを意図的に記録する。dispatcherではなく、
- * current taskのcommit、context switch、task状態変更は行わない。
- * 将来の章で本物のinterrupt-exit dispatch境界を導入する前に、IRQ由来の
- * preemption decision結果を観測できるようにするための状態である。
+ * 第11章11.1までは、論理的なpending要求だけを観測していた。第11章11.2では
+ * request済みfrom/toをinterrupt exit後段境界で一度だけconsumeし、妥当な場合だけ
+ * 既存のdispatcher/task_context switch smokeへ接続する。ただし、これは完全な
+ * 割り込み復帰frame切替ではなく、nested interruptやtime sliceも扱わない。
  */
 
 #include "dispatch_pending.h"
 
+#include "dispatcher.h"
 #include "hal/console.h"
+#include "task.h"
 
 #include <stddef.h>
 
@@ -24,9 +26,14 @@ typedef struct {
     dispatch_pending_reason_t reason;
     const tcb_t *current;
     const tcb_t *candidate;
+    int current_id;
+    int candidate_id;
 } dispatch_pending_state_t;
 
 static dispatch_pending_state_t dispatch_pending_state;
+
+#define DISPATCH_PENDING_CONSUME_NO_PENDING (-1)
+#define DISPATCH_PENDING_CONSUME_INVALID    (-2)
 
 /**
  * @brief libcのformat機能を使わず、符号付き整数をHAL consoleへ出力する。
@@ -59,6 +66,87 @@ static void dispatch_pending_write_int(int value)
     while (index > 0) {
         hal_console_putc(buffer[--index]);
     }
+}
+
+/**
+ * @brief dispatch pending reasonをvalidation log用文字列へ変換する。
+ *
+ * @details
+ * 11.2ではconsume logとrequested logで同じreason表記を使う。
+ * enum値を外部へ漏らさず、このmodule内で表示責務を閉じる。
+ *
+ * @param reason 変換対象のpending reason。
+ * @return HAL consoleへ渡す静的文字列。
+ */
+static const char *dispatch_pending_reason_name(dispatch_pending_reason_t reason)
+{
+    if (reason == DISPATCH_PENDING_FROM_IRQ) {
+        return "higher-priority-ready";
+    }
+
+    return "none";
+}
+
+/**
+ * @brief pending stateを初期化し、必要に応じてclear理由をlogへ出す。
+ *
+ * @details
+ * pending consumeは一度だけ行うため、valid/invalidどちらでも最終的にclearする。
+ * preemption評価開始時の古いpending破棄ではlogを出さず、11.2の後段境界で
+ * 消費結果を示す場合だけ理由を出す。
+ *
+ * @param log_reason NULL以外ならclear理由としてlogへ出す。
+ */
+static void dispatch_pending_clear_with_reason(const char *log_reason)
+{
+    dispatch_pending_state.requested = false;
+    dispatch_pending_state.reason = DISPATCH_PENDING_NONE;
+    dispatch_pending_state.current = NULL;
+    dispatch_pending_state.candidate = NULL;
+    dispatch_pending_state.current_id = 0;
+    dispatch_pending_state.candidate_id = 0;
+
+    if (log_reason != NULL) {
+        hal_console_write("[dispatch-pending] cleared: reason=");
+        hal_console_write(log_reason);
+        hal_console_write("\n");
+    }
+}
+
+/**
+ * @brief consumeしたpending snapshotをlogへ出力する。
+ *
+ * @details
+ * from/toはrequest時の読み取り専用TCBから得た表示用identityである。
+ * 実際にdispatcherへ渡すTCBは、この後にtask idから更新可能pointerを取り直す。
+ *
+ * @param snapshot consumeしたpending要求。
+ */
+static void dispatch_pending_log_consumed(
+    const dispatch_pending_snapshot_t *snapshot
+)
+{
+    hal_console_write("[dispatch-pending] consumed: reason=");
+    hal_console_write(dispatch_pending_reason_name(snapshot->reason));
+    hal_console_write(" from id=");
+    dispatch_pending_write_int(snapshot->from_task_id);
+    if (dispatch_pending_state.current != NULL) {
+        hal_console_write(" name=");
+        hal_console_write(
+            (dispatch_pending_state.current->name != NULL) ?
+                dispatch_pending_state.current->name : "(null)"
+        );
+    }
+    hal_console_write(" to id=");
+    dispatch_pending_write_int(snapshot->to_task_id);
+    if (dispatch_pending_state.candidate != NULL) {
+        hal_console_write(" name=");
+        hal_console_write(
+            (dispatch_pending_state.candidate->name != NULL) ?
+                dispatch_pending_state.candidate->name : "(null)"
+        );
+    }
+    hal_console_write("\n");
 }
 
 /**
@@ -100,6 +188,8 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate)
     dispatch_pending_state.reason = DISPATCH_PENDING_FROM_IRQ;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
+    dispatch_pending_state.current_id = current->id;
+    dispatch_pending_state.candidate_id = candidate->id;
 }
 
 /**
@@ -131,10 +221,7 @@ void dispatch_pending_clear_for_test_or_later_boundary(void)
      * 11.1ではpending consumerがまだないため、各preemption評価の入口で観測状態を単発化する。
      * これはdispatch完了通知ではなく、古い証跡を消すための初期化である。
      */
-    dispatch_pending_state.requested = false;
-    dispatch_pending_state.reason = DISPATCH_PENDING_NONE;
-    dispatch_pending_state.current = NULL;
-    dispatch_pending_state.candidate = NULL;
+    dispatch_pending_clear_with_reason(NULL);
 }
 
 /**
@@ -172,7 +259,9 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason)
      * 11.1では要求元と候補先を観測できるようにする。
      * ここでもdispatcher commitやcontext switchには進めず、pendingを消費しない。
      */
-    hal_console_write("[dispatch-pending] requested: reason=higher-priority-ready from id=");
+    hal_console_write("[dispatch-pending] requested: reason=");
+    hal_console_write(dispatch_pending_reason_name(dispatch_pending_state.reason));
+    hal_console_write(" from id=");
     if (dispatch_pending_state.current == NULL) {
         hal_console_write("none");
     } else {
@@ -195,4 +284,116 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason)
         );
     }
     hal_console_write("\n");
+}
+
+/**
+ * @brief pending状態をsnapshotとして取り出す。
+ *
+ * @details
+ * この関数自体はclearしない。呼び出し側のconsume境界が、no-pending、
+ * invalid、dispatch完了のどれで終わったかを決めてからclear理由を出す。
+ *
+ * @param snapshot 取り出し先。NULLは不正。
+ * @return pendingがあればtrue、なければfalse。
+ */
+static bool dispatch_pending_take_snapshot(
+    dispatch_pending_snapshot_t *snapshot
+)
+{
+    if (snapshot == NULL || !dispatch_pending_state.requested) {
+        return false;
+    }
+
+    snapshot->reason = dispatch_pending_state.reason;
+    snapshot->from_task_id = dispatch_pending_state.current_id;
+    snapshot->to_task_id = dispatch_pending_state.candidate_id;
+    return true;
+}
+
+/**
+ * @brief 後段dispatch境界でpendingを一度だけ消費し、妥当な場合だけ切替へ接続する。
+ *
+ * @details
+ * 第11章11.2の中核となるconsume処理である。timer IRQ handler本体から直接
+ * `dispatcher_switch_to()` を呼ばず、interrupt exit boundaryから委譲された後段処理として
+ * pendingを取り出す。request時に保持したfrom/to idを使って更新可能TCBを取り直し、
+ * fromがRUNNING、toがREADYである場合だけ既存のdispatcher task-to-task switch境界へ渡す。
+ *
+ * pendingが存在しない場合はswitchせず、no-pendingとして観測ログを出す。
+ * from/toが見つからない、または状態が不正な場合もswitchせず、pendingをinvalidとして
+ * clearする。valid dispatch後もpendingをclearし、二重dispatchを防ぐ。
+ *
+ * この処理は教育用の後段dispatch接続であり、完全な割り込み復帰frame切替、
+ * nested interrupt、同一優先度time slice、semaphore wakeup連携はまだ扱わない。
+ *
+ * @return dispatcherへ進んだ場合は `dispatcher_switch_to()` の戻り値。
+ *         pendingなし、または不正pendingの場合は負値。
+ */
+int dispatch_pending_consume_at_deferred_boundary(void)
+{
+    dispatch_pending_snapshot_t snapshot;
+    tcb_t *from;
+    tcb_t *to;
+    int result;
+
+    if (!dispatch_pending_take_snapshot(&snapshot)) {
+        /*
+         * pendingがない場合は正常なno-opとして扱う。
+         * ここでdispatcherへ進むと、timer IRQごとに根拠のない切替を起こすため、
+         * 観測ログだけを残して後段dispatchを終了する。
+         */
+        hal_console_write("[dispatch-pending] consume skipped: reason=no-pending\n");
+        return DISPATCH_PENDING_CONSUME_NO_PENDING;
+    }
+
+    /*
+     * snapshotを取れた時点で、このpendingは今回の後段境界が処理対象として引き受ける。
+     * 以降は成功・失敗に関わらずclearし、同じrequestを二重にdispatchしない。
+     */
+    dispatch_pending_log_consumed(&snapshot);
+
+    /*
+     * 11.2では、request時の読み取り専用pointerをそのままdispatcherへ渡さない。
+     * from/to idでtask tableから更新可能TCBを取り直し、現時点の状態を確認してから
+     * task-to-task switch境界へ接続する。
+     */
+    from = task_get_mutable_by_id(snapshot.from_task_id);
+    to = task_get_mutable_by_id(snapshot.to_task_id);
+    if (from == NULL || from->state != TASK_STATE_RUNNING) {
+        /*
+         * request時点ではfromがRUNNINGでも、後段境界に来るまでに状態が変わる可能性がある。
+         * RUNNINGでないfromをdispatcherへ渡すと、割り込み前後の実行主体を誤って扱うため、
+         * pendingを破棄して安全側に倒す。
+         */
+        hal_console_write(
+            "[dispatch-pending] consume rejected: reason=invalid-from-or-to detail=invalid-current\n"
+        );
+        dispatch_pending_clear_with_reason("invalid-pending");
+        return DISPATCH_PENDING_CONSUME_INVALID;
+    }
+
+    if (to == NULL || to->state != TASK_STATE_READY) {
+        /*
+         * 切替先はREADY taskだけに限定する。
+         * WAITING/DORMANT/RUNNINGへ進めるとschedulerの選択規則やtask lifecycleを壊すため、
+         * 11.2では補正せずinvalid pendingとして消費終了する。
+         */
+        hal_console_write(
+            "[dispatch-pending] consume rejected: reason=invalid-from-or-to detail=invalid-target\n"
+        );
+        dispatch_pending_clear_with_reason("invalid-pending");
+        return DISPATCH_PENDING_CONSUME_INVALID;
+    }
+
+    /*
+     * from/toが現在のtask table上でも妥当な場合だけ、既存のdispatcher境界へ接続する。
+     * ここはtimer IRQ handler本体ではなく、interrupt exitから委譲された後段境界である。
+     */
+    result = dispatcher_switch_to(from, to);
+    /*
+     * dispatcher_switch_to()の結果に関わらず、pending要求そのものはこの境界で消費済みにする。
+     * 失敗時にpendingを残すと、次のIRQや観測境界で同じ要求を再実行してしまうためである。
+     */
+    dispatch_pending_clear_with_reason("dispatch-completed");
+    return result;
 }

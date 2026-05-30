@@ -128,9 +128,10 @@ extern void arch_exception_stub_page_fault(void);
  * @brief IRQ0/vector 32のtimer interruptをC handlerへ渡すASM entry stub。
  *
  * @details
- * 第11章11.1ではtimer IRQ handler到達後にtick更新、高優先度READY検出、
- * dispatch pending要求観測まで進む。ただし、このstub自体は実dispatch、
- * context switch、pending消費、nested interrupt対応を行わない。
+ * 第11章11.2ではtimer IRQ handler到達後にtick更新、高優先度READY検出、
+ * dispatch pending要求観測を行い、interrupt exit boundaryから後段dispatch境界へ
+ * 委譲できる。ただし、このstub自体は完全な割り込み復帰frame切替や
+ * nested interrupt対応を行わない。
  */
 extern void arch_timer_irq_stub(void);
 
@@ -361,24 +362,34 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
 }
 
 /**
- * @brief timer IRQのinterrupt exit boundaryを観測する。
+ * @brief timer IRQのinterrupt exit boundaryで後段dispatch境界へ委譲する。
  *
  * @details
- * 第8章8.4では、dispatch pendingをinterrupt exit直前で消費しない。
- * この関数は将来の第9章以降でdispatcher/context switchへ接続する候補境界を
- * serial logに残すだけである。`dispatch_pending_is_requested()` を読むだけに
- * 留め、dispatcher commit、context switch、task state変更、register save/restore、
- * pending clearは行わない。
+ * 第11章11.2では、IRQ handler本体から直接dispatcherを呼ばず、このexit boundaryが
+ * dispatch_pending moduleのconsume APIへ委譲する。pendingがなければ何もせず、
+ * requestedの場合だけdeferred dispatchとして既存のtask-to-task switch境界へ進む。
+ * これは完全な割り込み復帰frame切替ではなく、EOI前の教育用後段境界である。
  */
 static void arch_timer_irq_exit_observe_boundary(void)
 {
     hal_console_write("[timer-irq] exit boundary: dispatch-pending=");
     if (dispatch_pending_is_requested()) {
-        hal_console_write("requested action=not-dispatched-yet\n");
+        /*
+         * requestedの場合だけ後段dispatchへ委譲する。
+         * handler本体にscheduler/dispatcherの詳細を増やさず、exit boundaryを
+         * 「割り込み中に決めた要求を安全に消費する場所」として観測できるようにする。
+         */
+        hal_console_write("requested action=deferred-dispatch\n");
+        (void)dispatch_pending_consume_at_deferred_boundary();
         return;
     }
 
-    hal_console_write("not-requested action=defer\n");
+    /*
+     * pendingがない場合は切替を試みない。
+     * no-dispatch側でもconsume APIを呼び、no-pendingの観測ログを同じ境界に集約する。
+     */
+    hal_console_write("none action=no-dispatch\n");
+    (void)dispatch_pending_consume_at_deferred_boundary();
 }
 
 /**
@@ -392,11 +403,11 @@ static void arch_timer_irq_exit_observe_boundary(void)
  * exit boundary観測の証跡としてだけ扱う。
  *
  * handlerの責務は `timer_tick()`、`preemption_evaluate_from_irq()`、
- * `dispatch_pending_log_state_from_irq()`、interrupt exit boundary観測、IRQ0 EOIまでである。
- * 第11章11.1ではpreemption層が高優先度READYを検出し、dispatch pendingを要求できる。
- * dispatch pendingがrequestedでも消費せず、dispatcher、context switch、
- * register save/restore、task state変更、interrupt return直前の実切替は呼び出さない。
- * nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
+ * `dispatch_pending_log_state_from_irq()`、interrupt exit boundary委譲、IRQ0 EOIまでである。
+ * 第11章11.2ではexit boundary側でpendingをconsumeし、妥当な場合だけ
+ * dispatcher/task_contextの既存task-to-task switch smokeへ接続する。handler本体から
+ * `yield_tsk()` や `dispatcher_switch_to()` は直接呼ばない。nested interrupt、
+ * 連続割り込み、完全な割り込み復帰frame切替は扱わない。
  */
 void arch_timer_irq_handle(void)
 {

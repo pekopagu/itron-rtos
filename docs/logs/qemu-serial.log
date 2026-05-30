@@ -14,22 +14,24 @@ kernel_main reached
 [timer-smoke] current tick=3
 [timer-smoke] end
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x1013f0 stack_base=0x110000 stack_size=1024 stack_top=0x110400 context.rsp=0x110400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x101400 stack_base=0x111000 stack_size=1024 stack_top=0x111400 context.rsp=0x111400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x101470 stack_base=0x110400 stack_size=1024 stack_top=0x110800 context.rsp=0x110800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x101480 stack_base=0x111400 stack_size=1024 stack_top=0x111800 context.rsp=0x111800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x101490 stack_base=0x110800 stack_size=1024 stack_top=0x110c00 context.rsp=0x110c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x1014a0 stack_base=0x111800 stack_size=1024 stack_top=0x111c00 context.rsp=0x111c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x1013f0 stack_base=0x110000 stack_size=1024 stack_top=0x110400 context.rsp=0x110400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101470 stack_base=0x110400 stack_size=1024 stack_top=0x110800 context.rsp=0x110800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101490 stack_base=0x110800 stack_size=1024 stack_top=0x110c00 context.rsp=0x110c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101400 stack_base=0x111000 stack_size=1024 stack_top=0x111400 context.rsp=0x111400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x101480 stack_base=0x111400 stack_size=1024 stack_top=0x111800 context.rsp=0x111800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x1014a0 stack_base=0x111800 stack_size=1024 stack_top=0x111c00 context.rsp=0x111c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [dispatcher] committed current: id=2 name=task_b prio=1 state=RUNNING
 [preempt-irq] current: id=2 name=task_b prio=1 state=RUNNING
 [preempt-irq] no higher-ready: reason=same-priority-not-timeslice-target
 [preempt-irq] decision evaluated: result=no-switch reason=same-priority-not-timeslice-target
 [dispatch-pending] not-requested: reason=same-priority-not-timeslice-target
+[timer-irq] exit boundary: dispatch-pending=none action=no-dispatch
+[dispatch-pending] consume skipped: reason=no-pending
 [dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
 [timer-irq] validation enable: unmask irq0 and sti
 [timer-irq] entry reached: vector=32 irq=0
@@ -38,5 +40,26 @@ kernel_main reached
 [preempt-irq] higher-ready detected: id=2 name=task_b prio=1 state=READY
 [preempt-irq] decision evaluated: result=request-switch reason=higher-priority-ready
 [dispatch-pending] requested: reason=higher-priority-ready from id=1 name=task_a to id=2 name=task_b
-[timer-irq] exit boundary: dispatch-pending=requested action=not-dispatched-yet
+[timer-irq] exit boundary: dispatch-pending=requested action=deferred-dispatch
+[dispatch-pending] consumed: reason=higher-priority-ready from id=1 name=task_a to id=2 name=task_b
+[dispatcher] switch boundary begin: from id=1 name=task_a to id=2 name=task_b
+[dispatcher] state transition: from id=1 name=task_a RUNNING->READY
+[dispatcher] state transition: to id=2 name=task_b READY->RUNNING
+[context] prepared initial frame: task id=1 name=task_a context.rsp=0x1113f8
+[context] prepared initial frame: task id=2 name=task_b context.rsp=0x1117f8
+[context] switch begin: from=boot to id=1 name=task_a boot.rsp.before=0x0 to.rsp.restore=0x1113f8
+[context] entered task stack: task id=1 name=task_a current.rsp=0x1113f8
+[task_a] executed
+[context] task entry returned: task id=1 name=task_a
+[context] task entry finalized: task id=1 name=task_a READY->DORMANT
+[context] task-to-task switch begin: from id=1 name=task_a to id=2 name=task_b from.rsp.before=0x1113f8 to.rsp.restore=0x1117f8
+[context] entered task stack: task id=2 name=task_b current.rsp=0x1117f8
+[task_b] executed
+[context] task entry returned: task id=2 name=task_b
+[context] task entry finalized: task id=2 name=task_b RUNNING->DORMANT
+[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x1117f8 boot.rsp.restore=0x110ea0
+[context] switch resumed: task=boot boot.rsp.after=0x110ea0 from id=2 name=task_b from.rsp.saved=0x1117c8
+[context] task-to-task switch end
+[dispatcher] switch boundary end: result=0
+[dispatch-pending] cleared: reason=dispatch-completed
 [timer-irq] eoi sent: irq=0

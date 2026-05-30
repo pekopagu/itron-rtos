@@ -1192,6 +1192,14 @@ void kernel_main(void)
         kernel_log_dispatcher_commit_result(dispatcher_commit_current(task_get_by_id(task_b_id)));
         not_requested_reason = preemption_evaluate_from_irq();
         dispatch_pending_log_state_from_irq(not_requested_reason);
+        /*
+         * 11.2のno-pending側もvalidation証跡として残す。ここではIRQ0をまだ開かず、
+         * 同一優先度READYがtime slice対象外でpendingを作らないことと、後段境界が
+         * no-dispatchで終わることだけを観測する。timer IRQ handler本体から
+         * dispatcher_switch_to()やyield_tsk()を呼ぶ経路ではない。
+         */
+        hal_console_write("[timer-irq] exit boundary: dispatch-pending=none action=no-dispatch\n");
+        (void)dispatch_pending_consume_at_deferred_boundary();
         (void)task_mark_ready_from_running(task_b_id);
     }
 

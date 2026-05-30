@@ -75,6 +75,7 @@ The current implementation covers the following milestones:
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
+| 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -550,6 +551,27 @@ preemption evaluation and requests dispatch pending for observation:
 * This chapter still does not call `yield_tsk()` or `dispatcher_switch_to()`
   from the timer IRQ handler, consume dispatch pending, connect interrupt exit
   to real dispatch, or perform a preemptive context switch.
+
+Chapter 11 Section 11.2 consumes the dispatch pending requested by 11.1 at a
+deferred dispatch boundary before IRQ0 EOI:
+
+* Dispatch pending now keeps the requested from/to task identity and exposes a
+  one-shot consume path for the later boundary.
+* The timer IRQ handler body still does not call `yield_tsk()` or
+  `dispatcher_switch_to()` directly. It delegates to the interrupt exit
+  boundary after tick, preemption evaluation, and pending observation.
+* When pending is requested, the exit boundary logs
+  `action=deferred-dispatch`, consumes the pending from/to, re-acquires mutable
+  TCBs by id, validates from RUNNING and to READY, then calls
+  `dispatcher_switch_to(from, to)`.
+* Valid deferred dispatch reaches the existing task-to-task context switch
+  smoke and then clears pending with `reason=dispatch-completed`.
+* No-pending and invalid from/to cases do not switch. Invalid pending is
+  cleared on the safe side.
+* Equal-priority READY tasks remain outside preemption and time slicing.
+* This is still not a complete interrupt-return-frame switch. Same-priority
+  time slice, semaphore wakeup integration, nested interrupts, sleep/delay
+  queues, APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
 
 ---
 
@@ -1110,8 +1132,10 @@ The current kernel includes:
 * `dispatch_pending_log_state_from_irq()`
 * IRQ-originated dispatch pending observation through QEMU serial log
 * Timer IRQ interrupt entry / kernel IRQ handler / interrupt exit boundary responsibility split
-* Interrupt exit boundary observation without dispatch pending consumption
+* Interrupt exit boundary deferred dispatch consumption for requested dispatch pending
 * Timer IRQ higher-priority READY detection and dispatch pending request observation
+* Dispatch pending from/to identity retention and one-shot deferred consume API
+* IRQ-originated pending consume connection to `dispatcher_switch_to(from, to)`
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
@@ -1132,7 +1156,7 @@ The following features are intentionally not implemented yet:
 * Continuous independent task stack execution
 * Full timer interrupt subsystem
 * Full interrupt-driven preemption
-* Dispatch pending consumption by a real dispatcher
+* Production-grade dispatch pending consumption tied to a complete interrupt return frame
 * IRQ routing
 * APIC, IOAPIC, and LAPIC support
 * PIT timer interrupt delivery
@@ -1214,6 +1238,13 @@ For Chapter 11 Section 11.1, comments document that the timer IRQ path now
 detects higher-priority READY tasks and requests dispatch pending for
 observation, while still leaving real dispatch, pending consumption, interrupt
 exit dispatch, and preemptive context switch out of scope.
+For Chapter 11 Section 11.2, comments document that interrupt exit boundary
+now consumes requested dispatch pending once, validates from RUNNING and to
+READY, and connects valid requests to `dispatcher_switch_to(from, to)`. They
+also state that the timer IRQ handler body still does not call `yield_tsk()` or
+`dispatcher_switch_to()` directly, and that same-priority time slice, semaphore
+wakeup integration, nested interrupts, and complete interrupt-return-frame
+switching remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1423,6 +1454,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
+| 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
 
 ---
 
