@@ -46,15 +46,111 @@ static const char *preemption_irq_reason_to_string(
         return "invalid-current";
     }
 
+    if (decision.reason == SCHEDULER_PREEMPT_SAME_PRIORITY) {
+        return "same-priority-not-timeslice-target";
+    }
+
     if (decision.current == NULL) {
         return "no-current";
     }
 
-    if (decision.candidate == NULL) {
-        return "no-ready";
+    return "no-higher-priority-ready";
+}
+
+/**
+ * @brief IRQ preemption log用に整数を10進出力する。
+ *
+ * @details
+ * freestanding環境ではprintfを使わないため、11.1のtask id/priority観測に必要な
+ * 最小限の変換だけをpreemption境界へ閉じ込める。
+ *
+ * @param value 出力する符号付き整数。
+ * @return なし。
+ */
+static void preemption_irq_write_int(int value)
+{
+    char buffer[20];
+    int index = 0;
+    unsigned int magnitude;
+
+    if (value < 0) {
+        hal_console_putc('-');
+        magnitude = (unsigned int)(-value);
+    } else {
+        magnitude = (unsigned int)value;
     }
 
-    return "candidate-not-higher";
+    if (magnitude == 0U) {
+        hal_console_putc('0');
+        return;
+    }
+
+    while (magnitude > 0U) {
+        buffer[index++] = (char)('0' + (magnitude % 10U));
+        magnitude /= 10U;
+    }
+
+    while (index > 0) {
+        hal_console_putc(buffer[--index]);
+    }
+}
+
+/**
+ * @brief task状態をIRQ preemption log用の固定文字列へ変換する。
+ *
+ * @details
+ * timer IRQ中の観測ログを読みやすくするための表示専用helperである。
+ * TCB状態は変更せず、未知の状態値は`UNKNOWN`として扱う。
+ *
+ * @param state 文字列へ変換するtask状態。
+ * @return HAL consoleへ渡す固定文字列。
+ */
+static const char *preemption_irq_task_state_name(task_state_t state)
+{
+    switch (state) {
+    case TASK_STATE_UNUSED:
+        return "UNUSED";
+    case TASK_STATE_DORMANT:
+        return "DORMANT";
+    case TASK_STATE_READY:
+        return "READY";
+    case TASK_STATE_RUNNING:
+        return "RUNNING";
+    case TASK_STATE_WAITING:
+        return "WAITING";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief 11.1のpreemption判定で観測するtask identityを出力する。
+ *
+ * @details
+ * id/name/prio/stateだけを読み取り、TCB状態やdispatcher currentは変更しない。
+ * timer IRQ中の検出証跡を残すための表示専用helperである。
+ *
+ * @param prefix ログ行の先頭に出力する分類文字列。
+ * @param task 表示対象task。NULLの場合は`none`として出力する。
+ * @return なし。
+ */
+static void preemption_irq_log_task(const char *prefix, const tcb_t *task)
+{
+    hal_console_write(prefix);
+    if (task == NULL) {
+        hal_console_write(" none\n");
+        return;
+    }
+
+    hal_console_write(" id=");
+    preemption_irq_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write((task->name != NULL) ? task->name : "(null)");
+    hal_console_write(" prio=");
+    preemption_irq_write_int(task->priority);
+    hal_console_write(" state=");
+    hal_console_write(preemption_irq_task_state_name(task->state));
+    hal_console_write("\n");
 }
 
 /**
@@ -70,7 +166,7 @@ static const char *preemption_irq_reason_to_string(
 static void preemption_irq_log_decision(scheduler_preempt_decision_t decision)
 {
     const char *result =
-        (decision.reason == SCHEDULER_PREEMPT_NEEDED) ? "switch-target" : "no-switch";
+        (decision.reason == SCHEDULER_PREEMPT_NEEDED) ? "request-switch" : "no-switch";
 
     hal_console_write("[preempt-irq] decision evaluated: result=");
     hal_console_write(result);
@@ -117,13 +213,42 @@ const char *preemption_evaluate_from_irq(void)
     dispatch_pending_clear_for_test_or_later_boundary();
     current = dispatcher_get_current();
     decision = scheduler_select_preemption_candidate(current);
+
+    /*
+     * 11.1では「何を基準に高優先度READYを探したか」を先に見せる。
+     * currentはdispatcherから読むだけで、ここではRUNNING/READYを補正しない。
+     */
+    if (current != NULL) {
+        preemption_irq_log_task("[preempt-irq] current:", current);
+    }
+
+    /*
+     * schedulerの判断結果をIRQ向けの観測ログへ分解する。
+     * 高優先度READYがある場合だけ候補taskを出し、それ以外は切り替えない理由を出す。
+     */
+    if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {
+        preemption_irq_log_task("[preempt-irq] higher-ready detected:", decision.candidate);
+    } else {
+        hal_console_write("[preempt-irq] no higher-ready: reason=");
+        hal_console_write(preemption_irq_reason_to_string(decision));
+        hal_console_write("\n");
+    }
+
     preemption_irq_log_decision(decision);
 
     if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {
-        dispatch_request_from_irq(decision.candidate);
+        /*
+         * ここで行うのはdispatch pendingの要求記録だけである。
+         * timer IRQ中にdispatcher_switch_to()へ進まず、pending消費も行わない。
+         */
+        dispatch_request_from_irq(current, decision.candidate);
         return NULL;
     }
 
+    /*
+     * no-switch系はhandler側のpending観測へ理由だけを返す。
+     * requestしていないことを明示するため、dispatch pending stateはclear済みのままにする。
+     */
     not_requested_reason = preemption_irq_reason_to_string(decision);
     return not_requested_reason;
 }

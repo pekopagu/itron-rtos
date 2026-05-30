@@ -61,6 +61,10 @@ static arch_pic_u8_t pic_slave_mask = ARCH_PIC_ALL_MASKED;
  */
 static void arch_pic_outb(arch_pic_u16_t port, arch_pic_u8_t value)
 {
+    /*
+     * PIC制御で使うI/O命令をこの小さなhelperに集約する。
+     * 呼び出し側の初期化手順はport番号の意味だけを扱い、inline asmの制約はここへ閉じ込める。
+     */
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
@@ -73,6 +77,10 @@ static void arch_pic_outb(arch_pic_u16_t port, arch_pic_u8_t value)
  */
 static void arch_pic_io_wait(void)
 {
+    /*
+     * 旧式デバイス向けの短い待ちを、読み書き対象を持たないport 0x80への書き込みで表す。
+     * 精密なtimerではなく、PIC初期化commandを連続発行しすぎないための最小待ちである。
+     */
     arch_pic_outb((arch_pic_u16_t)ARCH_PIC_IO_WAIT_PORT, 0U);
 }
 
@@ -102,6 +110,10 @@ static void arch_pic_write_masks(void)
  */
 static int arch_pic_irq_is_valid(unsigned int irq)
 {
+    /*
+     * legacy PICで扱う範囲だけを許可する。
+     * 範囲外IRQはmask mirrorやhardware registerを変えずに無視するための入口条件である。
+     */
     return irq < ARCH_PIC_IRQ_COUNT;
 }
 

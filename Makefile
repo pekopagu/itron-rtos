@@ -61,7 +61,7 @@ dirs:
 $(BOOT_OBJ): boot/boot.asm | dirs
 	$(NASM) -f elf64 boot/boot.asm -o $(BOOT_OBJ)
 
-$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/interrupt.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h | dirs
+$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/interrupt.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/dispatch_pending.h kernel/include/preemption.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/kernel.c -o $(KERNEL_OBJ)
 
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs

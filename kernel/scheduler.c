@@ -147,6 +147,12 @@ scheduler_preempt_decision_t scheduler_select_preemption_candidate(const tcb_t *
      */
     if (candidate->priority < current->priority) {
         decision.reason = SCHEDULER_PREEMPT_NEEDED;
+    } else if (candidate->priority == current->priority) {
+        /*
+         * 第11章11.1では同一優先度READYをtime slice対象として扱わない。
+         * 高優先度READYなしとは区別し、timer IRQ後の観測理由を明確にする。
+         */
+        decision.reason = SCHEDULER_PREEMPT_SAME_PRIORITY;
     }
 
     return decision;

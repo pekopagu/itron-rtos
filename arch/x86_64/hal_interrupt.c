@@ -28,6 +28,10 @@
  */
 int hal_interrupt_init(void)
 {
+    /*
+     * HAL層はkernel共通部に見せる入口だけを持ち、IDT layoutやlidtの詳細は
+     * arch実装へ閉じ込める。ここでは初期化の開始以上の責務を持たない。
+     */
     return arch_interrupt_init();
 }
 
@@ -43,6 +47,10 @@ int hal_interrupt_init(void)
  */
 int hal_interrupt_controller_init(void)
 {
+    /*
+     * interrupt controllerの実体は現時点ではlegacy PICである。
+     * kernel側へPIC portやremap手順を漏らさないため、このadapterで委譲だけを行う。
+     */
     return arch_pic_init();
 }
 
@@ -54,6 +62,10 @@ int hal_interrupt_controller_init(void)
  */
 void hal_interrupt_trigger_validation_exception(void)
 {
+    /*
+     * 検証用trapの発生方法はx86_64固有なのでHAL境界の下に隠す。
+     * 呼び出し側は「例外観測を開始する」意図だけを持てばよい。
+     */
     arch_interrupt_trigger_validation_exception();
 }
 
@@ -68,5 +80,9 @@ void hal_interrupt_trigger_validation_exception(void)
  */
 void hal_interrupt_enable_timer_entry_validation(void)
 {
+    /*
+     * IRQ0のunmaskやstiはarch固有の危険な操作なので、kernel共通部から直接触らない。
+     * この関数はvalidation build専用の入口であり、通常bootの割り込み開始APIではない。
+     */
     arch_interrupt_enable_timer_entry_validation();
 }

@@ -31,9 +31,11 @@
  */
 
 #include "dispatcher.h"
+#include "dispatch_pending.h"
 #include "hal/console.h"
 #include "hal/interrupt.h"
 #include "itron_api.h"
+#include "preemption.h"
 #include "scheduler.h"
 #include "semaphore.h"
 #include "task.h"
@@ -223,6 +225,10 @@ static const char *kernel_preempt_reason_to_string(
         return "invalid-current";
     }
 
+    if (decision.reason == SCHEDULER_PREEMPT_SAME_PRIORITY) {
+        return "same-priority-not-timeslice-target";
+    }
+
     if (decision.current == NULL) {
         return "no-current";
     }
@@ -231,7 +237,7 @@ static const char *kernel_preempt_reason_to_string(
         return "no-ready";
     }
 
-    return "candidate-not-higher";
+    return "no-higher-priority-ready";
 }
 
 /**
@@ -1107,14 +1113,6 @@ void kernel_main(void)
         }
     }
 
-#ifdef ARCH_TIMER_IRQ_ENTRY_VALIDATE
-    /*
-     * 第7章7.3の明示validation buildでは、IRQ0/vector 32 entryに到達できる構造だけを
-     * 観測する。PIT設定、timer_tick、scheduler、dispatcher、context switchには接続しない。
-     */
-    hal_interrupt_enable_timer_entry_validation();
-#endif
-
 #ifdef ARCH_INTERRUPT_VALIDATE_EXCEPTION
     /*
      * 明示的な検証buildでは、例外handler到達ログを出した後に停止する。
@@ -1180,6 +1178,35 @@ void kernel_main(void)
 
     /* 登録済みTCBだけを表示し、UNUSEDスロットは表示されないことを確認する。 */
     task_dump();
+
+#ifdef ARCH_TIMER_IRQ_ENTRY_VALIDATE
+    {
+        const char *not_requested_reason;
+
+        /*
+         * 11.1の同一優先度READY除外もvalidation buildで観測する。
+         * task_bをRUNNING currentにするとtask_cは同一priority READYなので、
+         * dispatch pendingはrequestされない。これはtimer IRQからの実切替ではなく、
+         * IRQを開く前の限定的な境界確認である。
+         */
+        kernel_log_dispatcher_commit_result(dispatcher_commit_current(task_get_by_id(task_b_id)));
+        not_requested_reason = preemption_evaluate_from_irq();
+        dispatch_pending_log_state_from_irq(not_requested_reason);
+        (void)task_mark_ready_from_running(task_b_id);
+    }
+
+    /*
+     * 第11章11.1の明示validation buildでは、timer IRQを開く前にpreemption判定用の
+     * 観測状態を作る。task_aをRUNNING current、task_b/task_cをREADYのまま残し、
+     * IRQ handler側では高優先度READY検出とdispatch pending requestだけを確認する。
+     * ここで実dispatch、pending消費、preemptive context switchへは接続しない。
+     */
+    kernel_log_dispatcher_commit_result(dispatcher_commit_current(task_get_by_id(task_a_id)));
+    hal_interrupt_enable_timer_entry_validation();
+    for (;;) {
+        __asm__ volatile ("hlt");
+    }
+#endif
 
     /*
      * 第6章6.3では、既存のsemaphore/context switch smokeへ進む前に、

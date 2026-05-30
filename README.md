@@ -74,6 +74,7 @@ The current implementation covers the following milestones:
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
+| 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -530,6 +531,25 @@ task_context switch boundaries for the first cooperative API switch path:
 * This remains a cooperative API connection only. Timer IRQ, interrupt exit
   dispatch, dispatch pending consumption, preemptive switch, and time slicing
   are still not connected.
+
+Chapter 11 Section 11.1 detects a higher-priority READY task after timer IRQ
+preemption evaluation and requests dispatch pending for observation:
+
+* The timer IRQ handler still runs `timer_tick()`, preemption evaluation,
+  dispatch pending observation, interrupt exit boundary observation, and IRQ0
+  EOI in that order.
+* The preemption layer logs the current RUNNING task and, when present, the
+  higher-priority READY candidate. A candidate is higher priority only when its
+  numeric priority value is smaller than the current task's priority.
+* Equal-priority READY tasks are logged as
+  `same-priority-not-timeslice-target` and are not preemption targets in this
+  chapter.
+* When a higher-priority READY task exists, dispatch pending is requested with
+  the source and destination task id/name, and the interrupt exit boundary still
+  reports `action=not-dispatched-yet`.
+* This chapter still does not call `yield_tsk()` or `dispatcher_switch_to()`
+  from the timer IRQ handler, consume dispatch pending, connect interrupt exit
+  to real dispatch, or perform a preemptive context switch.
 
 ---
 
@@ -1091,6 +1111,7 @@ The current kernel includes:
 * IRQ-originated dispatch pending observation through QEMU serial log
 * Timer IRQ interrupt entry / kernel IRQ handler / interrupt exit boundary responsibility split
 * Interrupt exit boundary observation without dispatch pending consumption
+* Timer IRQ higher-priority READY detection and dispatch pending request observation
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
@@ -1189,6 +1210,10 @@ to `dispatcher_switch_to()` and reaches the task_context task-to-task switch
 smoke from a cooperative API call, while still leaving timer IRQ dispatch,
 interrupt-exit dispatch, dispatch pending consumption, preemptive switch, and
 time slicing out of scope.
+For Chapter 11 Section 11.1, comments document that the timer IRQ path now
+detects higher-priority READY tasks and requests dispatch pending for
+observation, while still leaving real dispatch, pending consumption, interrupt
+exit dispatch, and preemptive context switch out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1397,6 +1422,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 10      | 10.2    | yield_tsk RUNNING to READY transition      | v10.2-yield-running-to-ready | Completed |
 | 10      | 10.3    | yield_tsk next READY task selection        | v10.3-yield-select-next-task | Completed |
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
+| 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 
 ---
 

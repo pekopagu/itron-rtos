@@ -35,6 +35,7 @@
 typedef enum {
     SCHEDULER_PREEMPT_NONE = 0,       /**< 現在taskより高優先度のREADY taskが存在しない。 */
     SCHEDULER_PREEMPT_NEEDED,         /**< 高優先度READY taskを切り替え候補として扱える。 */
+    SCHEDULER_PREEMPT_SAME_PRIORITY,  /**< 同一優先度READYのみで、11.1ではtime slice対象にしない。 */
     SCHEDULER_PREEMPT_INVALID_CURRENT /**< 渡されたcurrent taskをRUNNING基準として使えない。 */
 } scheduler_preempt_reason_t;
 

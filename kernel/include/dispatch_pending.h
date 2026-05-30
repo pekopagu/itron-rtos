@@ -37,13 +37,15 @@ typedef enum {
  * @brief IRQ由来のdispatch要求を、実dispatchせずに記録する。
  *
  * @details
- * validation logで観測するため、論理的なpending要求と候補taskを保存する。
+ * validation logで観測するため、論理的なpending要求、要求元current task、
+ * 候補taskを保存する。
  * このAPIはdispatcherを呼ばず、stackを切り替えず、register保存・復元も
  * task状態変更も行わない。
  *
+ * @param current dispatch要求元として観測する現在RUNNING task。
  * @param candidate preemption decision が選んだ読み取り専用の候補task。
  */
-void dispatch_request_from_irq(const tcb_t *candidate);
+void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate);
 
 /**
  * @brief dispatch要求が現在保留されているかを返す。

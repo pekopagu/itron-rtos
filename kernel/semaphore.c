@@ -38,15 +38,24 @@ static void sem_write_uint(unsigned long value)
     int index = 0;
 
     if (value == 0) {
+        /*
+         * 桁分解loopでは0が出力されないため、明示的に1文字だけ出す。
+         * semaphore logのcount/max_countで0を正しく観測するための処理である。
+         */
         hal_console_putc('0');
         return;
     }
 
+    /*
+     * 標準printfを使わず、HAL consoleだけで数値を出す。
+     * 下位桁からbufferへ積み、最後に逆順で出すことで10進表記を作る。
+     */
     while (value > 0) {
         buffer[index++] = (char)('0' + (value % 10));
         value /= 10;
     }
 
+    /* buffer内は逆順なので、末尾から戻しながら通常の桁順で出力する。 */
     while (index > 0) {
         hal_console_putc(buffer[--index]);
     }
@@ -60,6 +69,10 @@ static void sem_write_uint(unsigned long value)
 static void sem_write_int(int value)
 {
     if (value < 0) {
+        /*
+         * エラーコードは負値で返すため、符号を先に出してから絶対値部分を共通helperへ渡す。
+         * ログの数値出力だけを担当し、semaphore状態は変更しない。
+         */
         hal_console_putc('-');
         sem_write_uint((unsigned long)(-value));
         return;

@@ -80,11 +80,58 @@ typedef struct {
     arch_u64_t rflags;
 } arch_exception_frame_t;
 
+/**
+ * @brief divide error例外をC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * IDT登録用の入口アドレスとしてだけ参照する。C側では呼び出さず、
+ * register save/restoreや復帰処理の完成を意味しない。
+ */
 extern void arch_exception_stub_divide_error(void);
+
+/**
+ * @brief breakpoint例外をC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * `VALIDATE_EXCEPTION=1`の観測入口としてIDTへ登録する。
+ * 回復可能なdebug trap処理やtask切替には接続しない。
+ */
 extern void arch_exception_stub_breakpoint(void);
+
+/**
+ * @brief invalid opcode例外をC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * 代表的なCPU例外到達を観測するための入口である。
+ * 例外原因の修復や実行再開モデルはまだ扱わない。
+ */
 extern void arch_exception_stub_invalid_opcode(void);
+
+/**
+ * @brief general protection例外をC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * IDT gateの到達確認と最小frame観測に使う入口である。
+ * privilege管理、user mode、recoverable fault処理は実装しない。
+ */
 extern void arch_exception_stub_general_protection(void);
+
+/**
+ * @brief page fault例外をC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * 例外vector観測用の入口であり、ページテーブル修復やVM subsystemには接続しない。
+ */
 extern void arch_exception_stub_page_fault(void);
+
+/**
+ * @brief IRQ0/vector 32のtimer interruptをC handlerへ渡すASM entry stub。
+ *
+ * @details
+ * 第11章11.1ではtimer IRQ handler到達後にtick更新、高優先度READY検出、
+ * dispatch pending要求観測まで進む。ただし、このstub自体は実dispatch、
+ * context switch、pending消費、nested interrupt対応を行わない。
+ */
 extern void arch_timer_irq_stub(void);
 
 static arch_idt_entry_t arch_idt[ARCH_IDT_ENTRY_COUNT];
@@ -346,7 +393,8 @@ static void arch_timer_irq_exit_observe_boundary(void)
  *
  * handlerの責務は `timer_tick()`、`preemption_evaluate_from_irq()`、
  * `dispatch_pending_log_state_from_irq()`、interrupt exit boundary観測、IRQ0 EOIまでである。
- * dispatch pendingがrequestedでも8.4では消費せず、dispatcher、context switch、
+ * 第11章11.1ではpreemption層が高優先度READYを検出し、dispatch pendingを要求できる。
+ * dispatch pendingがrequestedでも消費せず、dispatcher、context switch、
  * register save/restore、task state変更、interrupt return直前の実切替は呼び出さない。
  * nested interrupt、連続割り込み、通常の割り込み復帰も扱わない。
  */

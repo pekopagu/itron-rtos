@@ -13,6 +13,14 @@
 #include "hal/console.h"
 #include "task_context.h"
 
+/**
+ * @brief 初期task stackから最初に戻るASM trampoline。
+ *
+ * @details
+ * `task_context_prepare_initial_frame()`がtask stack上にreturn addressとして積む入口である。
+ * C側では直接呼び出さず、arch context switch後にtask entryへ橋渡しする。
+ * 完全なtask lifecycleや割り込み復帰frameを実装するものではない。
+ */
 extern void task_context_trampoline(void);
 
 static task_context_t boot_context;
