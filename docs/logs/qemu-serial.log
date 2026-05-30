@@ -57,8 +57,8 @@ kernel_main reached
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
 [context] task entry finalized: task id=2 name=task_b RUNNING->DORMANT
-[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x1117f8 boot.rsp.restore=0x110ea0
-[context] switch resumed: task=boot boot.rsp.after=0x110ea0 from id=2 name=task_b from.rsp.saved=0x1117c8
+[context] switch back: from id=2 name=task_b to=boot from.rsp.before=0x1117f8 boot.rsp.restore=0x110e80
+[context] switch resumed: task=boot boot.rsp.after=0x110e80 from id=2 name=task_b from.rsp.saved=0x1117c8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [dispatch-pending] cleared: reason=dispatch-completed

@@ -77,6 +77,7 @@ The current implementation covers the following milestones:
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 | 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
 | 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
+| 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -592,6 +593,26 @@ time slice target:
 * Round-robin, tick-count slice management, same-priority task ordering,
   semaphore wakeup integration, nested interrupts, and complete
   interrupt-return-frame switching remain unimplemented.
+
+Chapter 11 Section 11.4 stabilizes the timer IRQ preemption event log sequence:
+
+* Higher-priority READY logs now keep the fixed order: current task,
+  higher-ready detection, decision, dispatch pending request, exit boundary,
+  pending consume, dispatcher switch, pending clear, and IRQ0 EOI.
+* Same-priority READY logs remain no-dispatch and keep
+  `same-priority-not-timeslice-target`, followed by not-requested, exit boundary
+  `dispatch-pending=none action=no-dispatch`, and
+  `consume skipped: reason=no-pending`.
+* Dispatch pending request, consume, and clear logs use the same
+  `higher-priority-ready` and `dispatch-completed` reason strings, and the
+  same pending request is not logged as requested more than once.
+* The 10.4 `yield_tsk()` cooperative context switch path, the 11.2
+  higher-priority READY deferred dispatch path, and the 11.3 same-priority
+  READY no-dispatch path remain intact.
+* This is still only an educational boot-time verification model. Same-priority
+  time slice, round-robin, tick-count slice management, semaphore wakeup,
+  sleep/delay queues, nested interrupts, complete interrupt-return-frame
+  switching, APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
 
 ---
 
@@ -1158,6 +1179,8 @@ The current kernel includes:
 * IRQ-originated pending consume connection to `dispatcher_switch_to(from, to)`
 * Same-priority READY exclusion from timer IRQ time slicing with
   `same-priority-not-timeslice-target`
+* Stabilized timer IRQ preemption event log ordering, reason strings, and
+  duplicate request-log suppression
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
@@ -1275,6 +1298,11 @@ reason `same-priority-not-timeslice-target`, explain that no dispatch pending
 is requested in that case, and keep round-robin, tick-based slice management,
 semaphore wakeup integration, nested interrupts, and complete
 interrupt-return-frame switching out of scope.
+For Chapter 11 Section 11.4, comments document that timer IRQ preemption event
+logs now have a fixed order, unified reason strings, and one-shot requested
+logging for each pending request. They also state that this log stabilization
+does not add same-priority time slicing, round-robin, semaphore wakeup, nested
+interrupts, or complete interrupt-return-frame switching.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.

@@ -236,6 +236,11 @@ const char *preemption_evaluate_from_irq(void)
         hal_console_write("\n");
     }
 
+    /*
+     * 第11章11.4では、current/candidate観測の後にdecision行を出し、
+     * その後でdispatch pending requestへ進む順序を固定する。
+     * ログ安定化だけを目的とし、状態遷移や同一優先度time sliceは追加しない。
+     */
     preemption_irq_log_decision(decision);
 
     if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {

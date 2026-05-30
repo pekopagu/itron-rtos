@@ -44,6 +44,17 @@
  *
  * @return dispatch pending観測用のnot-requested reason。pending要求時はNULL。
  */
+/**
+ * @brief IRQ由来のpreemption decisionを評価し、固定順序の観測ログとpending更新を行う。
+ * @details
+ * 第11章11.4では、IRQ由来preemptionログの順序を
+ * current -> candidate/no-candidate -> decision -> dispatch pending の順に固定する。
+ * priority値が小さいREADY taskだけを切替候補とし、同一priority READYは
+ * `same-priority-not-timeslice-target` のままpending requestしない。timer IRQ handler本体から
+ * `yield_tsk()` や `dispatcher_switch_to()` を直接呼ぶ経路はここでも追加しない。
+ *
+ * @return dispatch pending観測用のnot-requested reason。pending要求時はNULL。
+ */
 const char *preemption_evaluate_from_irq(void);
 
 #endif

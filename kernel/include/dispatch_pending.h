@@ -107,6 +107,16 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason);
  *
  * @return dispatcher_switch_to()へ進んだ場合はその戻り値。no-pendingやinvalid時は負値。
  */
+/**
+ * @brief interrupt exit後段境界でpendingを一度だけ消費し、必要ならdispatcherへ接続する。
+ * @details
+ * 第11章11.4では、同一pending requestのrequestedログを1回だけに固定したうえで、
+ * consume、dispatcher switch、clearの順序を安定させる。これはserial logの順序と
+ * 重複を安定化するための契約であり、同一優先度time slice、round-robin、
+ * semaphore wakeup、nested interrupt、完全な割り込み復帰frame切替はまだ扱わない。
+ *
+ * @return dispatcher_switch_to()へ進んだ場合はその戻り値。no-pendingやinvalid時は負値。
+ */
 int dispatch_pending_consume_at_deferred_boundary(void);
 
 #endif

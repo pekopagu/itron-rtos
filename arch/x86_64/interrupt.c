@@ -442,6 +442,11 @@ void arch_timer_irq_handle(void)
      * ここでは log に出すだけで、dispatcher commit、context switch、
      * task state変更、interrupt return直前の切替には接続しない。
      */
+    /*
+     * 第11章11.4では、この観測点でrequest/not-requestedを出した後に
+     * exit boundaryへ進む順序を固定する。handler本体はここでも
+     * yield_tsk()やdispatcher_switch_to()を直接呼ばない。
+     */
     dispatch_pending_log_state_from_irq(dispatch_not_requested_reason);
 
     /*

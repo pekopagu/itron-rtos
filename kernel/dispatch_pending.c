@@ -25,6 +25,7 @@
 
 typedef struct {
     bool requested;
+    bool request_logged;
     dispatch_pending_reason_t reason;
     const tcb_t *current;
     const tcb_t *candidate;
@@ -102,6 +103,7 @@ static const char *dispatch_pending_reason_name(dispatch_pending_reason_t reason
 static void dispatch_pending_clear_with_reason(const char *log_reason)
 {
     dispatch_pending_state.requested = false;
+    dispatch_pending_state.request_logged = false;
     dispatch_pending_state.reason = DISPATCH_PENDING_NONE;
     dispatch_pending_state.current = NULL;
     dispatch_pending_state.candidate = NULL;
@@ -187,6 +189,7 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate)
      * current/candidateはログ用の読み取り専用参照であり、ここでは実行対象へ切り替えない。
      */
     dispatch_pending_state.requested = true;
+    dispatch_pending_state.request_logged = false;
     dispatch_pending_state.reason = DISPATCH_PENDING_FROM_IRQ;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
@@ -261,6 +264,15 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason)
      * 11.1では要求元と候補先を観測できるようにする。
      * ここでもdispatcher commitやcontext switchには進めず、pendingを消費しない。
      */
+    if (dispatch_pending_state.request_logged) {
+        /*
+         * 11.4では同じpending requestを複数回観測しても、request event logは
+         * 1回だけに固定する。これはログ安定化のための抑止であり、pendingの
+         * 消費状態やdispatcherへの委譲可否は変更しない。
+         */
+        return;
+    }
+
     hal_console_write("[dispatch-pending] requested: reason=");
     hal_console_write(dispatch_pending_reason_name(dispatch_pending_state.reason));
     hal_console_write(" from id=");
@@ -286,6 +298,7 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason)
         );
     }
     hal_console_write("\n");
+    dispatch_pending_state.request_logged = true;
 }
 
 /**
