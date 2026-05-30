@@ -35,7 +35,7 @@
 typedef enum {
     SCHEDULER_PREEMPT_NONE = 0,       /**< 現在taskより高優先度のREADY taskが存在しない。 */
     SCHEDULER_PREEMPT_NEEDED,         /**< 高優先度READY taskを切り替え候補として扱える。 */
-    SCHEDULER_PREEMPT_SAME_PRIORITY,  /**< 同一優先度READYのみで、11.1ではtime slice対象にしない。 */
+    SCHEDULER_PREEMPT_SAME_PRIORITY,  /**< 同一優先度READYのみで、11.3ではtime slice対象にしない。 */
     SCHEDULER_PREEMPT_INVALID_CURRENT /**< 渡されたcurrent taskをRUNNING基準として使えない。 */
 } scheduler_preempt_reason_t;
 
@@ -97,7 +97,10 @@ const tcb_t *scheduler_select_next(void);
  * timer codeを呼ばず、context switchも実行しない。
  *
  * `candidate->priority < current->priority` の場合だけ候補を返す。
- * 同一priorityはtime sliceではないため、この段階ではpreemption対象にしない。
+ * 第11章11.3では、同一priorityのREADY taskが存在してもtime slice対象とはみなさず、
+ * `SCHEDULER_PREEMPT_SAME_PRIORITY` として明示する。これは「候補なし」と曖昧にせず、
+ * 将来のround-robin、tick count slice管理、同一優先度順序管理をまだ導入しないことを
+ * ログから確認するための教育用境界である。
  *
  * @param current dispatcherが所有するcurrent taskの観測値。NULLの場合は比較対象なし。
  * @return 高優先度READY候補の有無を表す判断結果。

@@ -1184,7 +1184,7 @@ void kernel_main(void)
         const char *not_requested_reason;
 
         /*
-         * 11.1の同一優先度READY除外もvalidation buildで観測する。
+         * 11.3の同一優先度READY除外をvalidation buildで観測する。
          * task_bをRUNNING currentにするとtask_cは同一priority READYなので、
          * dispatch pendingはrequestされない。これはtimer IRQからの実切替ではなく、
          * IRQを開く前の限定的な境界確認である。
@@ -1193,7 +1193,7 @@ void kernel_main(void)
         not_requested_reason = preemption_evaluate_from_irq();
         dispatch_pending_log_state_from_irq(not_requested_reason);
         /*
-         * 11.2のno-pending側もvalidation証跡として残す。ここではIRQ0をまだ開かず、
+         * 11.3のno-pending側もvalidation証跡として残す。ここではIRQ0をまだ開かず、
          * 同一優先度READYがtime slice対象外でpendingを作らないことと、後段境界が
          * no-dispatchで終わることだけを観測する。timer IRQ handler本体から
          * dispatcher_switch_to()やyield_tsk()を呼ぶ経路ではない。

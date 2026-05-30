@@ -76,6 +76,7 @@ The current implementation covers the following milestones:
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 | 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
+| 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -572,6 +573,25 @@ deferred dispatch boundary before IRQ0 EOI:
 * This is still not a complete interrupt-return-frame switch. Same-priority
   time slice, semaphore wakeup integration, nested interrupts, sleep/delay
   queues, APIC/IOAPIC/LAPIC, and SMP remain unimplemented.
+
+Chapter 11 Section 11.3 fixes same-priority READY handling as explicitly not a
+time slice target:
+
+* The scheduler/preemption decision treats only READY tasks with a numerically
+  smaller priority value than current as preemption targets.
+* If the only READY candidate is the same priority as current, the reason stays
+  `same-priority-not-timeslice-target` and dispatch pending is not requested.
+* The interrupt exit boundary therefore logs
+  `dispatch-pending=none action=no-dispatch`, and the consume API logs
+  `consume skipped: reason=no-pending`.
+* The 11.2 higher-priority READY deferred dispatch path remains intact:
+  requested pending is consumed once and valid from/to tasks still reach
+  `dispatcher_switch_to(from, to)`.
+* The 10.4 `yield_tsk()` cooperative context switch path remains separate from
+  timer IRQ dispatch.
+* Round-robin, tick-count slice management, same-priority task ordering,
+  semaphore wakeup integration, nested interrupts, and complete
+  interrupt-return-frame switching remain unimplemented.
 
 ---
 
@@ -1136,6 +1156,8 @@ The current kernel includes:
 * Timer IRQ higher-priority READY detection and dispatch pending request observation
 * Dispatch pending from/to identity retention and one-shot deferred consume API
 * IRQ-originated pending consume connection to `dispatcher_switch_to(from, to)`
+* Same-priority READY exclusion from timer IRQ time slicing with
+  `same-priority-not-timeslice-target`
 * Entry return finalization to `TASK_STATE_DORMANT` in the task_context layer
 * μITRON-like `yield_tsk()` API entry foundation
 * `yield_tsk()` current-task observation and invalid-current-state logging
@@ -1173,6 +1195,8 @@ The following features are intentionally not implemented yet:
 * Timer-integrated semaphore blocking
 * Sleep or delay queue
 * Round-robin scheduling
+* Tick-based time slice management
+* Same-priority task ordering for time slicing
 * Mutex
 * Event flag
 * `TASK_STATE_EXITED`
@@ -1245,6 +1269,12 @@ also state that the timer IRQ handler body still does not call `yield_tsk()` or
 `dispatcher_switch_to()` directly, and that same-priority time slice, semaphore
 wakeup integration, nested interrupts, and complete interrupt-return-frame
 switching remain out of scope.
+For Chapter 11 Section 11.3, comments document that same-priority READY tasks
+are explicitly not timer IRQ time slice targets. The comments preserve the
+reason `same-priority-not-timeslice-target`, explain that no dispatch pending
+is requested in that case, and keep round-robin, tick-based slice management,
+semaphore wakeup integration, nested interrupts, and complete
+interrupt-return-frame switching out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1455,6 +1485,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 10      | 10.4    | yield_tsk connect to context switch        | v10.4-yield-connect-context-switch | Completed |
 | 11      | 11.1    | Timer IRQ detect higher-priority READY     | v11.1-timer-irq-detect-higher-ready | Completed |
 | 11      | 11.2    | Timer IRQ deferred dispatch switch         | v11.2-timer-irq-deferred-dispatch-switch | Completed |
+| 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
 
 ---
 

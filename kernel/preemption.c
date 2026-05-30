@@ -61,7 +61,7 @@ static const char *preemption_irq_reason_to_string(
  * @brief IRQ preemption log用に整数を10進出力する。
  *
  * @details
- * freestanding環境ではprintfを使わないため、11.1のtask id/priority観測に必要な
+ * freestanding環境ではprintfを使わないため、11.3のtask id/priority観測に必要な
  * 最小限の変換だけをpreemption境界へ閉じ込める。
  *
  * @param value 出力する符号付き整数。
@@ -124,7 +124,7 @@ static const char *preemption_irq_task_state_name(task_state_t state)
 }
 
 /**
- * @brief 11.1のpreemption判定で観測するtask identityを出力する。
+ * @brief 11.3のpreemption判定で観測するtask identityを出力する。
  *
  * @details
  * id/name/prio/stateだけを読み取り、TCB状態やdispatcher currentは変更しない。
@@ -215,7 +215,7 @@ const char *preemption_evaluate_from_irq(void)
     decision = scheduler_select_preemption_candidate(current);
 
     /*
-     * 11.1では「何を基準に高優先度READYを探したか」を先に見せる。
+     * 11.3では「何を基準に高優先度READYを探したか」を先に見せる。
      * currentはdispatcherから読むだけで、ここではRUNNING/READYを補正しない。
      */
     if (current != NULL) {
@@ -225,6 +225,8 @@ const char *preemption_evaluate_from_irq(void)
     /*
      * schedulerの判断結果をIRQ向けの観測ログへ分解する。
      * 高優先度READYがある場合だけ候補taskを出し、それ以外は切り替えない理由を出す。
+     * 同一優先度READYだけの場合は11.3の固定仕様として
+     * same-priority-not-timeslice-targetを維持し、time sliceやround-robinへ進めない。
      */
     if (decision.reason == SCHEDULER_PREEMPT_NEEDED) {
         preemption_irq_log_task("[preempt-irq] higher-ready detected:", decision.candidate);

@@ -142,15 +142,17 @@ scheduler_preempt_decision_t scheduler_select_preemption_candidate(const tcb_t *
     }
 
     /*
-     * priority値が小さいほど高優先度。等しいpriorityはtime slice対象ではないため、
-     * この段階では切り替え候補にしない。
+     * priority値が小さいほど高優先度。11.3では等しいpriorityをtime slice対象にせず、
+     * currentよりpriority値が小さいREADY taskだけを切り替え候補にする。
      */
     if (candidate->priority < current->priority) {
         decision.reason = SCHEDULER_PREEMPT_NEEDED;
     } else if (candidate->priority == current->priority) {
         /*
-         * 第11章11.1では同一優先度READYをtime slice対象として扱わない。
+         * 第11章11.3では同一優先度READYをtime slice対象として扱わない。
          * 高優先度READYなしとは区別し、timer IRQ後の観測理由を明確にする。
+         * round-robin、tick countによるslice管理、同一優先度taskの順番管理は
+         * この段階ではまだ導入しない。
          */
         decision.reason = SCHEDULER_PREEMPT_SAME_PRIORITY;
     }

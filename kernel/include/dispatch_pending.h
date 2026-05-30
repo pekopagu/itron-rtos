@@ -100,6 +100,8 @@ void dispatch_pending_log_state_from_irq(const char *not_requested_reason);
  * 第11章11.2の到達点である。timer IRQ handler本体から直接
  * `dispatcher_switch_to()` を呼ばず、exit boundaryがこのAPIへ委譲する。
  * pendingがない場合は何も切り替えず、from/toが不正な場合も安全側にclearする。
+ * 第11章11.3では、同一優先度READYだけでpendingが作られない場合も正当なno-pendingとして扱い、
+ * `consume skipped: reason=no-pending` の観測だけで終了する。
  * これは完全な割り込み復帰frame切替ではなく、既存のtask-to-task context switch
  * smokeへ接続する教育用の後段dispatch境界である。
  *

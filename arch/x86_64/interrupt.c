@@ -366,7 +366,9 @@ void arch_exception_handle(const arch_exception_frame_t *frame)
  *
  * @details
  * 第11章11.2では、IRQ handler本体から直接dispatcherを呼ばず、このexit boundaryが
- * dispatch_pending moduleのconsume APIへ委譲する。pendingがなければ何もせず、
+ * dispatch_pending moduleのconsume APIへ委譲する。第11章11.3では同一優先度READYだけで
+ * pendingが作られない場合を `dispatch-pending=none action=no-dispatch` として観測する。
+ * pendingがなければ何もせず、
  * requestedの場合だけdeferred dispatchとして既存のtask-to-task switch境界へ進む。
  * これは完全な割り込み復帰frame切替ではなく、EOI前の教育用後段境界である。
  */
@@ -386,7 +388,8 @@ static void arch_timer_irq_exit_observe_boundary(void)
 
     /*
      * pendingがない場合は切替を試みない。
-     * no-dispatch側でもconsume APIを呼び、no-pendingの観測ログを同じ境界に集約する。
+     * no-dispatch側でもconsume APIを呼び、11.3の同一優先度READY除外を含む
+     * no-pendingの観測ログを同じ境界に集約する。
      */
     hal_console_write("none action=no-dispatch\n");
     (void)dispatch_pending_consume_at_deferred_boundary();

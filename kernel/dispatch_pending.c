@@ -11,6 +11,8 @@
  * request済みfrom/toをinterrupt exit後段境界で一度だけconsumeし、妥当な場合だけ
  * 既存のdispatcher/task_context switch smokeへ接続する。ただし、これは完全な
  * 割り込み復帰frame切替ではなく、nested interruptやtime sliceも扱わない。
+ * 第11章11.3では、同一優先度READYだけの場合にpendingを作らないことを
+ * no-pending consumeログで確認する。
  */
 
 #include "dispatch_pending.h"
@@ -341,6 +343,7 @@ int dispatch_pending_consume_at_deferred_boundary(void)
          * pendingがない場合は正常なno-opとして扱う。
          * ここでdispatcherへ進むと、timer IRQごとに根拠のない切替を起こすため、
          * 観測ログだけを残して後段dispatchを終了する。
+         * 11.3の同一優先度READY除外では、この経路が期待される正常なno-opである。
          */
         hal_console_write("[dispatch-pending] consume skipped: reason=no-pending\n");
         return DISPATCH_PENDING_CONSUME_NO_PENDING;

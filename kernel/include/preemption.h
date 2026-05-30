@@ -36,10 +36,11 @@
  * @brief IRQ由来のpreemption decisionを評価し、dispatch pendingを更新する。
  *
  * @details
- * 第8章8.3から第11章11.1の境界として、scheduler/dispatcher状態は既存のkernel API経由で
+ * 第8章8.3から第11章11.3の境界として、scheduler/dispatcher状態は既存のkernel API経由で
  * 読み取るだけにする。currentより高優先度のREADY taskを検出した場合は後続観測用に
- * dispatch pendingを記録するが、dispatcher commit、context switch、
- * stack切り替え、register保存・復元、task状態変更は行わない。
+ * dispatch pendingを記録するが、同一優先度READYだけの場合は
+ * `same-priority-not-timeslice-target` としてpendingをrequestしない。
+ * dispatcher commit、context switch、stack切り替え、register保存・復元、task状態変更は行わない。
  *
  * @return dispatch pending観測用のnot-requested reason。pending要求時はNULL。
  */
