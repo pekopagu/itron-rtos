@@ -79,6 +79,7 @@ The current implementation covers the following milestones:
 | 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
 | 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
+| 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -631,6 +632,19 @@ state transition path:
 * `sig_sem()` wakeup integration, wait queues, timeout waits, wakeup-after
   preemption checks, same-priority time slice, and round-robin remain
   unimplemented.
+
+Chapter 12 Section 12.2 adds the minimal `sig_sem()` wakeup path:
+
+* `sig_sem()` now scans the task table for one task with `state=WAITING` and
+  `wait_sem_id` matching the target semaphore.
+* If a matching waiting task exists, it is returned to READY, its
+  `wait_sem_id` is cleared, and the semaphore count is not incremented.
+* If no waiting task exists, `sig_sem()` increments the semaphore count by 1.
+* The 10.4 `yield_tsk()` cooperative switch path, 11.4 timer IRQ dispatch
+  pending log path, and 12.1 `wai_sem()` RUNNING->WAITING path remain separate.
+* wait queues, FIFO/priority wakeup ordering, wakeup-after-preemption checks,
+  immediate context switch after `sig_sem()`, timeout waits, same-priority time
+  slice, and round-robin remain unimplemented.
 
 ---
 
@@ -1211,6 +1225,8 @@ The current kernel includes:
 * RUNNING to WAITING transition when `wai_sem()` cannot acquire a semaphore
 * Scheduler selection after semaphore wait entry, excluding WAITING tasks
 * `wai_sem()` connection to the existing dispatcher switch boundary
+* `sig_sem()` waiting task to READY transition
+* `sig_sem()` no-waiting-task semaphore count increment path
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1488,6 +1504,7 @@ See the LICENSE file for details.
 * [x] Timer interrupt tick connection
 * [x] Timer IRQ preemption decision entry
 * [x] wai_sem RUNNING to WAITING transition
+* [x] sig_sem waiting task to READY transition
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1546,6 +1563,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 11      | 11.3    | Same-priority READY is not a time slice target | v11.3-same-priority-not-timeslice-target | Completed |
 | 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
+| 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 
 ---
 

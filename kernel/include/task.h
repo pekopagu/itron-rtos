@@ -322,7 +322,7 @@ int task_mark_waiting_on_sem(int task_id, int sem_id);
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
  *
  * @details
- * 第6章6.1のsig_semログでwakeup対象を先に観測するための読み取りAPIである。
+ * 第12章12.2のsig_semログでwakeup対象を先に観測するための読み取りAPIである。
  * task状態は変更しない。wait queue未導入のため、探索順はtask table順であり、
  * FIFO順や優先度順を保証しない。
  *
@@ -335,8 +335,10 @@ const tcb_t *task_find_waiting_on_sem(int sem_id);
  * @brief 指定セマフォを待つtaskを1件READYへ戻す。
  *
  * @details
- * 第6章6.1ではwait queueを持たないため、task tableを走査して最初に見つかった
- * WAITING taskを1件だけREADYへ戻す。FIFO順や優先度順は保証しない。
+ * 第12章12.2ではwait queueを持たないため、task tableを走査して最初に見つかった
+ * WAITING taskを1件だけREADYへ戻し、`wait_sem_id` を未待ち状態へ戻す。
+ * FIFO順や優先度順、wakeup後preemption、timeout、同一優先度time slice、
+ * round-robinは保証しない。
  *
  * @param sem_id 対象セマフォID。
  * @param woken_task_id wakeupしたtask idの格納先。NULLも許容する。

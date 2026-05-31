@@ -152,16 +152,25 @@ kernel_main reached
 [context] switch resumed: task=boot boot.rsp.after=0x111ee8 from id=7 name=task_wai_sem_to from.rsp.saved=0x113bc8
 [dispatcher] switch boundary end: result=0
 [wai-sem] switch end: result=0
+[sig-sem] called: sem_id=1
+[sig-sem] waiting task found: id=6 name=task_wai_sem_from state=WAITING wait_sem_id=1
+[task] ready: id=6 name=task_wai_sem_from wait_sem_id=none state=READY
+[sig-sem] wakeup: sem_id=1 task id=6 name=task_wai_sem_from WAITING->READY
+[sig-sem] completed: result=0 action=wakeup-no-switch
+[sig-sem] called: sem_id=1
+[sig-sem] no waiting task: sem_id=1
+[sig-sem] count incremented: sem_id=1 count 0->1
+[sig-sem] completed: result=0 action=count-up
 [task] dump start
 [task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101570 stack_base=0x112000 stack_size=1024 stack_top=0x112400 context.rsp=0x112400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 entry=0x1015f0 stack_base=0x112400 stack_size=1024 stack_top=0x112800 context.rsp=0x1127c8 context.rbp=0x1127f0 context.rbx=0x0 context.r12=0x113c78 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 entry=0x101610 stack_base=0x112800 stack_size=1024 stack_top=0x112c00 context.rsp=0x112bc8 context.rbp=0x112bf0 context.rbx=0x0 context.r12=0x113cf0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 entry=0x1018a0 stack_base=0x112c00 stack_size=1024 stack_top=0x113000 context.rsp=0x112fc8 context.rbp=0x112ff0 context.rbx=0x0 context.r12=0x113d68 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 entry=0x1018c0 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x1133c8 context.rbp=0x1133f0 context.rbx=0x0 context.r12=0x113de0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=5 state=WAITING wait_sem_id=1 entry=0x101b50 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=5 state=READY wait_sem_id=0 entry=0x101b50 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] id=7 name=task_wai_sem_to prio=1 state=DORMANT wait_sem_id=0 entry=0x101b70 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113bc8 context.rbp=0x113bf0 context.rbx=0x0 context.r12=0x113ed0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
-[sem] id=1 name=sem_a count=0 max_count=1
+[sem] id=1 name=sem_a count=1 max_count=1
 [sem] dump end
 [sem-smoke] end

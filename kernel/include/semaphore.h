@@ -97,12 +97,13 @@ const semaphore_t *sem_get_by_id(int sem_id);
 int sem_take_if_available(int sem_id, int *count_before, int *count_after);
 
 /**
- * @brief sig_sem相当のセマフォ返却を行う。
+ * @brief 12.2のsig_sem相当のセマフォ返却を行う。
  *
  * @details
- * 対象セマフォを待つtaskがあれば、最小実装として1 taskだけREADYへ戻す。
- * WAITING taskがなければcountを1増やす。FIFO順や優先度順は保証せず、
- * 将来のwait queue導入で置き換える。
+ * 対象セマフォを待つtaskがあれば、最小実装として1 taskだけREADYへ戻し、
+ * `wait_sem_id` を未待ち状態へ戻す。この場合countは増やさない。
+ * WAITING taskがなければcountを1増やす。FIFO順や優先度順、wakeup後preemption、
+ * timeout、同一優先度time slice、round-robinは保証せず、将来のwait queue導入で置き換える。
  *
  * @param sem_id 対象セマフォID。
  * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。

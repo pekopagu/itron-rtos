@@ -959,8 +959,16 @@ static void kernel_run_semaphore_smoke(int current_task_id)
     (void)wai_sem(sem_a_id);
 
     /*
-     * task dumpとsemaphore dumpを続けて出すことで、WAITING taskがREADY候補から
-     * 外れ、セマフォcount/max_countが維持されていることを同じQEMUログで確認できる。
+     * 12.2では、12.1でWAITINGへ落としたtaskをsig_sem相当APIでREADYへ戻す。
+     * wakeup経路ではcountを増やさず、次の呼び出しでは待ちtaskなしとしてcount-upする。
+     * wait queue、wakeup後preemption、timeout、time slice、round-robinはまだ扱わない。
+     */
+    (void)sig_sem(sem_a_id);
+    (void)sig_sem(sem_a_id);
+
+    /*
+     * task dumpとsemaphore dumpを続けて出すことで、READY復帰、wait_sem_idのclear、
+     * wakeup時のcount非増加、待ちtaskなしcount-upを同じQEMUログで確認できる。
      */
     task_dump();
     sem_dump();

@@ -867,10 +867,10 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
         task_write_int(task->id);
         hal_console_write(" name=");
         hal_console_write(task->name);
+        hal_console_write(" wait_sem_id=");
+        hal_console_write("none");
         hal_console_write(" state=");
         hal_console_write(task_state_to_string(task->state));
-        hal_console_write(" wait_sem_id=");
-        task_write_int(task->wait_sem_id);
         hal_console_write("\n");
 
         return 0;

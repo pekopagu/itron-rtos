@@ -333,17 +333,24 @@ int sem_take_if_available(int sem_id, int *count_before, int *count_after)
 int sig_sem(int sem_id)
 {
     semaphore_t *sem = find_semaphore_by_id(sem_id);
-    int count_before;
+    int count_before = 0;
     int woken_task_id = 0;
     int wake_result;
     const tcb_t *waiting_task;
     const char *woken_name;
+
+    hal_console_write("[sig-sem] called: sem_id=");
+    sem_write_int(sem_id);
+    hal_console_write("\n");
 
     /*
      * 存在しないセマフォへのsignalでは、countもtask状態も変更しない。
      * エラー時の副作用をなくし、QEMUログ上の原因切り分けを簡単にする。
      */
     if (sem == NULL) {
+        hal_console_write("[sig-sem] rejected: reason=invalid-semaphore sem_id=");
+        sem_write_int(sem_id);
+        hal_console_write("\n");
         return SEM_ERR_INVAL;
     }
 
@@ -357,16 +364,12 @@ int sig_sem(int sem_id)
         woken_task_id = waiting_task->id;
         woken_name = (waiting_task->name != NULL) ? waiting_task->name : "(null)";
 
-        hal_console_write("[sem] sig_sem: sem id=");
-        sem_write_int(sem->id);
-        hal_console_write(" name=");
-        hal_console_write(sem->name);
-        hal_console_write(" count_before=");
-        sem_write_int(count_before);
-        hal_console_write(" result=wakeup task id=");
+        hal_console_write("[sig-sem] waiting task found: id=");
         sem_write_int(woken_task_id);
         hal_console_write(" name=");
         hal_console_write(woken_name);
+        hal_console_write(" state=WAITING wait_sem_id=");
+        sem_write_int(sem_id);
         hal_console_write("\n");
 
         /*
@@ -375,11 +378,19 @@ int sig_sem(int sem_id)
          */
         wake_result = task_wake_one_waiting_on_sem(sem_id, &woken_task_id);
         if (wake_result != 0) {
-            hal_console_write("[sem] sig_sem: wakeup failed err=");
+            hal_console_write("[sig-sem] wakeup failed: err=");
             sem_write_int(wake_result);
             hal_console_write("\n");
             return SEM_ERR_TASK;
         }
+        hal_console_write("[sig-sem] wakeup: sem_id=");
+        sem_write_int(sem_id);
+        hal_console_write(" task id=");
+        sem_write_int(woken_task_id);
+        hal_console_write(" name=");
+        hal_console_write(woken_name);
+        hal_console_write(" WAITING->READY\n");
+        hal_console_write("[sig-sem] completed: result=0 action=wakeup-no-switch\n");
         return SEM_OK;
     }
 
@@ -387,27 +398,30 @@ int sig_sem(int sem_id)
      * 待ちtaskがいない場合だけcountを増やす。max_count超過を拒否することで、
      * semaphore_tの不変条件をsig_sem側でも維持する。
      */
+    hal_console_write("[sig-sem] no waiting task: sem_id=");
+    sem_write_int(sem_id);
+    hal_console_write("\n");
+
     if (sem->count >= sem->max_count) {
-        hal_console_write("[sem] sig_sem: sem id=");
+        hal_console_write("[sig-sem] rejected: reason=count-overflow sem_id=");
         sem_write_int(sem->id);
-        hal_console_write(" name=");
-        hal_console_write(sem->name);
-        hal_console_write(" count_before=");
+        hal_console_write(" count=");
         sem_write_int(count_before);
-        hal_console_write(" result=overflow\n");
+        hal_console_write(" max_count=");
+        sem_write_int(sem->max_count);
+        hal_console_write("\n");
         return SEM_ERR_OVERFLOW;
     }
 
     sem->count++;
-    hal_console_write("[sem] sig_sem: sem id=");
+    hal_console_write("[sig-sem] count incremented: sem_id=");
     sem_write_int(sem->id);
-    hal_console_write(" name=");
-    hal_console_write(sem->name);
-    hal_console_write(" count_before=");
+    hal_console_write(" count ");
     sem_write_int(count_before);
-    hal_console_write(" count_after=");
+    hal_console_write("->");
     sem_write_int(sem->count);
-    hal_console_write(" result=ok\n");
+    hal_console_write("\n");
+    hal_console_write("[sig-sem] completed: result=0 action=count-up\n");
     return SEM_OK;
 }
 
