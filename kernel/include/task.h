@@ -346,4 +346,19 @@ const tcb_t *task_find_waiting_on_sem(int sem_id);
  */
 int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id);
 
+/**
+ * @brief 指定taskを指定semaphore待ちからREADYへ戻す。
+ *
+ * @details
+ * 第12章12.3のsemaphore wait queue経由wakeupで使う。wakeup対象は
+ * semaphore queueからdequeue済みのtask idに限定し、task table全体から
+ * 別のWAITING taskを探さない。READY復帰時に `wait_sem_id` を0へ戻す。
+ * priority順wait queue、wakeup後preemption、timeout、time slice、round-robinは扱わない。
+ *
+ * @param task_id READYへ戻すtask ID。
+ * @param sem_id taskが待っているべきsemaphore ID。
+ * @return 成功時は0。失敗時はTASK_ERR_*。
+ */
+int task_wake_waiting_on_sem_by_id(int task_id, int sem_id);
+
 #endif

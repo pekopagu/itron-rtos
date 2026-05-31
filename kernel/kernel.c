@@ -959,9 +959,10 @@ static void kernel_run_semaphore_smoke(int current_task_id)
     (void)wai_sem(sem_a_id);
 
     /*
-     * 12.2では、12.1でWAITINGへ落としたtaskをsig_sem相当APIでREADYへ戻す。
-     * wakeup経路ではcountを増やさず、次の呼び出しでは待ちtaskなしとしてcount-upする。
-     * wait queue、wakeup後preemption、timeout、time slice、round-robinはまだ扱わない。
+     * 12.3では、12.1でWAITINGへ落としたtaskを対象semaphoreのFIFO wait queueへ積み、
+     * sig_sem()でそのqueueから1 taskを取り出してREADYへ戻す。wakeup経路ではcountを
+     * 増やさず、次の呼び出しではqueue空としてcount-upする。priority順、wakeup後
+     * preemption、timeout、time slice、round-robinはまだ扱わない。
      */
     (void)sig_sem(sem_a_id);
     (void)sig_sem(sem_a_id);
@@ -1071,8 +1072,9 @@ static void task_yield_to(void)
  *
  * @details
  * このentryは登録とcontext switch smokeの到達確認だけに使う。`wai_sem()` の呼び出しは
- * task文脈APIの観測としてkernel smoke側から行い、ここではwait queue、timeout、
- * `sig_sem()` wakeup、time slice、round-robinを開始しない。
+ * task文脈APIの観測としてkernel smoke側から行う。12.3ではWAITING化後に
+ * semaphoreごとのFIFO wait queueへ登録するが、timeout、priority順、time slice、
+ * round-robinは開始しない。
  *
  * @param なし。
  * @return なし。
@@ -1350,9 +1352,9 @@ void kernel_main(void)
     kernel_run_cooperative_entries();
 
     /*
-     * 第12章12.1では、専用のREADY taskを追加して `wai_sem()` のtask文脈APIを
-     * 観測する。ここでは `sig_sem()` wakeup、wait queue、timeout、wakeup後preemption、
-     * 同一優先度time slice、round-robinはまだ導入しない。
+     * 第12章12.3では、専用のREADY taskを追加して `wai_sem()` のWAITING化と
+     * semaphoreごとのFIFO wait queue enqueue/dequeueを観測する。priority順、
+     * timeout、wakeup後preemption、同一優先度time slice、round-robinはまだ導入しない。
      */
     task_wai_sem_from_id = task_register(
         "task_wai_sem_from",

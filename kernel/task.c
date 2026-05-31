@@ -878,3 +878,51 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
 
     return TASK_ERR_NOT_FOUND;
 }
+
+/**
+ * @brief 指定taskを指定semaphore待ちからREADYへ戻す。
+ *
+ * @details
+ * 第12章12.3のwait queue経由wakeupで使う。`sig_sem()` はsemaphore queueから
+ * 取り出したtask idを渡し、この関数はその1 taskだけをREADYへ戻す。task table全体を
+ * wakeup対象探索には使わない。READY復帰時に `wait_sem_id` を0へ戻す。
+ *
+ * @param task_id READYへ戻すtask ID。
+ * @param sem_id taskが待っているべきsemaphore ID。
+ * @return 成功時は0。失敗時はTASK_ERR_*。
+ */
+int task_wake_waiting_on_sem_by_id(int task_id, int sem_id)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    if (task_id <= 0 || sem_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * wait queueから取り出したtaskだけをwakeup対象にする。queueとTCBがずれている場合は
+     * 12.3の検証上の不整合として失敗させ、別taskを探して補正しない。
+     */
+    if (task->state != TASK_STATE_WAITING || task->wait_sem_id != sem_id) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    task->state = TASK_STATE_READY;
+    task->wait_sem_id = 0;
+
+    hal_console_write("[task] ready: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" wait_sem_id=");
+    hal_console_write("none");
+    hal_console_write(" state=");
+    hal_console_write(task_state_to_string(task->state));
+    hal_console_write("\n");
+
+    return 0;
+}

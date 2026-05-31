@@ -322,6 +322,7 @@ int wai_sem(int sem_id)
     int count_after = 0;
     int take_result;
     int wait_result;
+    int enqueue_result;
     int switch_result;
 
     if (current == NULL) {
@@ -388,6 +389,19 @@ int wai_sem(int sem_id)
     if (wait_result != 0) {
         hal_console_write("[wai-sem] rejected: reason=waiting-transition-failed err=");
         itron_api_write_int(wait_result);
+        hal_console_write("\n");
+        return WAI_SEM_ERR_DISPATCH;
+    }
+
+    /*
+     * 12.3ではWAITING化したtaskだけを対象semaphoreのFIFO wait queueへ積む。
+     * priority順、timeout、wakeup後preemption判定はここでは扱わず、queue登録後も
+     * 12.1と同じscheduler/dispatcher境界へ進む。
+     */
+    enqueue_result = sem_enqueue_waiter(sem_id, current->id);
+    if (enqueue_result != SEM_OK) {
+        hal_console_write("[wai-sem] rejected: reason=wait-queue-enqueue-failed err=");
+        itron_api_write_int(enqueue_result);
         hal_console_write("\n");
         return WAI_SEM_ERR_DISPATCH;
     }

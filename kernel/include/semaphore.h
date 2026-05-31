@@ -20,6 +20,8 @@
 #ifndef ITRON_RTOS_SEMAPHORE_H
 #define ITRON_RTOS_SEMAPHORE_H
 
+#include "task.h"
+
 #define MAX_SEMAPHORES 16
 
 #define SEM_OK            0
@@ -28,6 +30,7 @@
 #define SEM_ERR_NOT_FOUND (-3)
 #define SEM_ERR_OVERFLOW  (-4)
 #define SEM_ERR_TASK      (-5)
+#define SEM_WAIT_QUEUE_EMPTY 2
 #define SEM_WAIT_REQUIRED 1
 
 /**
@@ -43,6 +46,10 @@ typedef struct {
     const char *name;/**< ログとdumpで識別するためのセマフォ名。 */
     int count;       /**< 現在の資源数。0以上max_count以下を不変条件にする。 */
     int max_count;   /**< countの上限。sig_sem相当操作で超過させない。 */
+    int wait_queue[MAX_TASKS]; /**< 12.3のFIFO wait queue。WAITING taskのidだけを固定長で保持する。 */
+    int wait_head;   /**< 次にdequeueする位置。priority順制御はまだ行わない。 */
+    int wait_tail;   /**< 次にenqueueする位置。timeout queueとは連動しない。 */
+    int wait_count;  /**< queue内の待ちtask数。wakeup後preemption判定には使わない。 */
 } semaphore_t;
 
 /**
@@ -95,6 +102,33 @@ const semaphore_t *sem_get_by_id(int sem_id);
  * @return 取得成功はSEM_OK、待ち入りが必要ならSEM_WAIT_REQUIRED、失敗時はSEM_ERR_*。
  */
 int sem_take_if_available(int sem_id, int *count_before, int *count_after);
+
+/**
+ * @brief 12.3のFIFO wait queueへWAITING task idを登録する。
+ *
+ * @details
+ * `wai_sem()` がRUNNING taskをWAITINGへ落とした後に呼ぶqueue操作である。
+ * この関数はtask状態を変更せず、対象semaphoreが所有する固定長FIFO queueだけを更新する。
+ * priority順、timeout、wakeup後preemption、time slice、round-robinはここでは扱わない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id WAITING化済みtask ID。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_enqueue_waiter(int sem_id, int task_id);
+
+/**
+ * @brief 12.3のFIFO wait queueから待ちtask idを1件取り出す。
+ *
+ * @details
+ * `sig_sem()` がtask table全体を探索せず、対象semaphoreの待ち行列だけから
+ * wakeup対象を決めるためのqueue操作である。空の場合はSEM_WAIT_QUEUE_EMPTYを返す。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 取り出したtask IDの格納先。NULLは不正。
+ * @return 成功時はSEM_OK。空の場合はSEM_WAIT_QUEUE_EMPTY。失敗時はSEM_ERR_*。
+ */
+int sem_dequeue_waiter(int sem_id, int *task_id);
 
 /**
  * @brief 12.2のsig_sem相当のセマフォ返却を行う。

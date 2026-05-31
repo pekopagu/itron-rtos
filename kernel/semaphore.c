@@ -28,6 +28,31 @@ static semaphore_t semaphore_table[MAX_SEMAPHORES];
 static int next_sem_id = 1;
 
 /**
+ * @brief semaphore wait queueを空状態へ初期化する。
+ *
+ * @details
+ * 12.3のwait queueは固定長task id配列によるFIFOである。ここではqueue metadataだけを
+ * 初期化し、priority順、timeout、sleep/delay queue、wakeup後preemption判定は扱わない。
+ *
+ * @param sem 初期化対象のsemaphore。NULLの場合は何もしない。
+ */
+static void sem_reset_wait_queue(semaphore_t *sem)
+{
+    int index;
+
+    if (sem == NULL) {
+        return;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        sem->wait_queue[index] = 0;
+    }
+    sem->wait_head = 0;
+    sem->wait_tail = 0;
+    sem->wait_count = 0;
+}
+
+/**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
  *
  * @param value 出力する値。
@@ -193,6 +218,7 @@ int sem_init(void)
         semaphore_table[index].name = NULL;
         semaphore_table[index].count = 0;
         semaphore_table[index].max_count = 0;
+        sem_reset_wait_queue(&semaphore_table[index]);
     }
 
     next_sem_id = 1;
@@ -248,6 +274,7 @@ int sem_create(const char *name, int initial_count, int max_count)
     slot->name = name;
     slot->count = initial_count;
     slot->max_count = max_count;
+    sem_reset_wait_queue(slot);
 
     hal_console_write("[sem] initialized: id=");
     sem_write_int(slot->id);
@@ -330,12 +357,115 @@ int sem_take_if_available(int sem_id, int *count_before, int *count_after)
  * @param sem_id 対象セマフォID。
  * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
+/**
+ * @brief 12.3のFIFO wait queueへWAITING task idを登録する。
+ *
+ * @details
+ * `wai_sem()` がTCBをWAITINGへ更新した後に呼ぶ。semaphore moduleはqueueだけを所有し、
+ * task stateの変更はtask moduleへ残す。固定長queueが満杯の場合はエラーを返し、
+ * timeout待ちやpriority順への回避は行わない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id WAITING化済みtask ID。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_enqueue_waiter(int sem_id, int task_id)
+{
+    semaphore_t *sem = find_semaphore_by_id(sem_id);
+    const tcb_t *task = task_get_by_id(task_id);
+    const char *task_name;
+
+    if (sem == NULL || task == NULL || task_id <= 0) {
+        return SEM_ERR_INVAL;
+    }
+
+    if (sem->wait_count >= MAX_TASKS) {
+        return SEM_ERR_OVERFLOW;
+    }
+
+    /*
+     * FIFO順を保つため、tailへ追加してから循環更新する。task idだけを保持し、
+     * priority順制御やtimeout情報は12.3ではqueueに入れない。
+     */
+    sem->wait_queue[sem->wait_tail] = task_id;
+    sem->wait_tail = (sem->wait_tail + 1) % MAX_TASKS;
+    sem->wait_count++;
+
+    task_name = (task->name != NULL) ? task->name : "(null)";
+    hal_console_write("[sem-wq] enqueue: sem_id=");
+    sem_write_int(sem_id);
+    hal_console_write(" task id=");
+    sem_write_int(task_id);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" queue_count=");
+    sem_write_int(sem->wait_count);
+    hal_console_write("\n");
+
+    return SEM_OK;
+}
+
+/**
+ * @brief 12.3のFIFO wait queueからWAITING task idを1件取り出す。
+ *
+ * @details
+ * `sig_sem()` はこの関数で対象semaphoreの待ちtaskだけを取り出す。queueが空の場合は
+ * count-up経路へ進めるよう、SEM_WAIT_QUEUE_EMPTYを返して `[sem-wq] empty` を出力する。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 取り出したtask idの格納先。
+ * @return 成功時はSEM_OK。空の場合はSEM_WAIT_QUEUE_EMPTY。失敗時はSEM_ERR_*。
+ */
+int sem_dequeue_waiter(int sem_id, int *task_id)
+{
+    semaphore_t *sem = find_semaphore_by_id(sem_id);
+    const tcb_t *task;
+    const char *task_name;
+    int dequeued_task_id;
+
+    if (sem == NULL || task_id == NULL) {
+        return SEM_ERR_INVAL;
+    }
+
+    if (sem->wait_count <= 0) {
+        hal_console_write("[sem-wq] empty: sem_id=");
+        sem_write_int(sem_id);
+        hal_console_write("\n");
+        return SEM_WAIT_QUEUE_EMPTY;
+    }
+
+    /*
+     * headから1件取り出して循環更新する。古いslotは0に戻し、将来の検証で
+     * staleなtask idが残って見えないようにする。
+     */
+    dequeued_task_id = sem->wait_queue[sem->wait_head];
+    sem->wait_queue[sem->wait_head] = 0;
+    sem->wait_head = (sem->wait_head + 1) % MAX_TASKS;
+    sem->wait_count--;
+    *task_id = dequeued_task_id;
+
+    task = task_get_by_id(dequeued_task_id);
+    task_name = (task != NULL && task->name != NULL) ? task->name : "(null)";
+    hal_console_write("[sem-wq] dequeue: sem_id=");
+    sem_write_int(sem_id);
+    hal_console_write(" task id=");
+    sem_write_int(dequeued_task_id);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" queue_count=");
+    sem_write_int(sem->wait_count);
+    hal_console_write("\n");
+
+    return SEM_OK;
+}
+
 int sig_sem(int sem_id)
 {
     semaphore_t *sem = find_semaphore_by_id(sem_id);
     int count_before = 0;
     int woken_task_id = 0;
     int wake_result;
+    int dequeue_result;
     const tcb_t *waiting_task;
     const char *woken_name;
 
@@ -355,28 +485,40 @@ int sig_sem(int sem_id)
     }
 
     count_before = sem->count;
-    waiting_task = task_find_waiting_on_sem(sem_id);
-    if (waiting_task != NULL) {
+    dequeue_result = sem_dequeue_waiter(sem_id, &woken_task_id);
+    if (dequeue_result == SEM_OK) {
         /*
          * wakeup対象の名前をsig_semログへ含めるため、先に読み取り専用探索を行う。
          * 実際のREADY遷移はこの後もtask moduleへ委譲し、TCB直接更新はしない。
          */
-        woken_task_id = waiting_task->id;
+        waiting_task = task_get_by_id(woken_task_id);
+        if (waiting_task == NULL) {
+            hal_console_write("[sig-sem] wakeup failed: reason=task-not-found task id=");
+            sem_write_int(woken_task_id);
+            hal_console_write("\n");
+            return SEM_ERR_TASK;
+        }
         woken_name = (waiting_task->name != NULL) ? waiting_task->name : "(null)";
 
-        hal_console_write("[sig-sem] waiting task found: id=");
+        hal_console_write("[sig-sem] waiting task dequeued: id=");
         sem_write_int(woken_task_id);
         hal_console_write(" name=");
         hal_console_write(woken_name);
-        hal_console_write(" state=WAITING wait_sem_id=");
-        sem_write_int(sem_id);
+        hal_console_write(" state=");
+        if (waiting_task->state == TASK_STATE_WAITING) {
+            hal_console_write("WAITING");
+        } else {
+            hal_console_write("NOT-WAITING");
+        }
+        hal_console_write(" wait_sem_id=");
+        sem_write_int(waiting_task->wait_sem_id);
         hal_console_write("\n");
 
         /*
          * 待ちtaskへ資源を渡した扱いにするため、この経路ではcountを増やさない。
          * 6.1では1 taskだけの最小wakeupで、複数待ちや順序保証は扱わない。
          */
-        wake_result = task_wake_one_waiting_on_sem(sem_id, &woken_task_id);
+        wake_result = task_wake_waiting_on_sem_by_id(woken_task_id, sem_id);
         if (wake_result != 0) {
             hal_console_write("[sig-sem] wakeup failed: err=");
             sem_write_int(wake_result);
@@ -394,6 +536,13 @@ int sig_sem(int sem_id)
         return SEM_OK;
     }
 
+    if (dequeue_result != SEM_WAIT_QUEUE_EMPTY) {
+        hal_console_write("[sig-sem] rejected: reason=wait-queue-error err=");
+        sem_write_int(dequeue_result);
+        hal_console_write("\n");
+        return SEM_ERR_TASK;
+    }
+
     /*
      * 待ちtaskがいない場合だけcountを増やす。max_count超過を拒否することで、
      * semaphore_tの不変条件をsig_sem側でも維持する。
@@ -409,6 +558,8 @@ int sig_sem(int sem_id)
         sem_write_int(count_before);
         hal_console_write(" max_count=");
         sem_write_int(sem->max_count);
+        hal_console_write(" wait_queue_count=");
+        sem_write_int(sem->wait_count);
         hal_console_write("\n");
         return SEM_ERR_OVERFLOW;
     }
@@ -454,6 +605,8 @@ void sem_dump(void)
         sem_write_int(sem->count);
         hal_console_write(" max_count=");
         sem_write_int(sem->max_count);
+        hal_console_write(" wait_queue_count=");
+        sem_write_int(sem->wait_count);
         hal_console_write("\n");
     }
 

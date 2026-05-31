@@ -80,6 +80,7 @@ The current implementation covers the following milestones:
 | 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
+| 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -645,6 +646,21 @@ Chapter 12 Section 12.2 adds the minimal `sig_sem()` wakeup path:
 * wait queues, FIFO/priority wakeup ordering, wakeup-after-preemption checks,
   immediate context switch after `sig_sem()`, timeout waits, same-priority time
   slice, and round-robin remain unimplemented.
+
+Chapter 12 Section 12.3 adds a semaphore-local FIFO wait queue:
+
+* Each `semaphore_t` now owns a fixed-length FIFO wait queue of waiting task IDs.
+* When `wai_sem()` cannot acquire the semaphore, the RUNNING task becomes
+  WAITING and is enqueued on the target semaphore wait queue.
+* `sig_sem()` no longer scans the whole task table for a waiting task. It
+  dequeues one task from the target semaphore queue and returns that task to
+  READY.
+* A dequeued task has `wait_sem_id` cleared to the non-waiting state.
+* If a waiting task is woken, the semaphore count is not incremented. If the
+  wait queue is empty, `sig_sem()` increments the semaphore count by 1.
+* Priority-ordered wait queues, timeout waits, wakeup-after-preemption checks,
+  immediate context switch after `sig_sem()`, same-priority time slice, and
+  round-robin remain unimplemented.
 
 ---
 
@@ -1227,6 +1243,7 @@ The current kernel includes:
 * `wai_sem()` connection to the existing dispatcher switch boundary
 * `sig_sem()` waiting task to READY transition
 * `sig_sem()` no-waiting-task semaphore count increment path
+* Semaphore-local FIFO wait queue for `wai_sem()` / `sig_sem()`
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1253,7 +1270,7 @@ The following features are intentionally not implemented yet:
 * Timer-driven stack switching
 * Timeout wait (`twai_sem`)
 * Polling semaphore wait (`pol_sem`)
-* FIFO or priority semaphore wait queue
+* Priority semaphore wait queue
 * Timer-integrated semaphore blocking
 * Sleep or delay queue
 * Round-robin scheduling
@@ -1348,6 +1365,12 @@ and that an unavailable semaphore moves the RUNNING current task to WAITING
 before selecting the next READY task. They also state that `sig_sem()` wakeup,
 wait queues, timeout waits, wakeup-after-preemption checks, same-priority time
 slice, and round-robin remain out of scope.
+For Chapter 12 Section 12.3, comments document that each semaphore now owns a
+fixed-length FIFO wait queue, that `wai_sem()` enqueues only tasks that have
+entered WAITING, and that `sig_sem()` dequeues from the target semaphore before
+returning the task to READY. They also state that priority ordering, timeout
+waits, wakeup-after-preemption checks, same-priority time slice, and
+round-robin remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1505,6 +1528,7 @@ See the LICENSE file for details.
 * [x] Timer IRQ preemption decision entry
 * [x] wai_sem RUNNING to WAITING transition
 * [x] sig_sem waiting task to READY transition
+* [x] semaphore FIFO wait queue
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1564,6 +1588,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 11      | 11.4    | Preemption event log stabilization         | v11.4-preemption-event-log-stabilization | Completed |
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
+| 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 
 ---
 

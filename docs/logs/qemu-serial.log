@@ -137,6 +137,7 @@ kernel_main reached
 [wai-sem] called: sem_id=1 current id=6 name=task_wai_sem_from state=RUNNING
 [wai-sem] wait required: sem_id=1 count=0
 [task] waiting: id=6 name=task_wai_sem_from wait_sem_id=1 state=WAITING
+[sem-wq] enqueue: sem_id=1 task id=6 name=task_wai_sem_from queue_count=1
 [wai-sem] state transition: current id=6 name=task_wai_sem_from RUNNING->WAITING
 [wai-sem] next selected: id=7 name=task_wai_sem_to prio=1 state=READY
 [wai-sem] switch begin: from id=6 name=task_wai_sem_from to id=7 name=task_wai_sem_to
@@ -153,11 +154,13 @@ kernel_main reached
 [dispatcher] switch boundary end: result=0
 [wai-sem] switch end: result=0
 [sig-sem] called: sem_id=1
-[sig-sem] waiting task found: id=6 name=task_wai_sem_from state=WAITING wait_sem_id=1
+[sem-wq] dequeue: sem_id=1 task id=6 name=task_wai_sem_from queue_count=0
+[sig-sem] waiting task dequeued: id=6 name=task_wai_sem_from state=WAITING wait_sem_id=1
 [task] ready: id=6 name=task_wai_sem_from wait_sem_id=none state=READY
 [sig-sem] wakeup: sem_id=1 task id=6 name=task_wai_sem_from WAITING->READY
 [sig-sem] completed: result=0 action=wakeup-no-switch
 [sig-sem] called: sem_id=1
+[sem-wq] empty: sem_id=1
 [sig-sem] no waiting task: sem_id=1
 [sig-sem] count incremented: sem_id=1 count 0->1
 [sig-sem] completed: result=0 action=count-up
@@ -171,6 +174,6 @@ kernel_main reached
 [task] id=7 name=task_wai_sem_to prio=1 state=DORMANT wait_sem_id=0 entry=0x101b70 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113bc8 context.rbp=0x113bf0 context.rbx=0x0 context.r12=0x113ed0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
-[sem] id=1 name=sem_a count=1 max_count=1
+[sem] id=1 name=sem_a count=1 max_count=1 wait_queue_count=0
 [sem] dump end
 [sem-smoke] end
