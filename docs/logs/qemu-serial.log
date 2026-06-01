@@ -14,16 +14,16 @@ kernel_main reached
 [timer-smoke] current tick=3
 [timer-smoke] end
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x101570 stack_base=0x112000 stack_size=1024 stack_top=0x112400 context.rsp=0x112400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=1 name=task_a state=READY wait_sem_id=0 prio=5 entry=0x101520 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x113400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x1015f0 stack_base=0x112400 stack_size=1024 stack_top=0x112800 context.rsp=0x112800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=2 name=task_b state=READY wait_sem_id=0 prio=1 entry=0x1015a0 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x101610 stack_base=0x112800 stack_size=1024 stack_top=0x112c00 context.rsp=0x112c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=3 name=task_c state=READY wait_sem_id=0 prio=1 entry=0x1015c0 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101570 stack_base=0x112000 stack_size=1024 stack_top=0x112400 context.rsp=0x112400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x1015f0 stack_base=0x112400 stack_size=1024 stack_top=0x112800 context.rsp=0x112800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x101610 stack_base=0x112800 stack_size=1024 stack_top=0x112c00 context.rsp=0x112c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101520 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x113400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 entry=0x1015a0 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 entry=0x1015c0 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [preempt-smoke] begin
 [timer] tick: 4
@@ -43,28 +43,28 @@ kernel_main reached
 [dispatcher] switch boundary begin: from id=2 name=task_b to id=3 name=task_c
 [dispatcher] state transition: from id=2 name=task_b RUNNING->READY
 [dispatcher] state transition: to id=3 name=task_c READY->RUNNING
-[context] prepared initial frame: task id=2 name=task_b context.rsp=0x1127f8
-[context] prepared initial frame: task id=3 name=task_c context.rsp=0x112bf8
-[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x1127f8
-[context] entered task stack: task id=2 name=task_b current.rsp=0x1127f8
+[context] prepared initial frame: task id=2 name=task_b context.rsp=0x1137f8
+[context] prepared initial frame: task id=3 name=task_c context.rsp=0x113bf8
+[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x1137f8
+[context] entered task stack: task id=2 name=task_b current.rsp=0x1137f8
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
 [context] task entry finalized: task id=2 name=task_b READY->DORMANT
-[context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x1127f8 to.rsp.restore=0x112bf8
-[context] entered task stack: task id=3 name=task_c current.rsp=0x112bf8
+[context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x1137f8 to.rsp.restore=0x113bf8
+[context] entered task stack: task id=3 name=task_c current.rsp=0x113bf8
 [task_c] executed
 [context] task entry returned: task id=3 name=task_c
 [context] task entry finalized: task id=3 name=task_c RUNNING->DORMANT
-[context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x112bf8 boot.rsp.restore=0x111ef8
-[context] switch resumed: task=boot boot.rsp.after=0x111ef8 from id=3 name=task_c from.rsp.saved=0x112bc8
+[context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x113bf8 boot.rsp.restore=0x112ef8
+[context] switch resumed: task=boot boot.rsp.after=0x112ef8 from id=3 name=task_c from.rsp.saved=0x113bc8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [context-smoke] end
 [yield] called: current id=3 name=task_c state=DORMANT
 [yield] rejected: reason=invalid-current-state current id=3 name=task_c state=DORMANT
-[task] registered: id=4 name=task_yield_from state=READY wait_sem_id=0 prio=5 entry=0x1018a0 stack_base=0x112c00 stack_size=1024 stack_top=0x113000 context.rsp=0x113000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=4 name=task_yield_from state=READY wait_sem_id=0 prio=5 entry=0x101850 stack_base=0x113c00 stack_size=1024 stack_top=0x114000 context.rsp=0x114000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_yield_from returned 4
-[task] registered: id=5 name=task_yield_to state=READY wait_sem_id=0 prio=1 entry=0x1018c0 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x113400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=5 name=task_yield_to state=READY wait_sem_id=0 prio=1 entry=0x101870 stack_base=0x114000 stack_size=1024 stack_top=0x114400 context.rsp=0x114400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_yield_to returned 5
 [yield-smoke] begin
 [dispatcher] committed current: id=4 name=task_yield_from prio=5 state=RUNNING
@@ -74,20 +74,20 @@ kernel_main reached
 [yield] switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to
 [dispatcher] switch boundary begin: from id=4 name=task_yield_from to id=5 name=task_yield_to
 [dispatcher] state transition: to id=5 name=task_yield_to READY->RUNNING
-[context] prepared initial frame: task id=4 name=task_yield_from context.rsp=0x112ff8
-[context] prepared initial frame: task id=5 name=task_yield_to context.rsp=0x1133f8
-[context] switch begin: from=boot to id=4 name=task_yield_from boot.rsp.before=0x111ef8 to.rsp.restore=0x112ff8
-[context] entered task stack: task id=4 name=task_yield_from current.rsp=0x112ff8
+[context] prepared initial frame: task id=4 name=task_yield_from context.rsp=0x113ff8
+[context] prepared initial frame: task id=5 name=task_yield_to context.rsp=0x1143f8
+[context] switch begin: from=boot to id=4 name=task_yield_from boot.rsp.before=0x112ef8 to.rsp.restore=0x113ff8
+[context] entered task stack: task id=4 name=task_yield_from current.rsp=0x113ff8
 [task_yield_from] executed
 [context] task entry returned: task id=4 name=task_yield_from
 [context] task entry finalized: task id=4 name=task_yield_from READY->DORMANT
-[context] task-to-task switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to from.rsp.before=0x112ff8 to.rsp.restore=0x1133f8
-[context] entered task stack: task id=5 name=task_yield_to current.rsp=0x1133f8
+[context] task-to-task switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to from.rsp.before=0x113ff8 to.rsp.restore=0x1143f8
+[context] entered task stack: task id=5 name=task_yield_to current.rsp=0x1143f8
 [task_yield_to] executed
 [context] task entry returned: task id=5 name=task_yield_to
 [context] task entry finalized: task id=5 name=task_yield_to RUNNING->DORMANT
-[context] switch back: from id=5 name=task_yield_to to=boot from.rsp.before=0x1133f8 boot.rsp.restore=0x111ec8
-[context] switch resumed: task=boot boot.rsp.after=0x111ec8 from id=5 name=task_yield_to from.rsp.saved=0x1133c8
+[context] switch back: from id=5 name=task_yield_to to=boot from.rsp.before=0x1143f8 boot.rsp.restore=0x112ec8
+[context] switch resumed: task=boot boot.rsp.after=0x112ec8 from id=5 name=task_yield_to from.rsp.saved=0x1143c8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [yield] switch end: result=0
@@ -124,10 +124,8 @@ kernel_main reached
 [cooperative] returned current: id=1 name=task_a prio=5 state=RUNNING
 [cooperative] ready again: result=ok id=1 name=task_a state=READY
 [cooperative] stop: reason=limit-reached
-[task] registered: id=6 name=task_wai_sem_from state=READY wait_sem_id=0 prio=5 entry=0x101b50 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=6 name=task_wai_sem_from state=READY wait_sem_id=0 prio=1 entry=0x101b00 stack_base=0x114400 stack_size=1024 stack_top=0x114800 context.rsp=0x114800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_wai_sem_from returned 6
-[task] registered: id=7 name=task_wai_sem_to state=READY wait_sem_id=0 prio=1 entry=0x101b70 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[kernel] task_register task_wai_sem_to returned 7
 [sem-smoke] begin
 [sem] table initialized
 [sem] initialized: id=1 name=sem_a count=1 max_count=1
@@ -139,39 +137,64 @@ kernel_main reached
 [task] waiting: id=6 name=task_wai_sem_from wait_sem_id=1 state=WAITING
 [sem-wq] enqueue: sem_id=1 task id=6 name=task_wai_sem_from queue_count=1
 [wai-sem] state transition: current id=6 name=task_wai_sem_from RUNNING->WAITING
-[wai-sem] next selected: id=7 name=task_wai_sem_to prio=1 state=READY
-[wai-sem] switch begin: from id=6 name=task_wai_sem_from to id=7 name=task_wai_sem_to
-[dispatcher] switch boundary begin: from id=6 name=task_wai_sem_from to id=7 name=task_wai_sem_to
-[dispatcher] state transition: to id=7 name=task_wai_sem_to READY->RUNNING
-[context] prepared initial frame: task id=7 name=task_wai_sem_to context.rsp=0x113bf8
-[context] switch begin: from=boot to id=7 name=task_wai_sem_to boot.rsp.before=0x111ec8 to.rsp.restore=0x113bf8
-[context] entered task stack: task id=7 name=task_wai_sem_to current.rsp=0x113bf8
-[task_wai_sem_to] executed
-[context] task entry returned: task id=7 name=task_wai_sem_to
-[context] task entry finalized: task id=7 name=task_wai_sem_to RUNNING->DORMANT
-[context] switch back: from id=7 name=task_wai_sem_to to=boot from.rsp.before=0x113bf8 boot.rsp.restore=0x111ee8
-[context] switch resumed: task=boot boot.rsp.after=0x111ee8 from id=7 name=task_wai_sem_to from.rsp.saved=0x113bc8
+[wai-sem] next selected: id=1 name=task_a prio=5 state=READY
+[wai-sem] switch begin: from id=6 name=task_wai_sem_from to id=1 name=task_a
+[dispatcher] switch boundary begin: from id=6 name=task_wai_sem_from to id=1 name=task_a
+[dispatcher] state transition: to id=1 name=task_a READY->RUNNING
+[context] prepared initial frame: task id=1 name=task_a context.rsp=0x1133f8
+[context] switch begin: from=boot to id=1 name=task_a boot.rsp.before=0x112ec8 to.rsp.restore=0x1133f8
+[context] entered task stack: task id=1 name=task_a current.rsp=0x1133f8
+[task_a] executed
+[context] task entry returned: task id=1 name=task_a
+[context] task entry finalized: task id=1 name=task_a RUNNING->DORMANT
+[context] switch back: from id=1 name=task_a to=boot from.rsp.before=0x1133f8 boot.rsp.restore=0x112ee8
+[context] switch resumed: task=boot boot.rsp.after=0x112ee8 from id=1 name=task_a from.rsp.saved=0x1133c8
 [dispatcher] switch boundary end: result=0
 [wai-sem] switch end: result=0
+[task] registered: id=7 name=task_wai_sem_to state=READY wait_sem_id=0 prio=5 entry=0x102860 stack_base=0x114800 stack_size=1024 stack_top=0x114c00 context.rsp=0x114c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[kernel] task_register task_wai_sem_to returned 7
 [sig-sem] called: sem_id=1
 [sem-wq] dequeue: sem_id=1 task id=6 name=task_wai_sem_from queue_count=0
 [sig-sem] waiting task dequeued: id=6 name=task_wai_sem_from state=WAITING wait_sem_id=1
 [task] ready: id=6 name=task_wai_sem_from wait_sem_id=none state=READY
 [sig-sem] wakeup: sem_id=1 task id=6 name=task_wai_sem_from WAITING->READY
-[sig-sem] completed: result=0 action=wakeup-no-switch
+[sig-sem] preempt check: current id=7 name=task_wai_sem_to prio=5 woken id=6 name=task_wai_sem_from prio=1
+[sig-sem] preempt required: reason=wakeup-higher-priority
+[sig-sem] switch begin: from id=7 name=task_wai_sem_to to id=6 name=task_wai_sem_from
+[dispatcher] switch boundary begin: from id=7 name=task_wai_sem_to to id=6 name=task_wai_sem_from
+[dispatcher] state transition: from id=7 name=task_wai_sem_to RUNNING->READY
+[dispatcher] state transition: to id=6 name=task_wai_sem_from READY->RUNNING
+[context] prepared initial frame: task id=7 name=task_wai_sem_to context.rsp=0x114bf8
+[context] prepared initial frame: task id=6 name=task_wai_sem_from context.rsp=0x1147f8
+[context] switch begin: from=boot to id=7 name=task_wai_sem_to boot.rsp.before=0x112ee8 to.rsp.restore=0x114bf8
+[context] entered task stack: task id=7 name=task_wai_sem_to current.rsp=0x114bf8
+[task_wai_sem_to] executed
+[context] task entry returned: task id=7 name=task_wai_sem_to
+[context] task entry finalized: task id=7 name=task_wai_sem_to READY->DORMANT
+[context] task-to-task switch begin: from id=7 name=task_wai_sem_to to id=6 name=task_wai_sem_from from.rsp.before=0x114bf8 to.rsp.restore=0x1147f8
+[context] entered task stack: task id=6 name=task_wai_sem_from current.rsp=0x1147f8
+[task_wai_sem_from] executed
+[context] task entry returned: task id=6 name=task_wai_sem_from
+[context] task entry finalized: task id=6 name=task_wai_sem_from RUNNING->DORMANT
+[context] switch back: from id=6 name=task_wai_sem_from to=boot from.rsp.before=0x1147f8 boot.rsp.restore=0x112e78
+[context] switch resumed: task=boot boot.rsp.after=0x112e78 from id=6 name=task_wai_sem_from from.rsp.saved=0x1147c8
+[context] task-to-task switch end
+[dispatcher] switch boundary end: result=0
+[sig-sem] switch end: result=0
+[sig-sem] completed: result=0 action=wakeup-switch
 [sig-sem] called: sem_id=1
 [sem-wq] empty: sem_id=1
 [sig-sem] no waiting task: sem_id=1
 [sig-sem] count incremented: sem_id=1 count 0->1
 [sig-sem] completed: result=0 action=count-up
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 entry=0x101570 stack_base=0x112000 stack_size=1024 stack_top=0x112400 context.rsp=0x112400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 entry=0x1015f0 stack_base=0x112400 stack_size=1024 stack_top=0x112800 context.rsp=0x1127c8 context.rbp=0x1127f0 context.rbx=0x0 context.r12=0x113c78 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 entry=0x101610 stack_base=0x112800 stack_size=1024 stack_top=0x112c00 context.rsp=0x112bc8 context.rbp=0x112bf0 context.rbx=0x0 context.r12=0x113cf0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 entry=0x1018a0 stack_base=0x112c00 stack_size=1024 stack_top=0x113000 context.rsp=0x112fc8 context.rbp=0x112ff0 context.rbx=0x0 context.r12=0x113d68 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 entry=0x1018c0 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x1133c8 context.rbp=0x1133f0 context.rbx=0x0 context.r12=0x113de0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=5 state=READY wait_sem_id=0 entry=0x101b50 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x113800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=1 state=DORMANT wait_sem_id=0 entry=0x101b70 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113bc8 context.rbp=0x113bf0 context.rbx=0x0 context.r12=0x113ed0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 entry=0x101520 stack_base=0x113000 stack_size=1024 stack_top=0x113400 context.rsp=0x1133c8 context.rbp=0x1133f0 context.rbx=0x0 context.r12=0x114c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 entry=0x1015a0 stack_base=0x113400 stack_size=1024 stack_top=0x113800 context.rsp=0x1137c8 context.rbp=0x1137f0 context.rbx=0x0 context.r12=0x114c78 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 entry=0x1015c0 stack_base=0x113800 stack_size=1024 stack_top=0x113c00 context.rsp=0x113bc8 context.rbp=0x113bf0 context.rbx=0x0 context.r12=0x114cf0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 entry=0x101850 stack_base=0x113c00 stack_size=1024 stack_top=0x114000 context.rsp=0x113fc8 context.rbp=0x113ff0 context.rbx=0x0 context.r12=0x114d68 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 entry=0x101870 stack_base=0x114000 stack_size=1024 stack_top=0x114400 context.rsp=0x1143c8 context.rbp=0x1143f0 context.rbx=0x0 context.r12=0x114de0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 entry=0x101b00 stack_base=0x114400 stack_size=1024 stack_top=0x114800 context.rsp=0x1147c8 context.rbp=0x1147f0 context.rbx=0x0 context.r12=0x114e58 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=DORMANT wait_sem_id=0 entry=0x102860 stack_base=0x114800 stack_size=1024 stack_top=0x114c00 context.rsp=0x114bc8 context.rbp=0x114bf0 context.rbx=0x0 context.r12=0x114ed0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
 [sem] id=1 name=sem_a count=1 max_count=1 wait_queue_count=0

@@ -142,6 +142,23 @@ int sem_dequeue_waiter(int sem_id, int *task_id);
  * @param sem_id 対象セマフォID。
  * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
+/**
+ * @brief 12.4のsig_sem相当のセマフォ返却とwakeup後preemption判定を行う。
+ *
+ * @details
+ * 対象semaphoreのFIFO wait queueにWAITING taskがあれば、1 taskだけdequeueしてREADYへ戻す。
+ * READY復帰時には `wait_sem_id` を必ずclearし、このwakeup経路ではsemaphore countを増やさない。
+ * READYへ戻した後、task文脈のcurrent RUNNING taskとwoken READY taskのpriorityを比較し、
+ * woken taskのpriority値がcurrentより小さい場合だけ既存の `dispatcher_switch_to()` 境界へ進む。
+ *
+ * 同一priorityはまだtime slice対象にしない。低優先度wakeupと同じくno-switchで完了する。
+ * wait queueが空の場合だけcountを1増やす。priority順wait queue、timeout付き `twai_sem`、
+ * sleep/delay queue、round-robin、timer IRQ handlerからの呼び出し、dispatch pending経路との統合、
+ * 完全な割り込み復帰フレーム切替はここでは扱わない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
 int sig_sem(int sem_id);
 
 /**

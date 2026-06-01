@@ -67,7 +67,7 @@ $(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/i
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/task.c -o $(TASK_OBJ)
 
-$(SEMAPHORE_OBJ): kernel/semaphore.c kernel/include/semaphore.h kernel/include/task.h kernel/include/hal/console.h | dirs
+$(SEMAPHORE_OBJ): kernel/semaphore.c kernel/include/semaphore.h kernel/include/task.h kernel/include/dispatcher.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/semaphore.c -o $(SEMAPHORE_OBJ)
 
 $(TIMER_OBJ): kernel/timer.c kernel/include/timer.h kernel/include/hal/console.h | dirs

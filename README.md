@@ -81,6 +81,7 @@ The current implementation covers the following milestones:
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
+| 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -661,6 +662,22 @@ Chapter 12 Section 12.3 adds a semaphore-local FIFO wait queue:
 * Priority-ordered wait queues, timeout waits, wakeup-after-preemption checks,
   immediate context switch after `sig_sem()`, same-priority time slice, and
   round-robin remain unimplemented.
+
+Chapter 12 Section 12.4 adds a wakeup-after-preemption check to `sig_sem()`:
+
+* After `sig_sem()` dequeues a WAITING task and returns it to READY, it compares
+  the current RUNNING task priority with the woken READY task priority.
+* A smaller numeric priority value is treated as higher priority.
+* If the woken task is higher priority than current, `sig_sem()` proceeds to the
+  existing `dispatcher_switch_to(from, to)` boundary and completes with
+  `action=wakeup-switch`.
+* Same-priority and lower-priority wakeups remain `action=wakeup-no-switch`;
+  same-priority tasks are still not time slice targets.
+* The 12.3 FIFO wait queue order, `wait_sem_id` clear, and semaphore count rule
+  are preserved: waking a waiting task does not increment count, and count is
+  incremented only when the wait queue is empty.
+* Priority-ordered wait queues, timeout waits, sleep/delay queues,
+  same-priority time slicing, and round-robin remain unimplemented.
 
 ---
 
@@ -1244,6 +1261,7 @@ The current kernel includes:
 * `sig_sem()` waiting task to READY transition
 * `sig_sem()` no-waiting-task semaphore count increment path
 * Semaphore-local FIFO wait queue for `wai_sem()` / `sig_sem()`
+* `sig_sem()` wakeup-after-preemption check for higher-priority READY tasks
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1371,6 +1389,13 @@ entered WAITING, and that `sig_sem()` dequeues from the target semaphore before
 returning the task to READY. They also state that priority ordering, timeout
 waits, wakeup-after-preemption checks, same-priority time slice, and
 round-robin remain out of scope.
+For Chapter 12 Section 12.4, comments document that `sig_sem()` is a
+task-context API which compares priority only after a dequeued WAITING task has
+returned to READY and cleared `wait_sem_id`. They also state that only a
+higher-priority wakeup proceeds to the existing dispatcher switch boundary, while
+priority-ordered wait queues, timeout waits, same-priority time slice,
+round-robin, timer IRQ handler calls to `sig_sem()`, and complete
+interrupt-return-frame switching remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1529,6 +1554,7 @@ See the LICENSE file for details.
 * [x] wai_sem RUNNING to WAITING transition
 * [x] sig_sem waiting task to READY transition
 * [x] semaphore FIFO wait queue
+* [x] semaphore wakeup preemption decision
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1589,6 +1615,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 12      | 12.1    | wai_sem RUNNING to WAITING transition      | v12.1-wai-sem-running-to-waiting | Completed |
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
+| 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 
 ---
 

@@ -61,6 +61,8 @@ static unsigned char task_yield_to_stack[TASK_STACK_SIZE] __attribute__((aligned
 static unsigned char task_wai_sem_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_wai_sem_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
+static void task_wai_sem_to(void);
+
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
  *
@@ -914,21 +916,25 @@ static void kernel_run_cooperative_entries(void)
 }
 
 /**
- * @brief 第6章6.1のセマフォ基盤smoke sequenceを実行する。
+ * @brief 第12章12.4のsemaphore wakeup preemption smoke sequenceを実行する。
  *
  * @details
  * 静的セマフォを作成し、RUNNING current taskから `wai_sem()` を2回呼ぶ。
  * 1回目はcountを取得してswitchせず、2回目はcount不足によりcurrentをWAITINGへ
- * 落として次READY taskへdispatcher境界経由で進む。
+ * 落としてFIFO wait queueへenqueueする。その後、低優先度のtask文脈をcurrent
+ * RUNNINGとして確定し、`sig_sem()` で高優先度taskをREADYへ戻した直後に
+ * `dispatcher_switch_to()` へ進むことを観測する。
  *
- * この検証は `sig_sem()` wakeup、wait queue、timeout、preemption、
- * wakeup後preemption、同一優先度time slice、round-robinとは接続しない。
+ * この検証はtask文脈APIのsmokeであり、timer IRQ handlerやdispatch pending経路から
+ * `sig_sem()` を呼ばない。priority順wait queue、timeout、同一優先度time slice、
+ * round-robin、完全な割り込み復帰フレーム切替も扱わない。
  *
  * @param current_task_id `wai_sem()` を呼ぶRUNNING current taskのid。
  */
 static void kernel_run_semaphore_smoke(int current_task_id)
 {
     int sem_a_id;
+    int signaler_task_id;
 
     hal_console_write("[sem-smoke] begin\n");
     /*
@@ -959,11 +965,24 @@ static void kernel_run_semaphore_smoke(int current_task_id)
     (void)wai_sem(sem_a_id);
 
     /*
-     * 12.3では、12.1でWAITINGへ落としたtaskを対象semaphoreのFIFO wait queueへ積み、
-     * sig_sem()でそのqueueから1 taskを取り出してREADYへ戻す。wakeup経路ではcountを
-     * 増やさず、次の呼び出しではqueue空としてcount-upする。priority順、wakeup後
-     * preemption、timeout、time slice、round-robinはまだ扱わない。
+     * 12.4では、WAITINGへ落としたtaskより低優先度のtask文脈をsig_sem()直前に
+     * current RUNNINGとして確定する。これにより、wakeup後にREADYへ戻った高優先度task
+     * だけがdispatcher switch対象になることを、timer IRQ経路と混ぜずに観測する。
      */
+    signaler_task_id = task_register(
+        "task_wai_sem_to",
+        task_wai_sem_to,
+        5,
+        task_wai_sem_to_stack,
+        sizeof(task_wai_sem_to_stack)
+    );
+    kernel_log_task_register_result("task_wai_sem_to", signaler_task_id);
+    if (signaler_task_id <= 0 ||
+        dispatcher_commit_current(task_get_by_id(signaler_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[sem-smoke] stop: reason=signaler-current-commit-failed\n");
+        return;
+    }
+
     (void)sig_sem(sem_a_id);
     (void)sig_sem(sem_a_id);
 
@@ -1125,7 +1144,6 @@ void kernel_main(void)
     int task_yield_from_id;
     int task_yield_to_id;
     int task_wai_sem_from_id;
-    int task_wai_sem_to_id;
     const tcb_t *selected_task;
     const tcb_t *context_next_task;
 
@@ -1352,29 +1370,21 @@ void kernel_main(void)
     kernel_run_cooperative_entries();
 
     /*
-     * 第12章12.3では、専用のREADY taskを追加して `wai_sem()` のWAITING化と
-     * semaphoreごとのFIFO wait queue enqueue/dequeueを観測する。priority順、
-     * timeout、wakeup後preemption、同一優先度time slice、round-robinはまだ導入しない。
+     * 第12章12.4では、専用のREADY taskを追加して `wai_sem()` のWAITING化、
+     * semaphoreごとのFIFO wait queue enqueue/dequeue、`sig_sem()` によるREADY復帰後の
+     * priority比較、そして高優先度wakeup時だけdispatcher境界へ進むことを観測する。
+     * priority順wait queue、timeout、同一優先度time slice、round-robinはまだ導入しない。
      */
     task_wai_sem_from_id = task_register(
         "task_wai_sem_from",
         task_wai_sem_from,
-        5,
+        1,
         task_wai_sem_from_stack,
         sizeof(task_wai_sem_from_stack)
     );
     kernel_log_task_register_result("task_wai_sem_from", task_wai_sem_from_id);
 
-    task_wai_sem_to_id = task_register(
-        "task_wai_sem_to",
-        task_wai_sem_to,
-        1,
-        task_wai_sem_to_stack,
-        sizeof(task_wai_sem_to_stack)
-    );
-    kernel_log_task_register_result("task_wai_sem_to", task_wai_sem_to_id);
-
-    if (task_wai_sem_from_id > 0 && task_wai_sem_to_id > 0) {
+    if (task_wai_sem_from_id > 0) {
         kernel_run_semaphore_smoke(task_wai_sem_from_id);
     }
 

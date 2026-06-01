@@ -18,6 +18,7 @@
 
 #include <stddef.h>
 
+#include "dispatcher.h"
 #include "hal/console.h"
 #include "semaphore.h"
 #include "task.h"
@@ -104,6 +105,128 @@ static void sem_write_int(int value)
     }
 
     sem_write_uint((unsigned long)value);
+}
+
+/**
+ * @brief 未使用のsemaphore slotを探す。
+ *
+ * @return 空きslot。なければNULL。
+ */
+/**
+ * @brief sig_sem()のtask表示用にid/nameだけを出力する。
+ *
+ * @details
+ * 第12章12.4のwakeup後preemption判定では、current taskとwoken taskを
+ * 同じ形式で複数回ログへ出す。ここではTCBを読み取るだけで、task状態、
+ * dispatcher current、semaphore count、wait queueは変更しない。
+ *
+ * @param label 表示するtaskの役割名。例: `current`、`woken`、`from`、`to`。
+ * @param task 表示対象task。NULLの場合は `none` として出力する。
+ */
+static void sig_sem_log_task_id_name(const char *label, const tcb_t *task)
+{
+    hal_console_write(label);
+    if (task == NULL) {
+        hal_console_write(" none");
+        return;
+    }
+
+    hal_console_write(" id=");
+    sem_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write((task->name != NULL) ? task->name : "(null)");
+}
+
+/**
+ * @brief READY復帰済みtaskがcurrentより高優先度なら既存dispatcher境界へ進める。
+ *
+ * @details
+ * 第12章12.4のtask文脈preemption判定である。`sig_sem()` がWAITING taskを
+ * READYへ戻し、`wait_sem_id` をclearした後にだけ呼ぶ。priority値が小さいtaskを
+ * 高優先度とし、woken taskがcurrent RUNNING taskより高優先度の場合だけ
+ * `dispatcher_switch_to()` へ接続する。同一優先度はまだtime slice対象にせず、
+ * 低優先度と同じno-switchとして扱う。
+ *
+ * このhelperはtask文脈専用であり、timer IRQ handlerやdispatch pending
+ * request/consume経路とは責務を混ぜない。priority順wait queue、timeout付き待ち、
+ * sleep/delay queue、round-robin、完全な割り込み復帰フレーム切替も扱わない。
+ *
+ * @param woken_task_id READYへ戻したtask ID。
+ * @param switched switchへ進んだ場合に1、no-switchの場合に0を書き込む。
+ * @return 成功時はSEM_OK。dispatcher接続に失敗した場合はSEM_ERR_TASK。
+ */
+static int sig_sem_switch_if_woken_has_higher_priority(int woken_task_id, int *switched)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *woken = task_get_by_id(woken_task_id);
+    tcb_t *current_mutable;
+    tcb_t *woken_mutable;
+    int switch_result;
+
+    if (switched != NULL) {
+        *switched = 0;
+    }
+
+    hal_console_write("[sig-sem] preempt check:");
+    sig_sem_log_task_id_name(" current", current);
+    if (current != NULL) {
+        hal_console_write(" prio=");
+        sem_write_int(current->priority);
+    }
+    sig_sem_log_task_id_name(" woken", woken);
+    if (woken != NULL) {
+        hal_console_write(" prio=");
+        sem_write_int(woken->priority);
+    }
+    hal_console_write("\n");
+
+    if (current == NULL || woken == NULL || current->state != TASK_STATE_RUNNING ||
+        woken->state != TASK_STATE_READY) {
+        /*
+         * READY復帰自体は完了済みなので、比較前提が崩れてもcountは増やさない。
+         * task文脈のcurrent RUNNINGがない状態ではswitchへ進まない。
+         */
+        hal_console_write("[sig-sem] preempt not required: reason=invalid-current-or-woken-state\n");
+        return SEM_OK;
+    }
+
+    if (woken->priority >= current->priority) {
+        /*
+         * 同一priorityは12.4でもtime slice対象外である。低優先度wakeupと同じく
+         * currentを維持し、schedulerやdispatcherへ進まない。
+         */
+        hal_console_write("[sig-sem] preempt not required: reason=same-or-lower-priority\n");
+        return SEM_OK;
+    }
+
+    hal_console_write("[sig-sem] preempt required: reason=wakeup-higher-priority\n");
+
+    current_mutable = task_get_mutable_by_id(current->id);
+    woken_mutable = task_get_mutable_by_id(woken->id);
+    if (current_mutable == NULL || woken_mutable == NULL) {
+        hal_console_write("[sig-sem] switch failed: reason=task-not-found\n");
+        return SEM_ERR_TASK;
+    }
+
+    hal_console_write("[sig-sem] switch begin:");
+    sig_sem_log_task_id_name(" from", current);
+    sig_sem_log_task_id_name(" to", woken);
+    hal_console_write("\n");
+
+    switch_result = dispatcher_switch_to(current_mutable, woken_mutable);
+
+    hal_console_write("[sig-sem] switch end: result=");
+    sem_write_int(switch_result);
+    hal_console_write("\n");
+
+    if (switch_result != DISPATCHER_OK) {
+        return SEM_ERR_TASK;
+    }
+
+    if (switched != NULL) {
+        *switched = 1;
+    }
+    return SEM_OK;
 }
 
 /**
@@ -459,6 +582,21 @@ int sem_dequeue_waiter(int sem_id, int *task_id)
     return SEM_OK;
 }
 
+/**
+ * @brief 12.4のtask文脈sig_semとしてwakeup後preemption判定まで実行する。
+ *
+ * @details
+ * 対象semaphoreのFIFO wait queueからWAITING taskを1件dequeueし、READYへ戻した後に
+ * current RUNNING taskとのpriority比較を行う。woken taskのpriority値が小さい場合だけ
+ * 既存のdispatcher switch境界へ接続する。同一priorityまたは低優先度ではswitchしない。
+ * 待ちtaskがいる場合はsemaphore countを増やさず、queueが空の場合だけcount-upする。
+ *
+ * このAPIはtask文脈用であり、timer IRQ handlerから呼ばない。priority順wait queue、
+ * timeout付き待ち、同一優先度time slice、round-robinはまだ扱わない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
 int sig_sem(int sem_id)
 {
     semaphore_t *sem = find_semaphore_by_id(sem_id);
@@ -466,6 +604,8 @@ int sig_sem(int sem_id)
     int woken_task_id = 0;
     int wake_result;
     int dequeue_result;
+    int preempt_result;
+    int switched = 0;
     const tcb_t *waiting_task;
     const char *woken_name;
 
@@ -532,7 +672,19 @@ int sig_sem(int sem_id)
         hal_console_write(" name=");
         hal_console_write(woken_name);
         hal_console_write(" WAITING->READY\n");
-        hal_console_write("[sig-sem] completed: result=0 action=wakeup-no-switch\n");
+        preempt_result = sig_sem_switch_if_woken_has_higher_priority(woken_task_id, &switched);
+        if (preempt_result != SEM_OK) {
+            hal_console_write("[sig-sem] completed: result=");
+            sem_write_int(preempt_result);
+            hal_console_write(" action=wakeup-switch-failed\n");
+            return preempt_result;
+        }
+
+        if (switched) {
+            hal_console_write("[sig-sem] completed: result=0 action=wakeup-switch\n");
+        } else {
+            hal_console_write("[sig-sem] completed: result=0 action=wakeup-no-switch\n");
+        }
         return SEM_OK;
     }
 
