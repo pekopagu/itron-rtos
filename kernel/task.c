@@ -289,6 +289,31 @@ static const char *task_state_to_string(task_state_t state)
 }
 
 /**
+ * @brief WAITING理由をログ用の固定文字列へ変換する。
+ *
+ * @details
+ * 第13章13.1では `TASK_STATE_WAITING` の内訳を観測するため、
+ * semaphore待ちとdelay待ちをTCB上の別フィールドで区別する。このhelperは表示専用で、
+ * 待ち理由の変更やdelay tickの減算は行わない。
+ *
+ * @param reason 変換対象の待ち理由。
+ * @return ログへ出力する固定文字列。
+ */
+static const char *task_wait_reason_to_string(task_wait_reason_t reason)
+{
+    switch (reason) {
+    case TASK_WAIT_REASON_NONE:
+        return "none";
+    case TASK_WAIT_REASON_SEMAPHORE:
+        return "semaphore";
+    case TASK_WAIT_REASON_DELAY:
+        return "delay";
+    default:
+        return "unknown";
+    }
+}
+
+/**
  * @brief タスク管理テーブル全体を初期化する。
  *
  * @details
@@ -311,6 +336,8 @@ void task_init(void)
         task_table[index].priority = 0;
         task_table[index].state = TASK_STATE_UNUSED;
         task_table[index].wait_sem_id = 0;
+        task_table[index].wait_reason = TASK_WAIT_REASON_NONE;
+        task_table[index].delay_ticks_remaining = 0;
         task_table[index].stack_base = NULL;
         task_table[index].stack_size = 0;
         task_table[index].stack_top = NULL;
@@ -373,6 +400,8 @@ int task_register(
     /* 登録済みだが未実行のタスクとして、将来のスケジューラ候補にしやすいREADYへ置く。 */
     slot->state = TASK_STATE_READY;
     slot->wait_sem_id = 0;
+    slot->wait_reason = TASK_WAIT_REASON_NONE;
+    slot->delay_ticks_remaining = 0;
     slot->stack_base = stack_base;
     slot->stack_size = stack_size;
     slot->stack_top = task_calculate_stack_top(stack_base, stack_size);
@@ -391,6 +420,10 @@ int task_register(
     hal_console_write(task_state_to_string(slot->state));
     hal_console_write(" wait_sem_id=");
     task_write_int(slot->wait_sem_id);
+    hal_console_write(" wait_reason=");
+    hal_console_write(task_wait_reason_to_string(slot->wait_reason));
+    hal_console_write(" delay_ticks_remaining=");
+    task_write_uint(slot->delay_ticks_remaining);
     hal_console_write(" prio=");
     task_write_int(slot->priority);
     hal_console_write(" entry=");
@@ -443,6 +476,10 @@ void task_dump(void)
         hal_console_write(task_state_to_string(task->state));
         hal_console_write(" wait_sem_id=");
         task_write_int(task->wait_sem_id);
+        hal_console_write(" wait_reason=");
+        hal_console_write(task_wait_reason_to_string(task->wait_reason));
+        hal_console_write(" delay_ticks_remaining=");
+        task_write_uint(task->delay_ticks_remaining);
         hal_console_write(" entry=");
         task_write_hex((unsigned long)task->entry);
         hal_console_write(" stack_base=");
@@ -603,7 +640,14 @@ int task_mark_running(int task_id)
          * 第3章3.3の論理状態確定だけを行う。
          * 入口関数呼び出し、スタック切り替え、レジスタ保存、コンテキストスイッチは行わない。
          */
+        /*
+         * RUNNINGへ入るtaskは待ち状態ではない。以前のsemaphore/delay観測値が残ると、
+         * dumpや将来のwakeup判定で誤解を招くため、current化と同時にclearする。
+         */
         task->state = TASK_STATE_RUNNING;
+        task->wait_reason = TASK_WAIT_REASON_NONE;
+        task->wait_sem_id = 0;
+        task->delay_ticks_remaining = 0;
         return 0;
     }
 
@@ -657,7 +701,14 @@ int task_mark_ready_from_running(int task_id)
             return TASK_ERR_BAD_STATE;
         }
 
+        /*
+         * READY taskはscheduler候補であり、待ち理由を持たない。yield経路などで
+         * RUNNINGから戻る場合も、古い待ち観測値を候補taskへ持ち越さない。
+         */
         task->state = TASK_STATE_READY;
+        task->wait_reason = TASK_WAIT_REASON_NONE;
+        task->wait_sem_id = 0;
+        task->delay_ticks_remaining = 0;
         return 0;
     }
 
@@ -716,7 +767,14 @@ int task_mark_dormant_from_entry_return(int task_id)
          * ここで行うのはTCB上のlifecycle確定だけである。
          * ready queue操作、scheduler再選択、dispatcher current更新、context保存復元は行わない。
          */
+        /*
+         * DORMANTは起動単位の完了状態として扱う。待ち解除ではないため、
+         * semaphore/delayの観測値を残さず、次章以降の再起動設計へ持ち込まない。
+         */
         task->state = TASK_STATE_DORMANT;
+        task->wait_reason = TASK_WAIT_REASON_NONE;
+        task->wait_sem_id = 0;
+        task->delay_ticks_remaining = 0;
         return 0;
     }
 
@@ -763,8 +821,14 @@ int task_mark_waiting_on_sem(int task_id, int sem_id)
      * ここで初めてTCBを更新する。semaphore moduleではなくtask moduleに閉じることで、
      * schedulerやdispatcherが参照するstateの所有権を分散させない。
      */
+    /*
+     * wait_sem_idの意味をsemaphore待ち専用に保つため、待ち理由も同時に記録する。
+     * delay残tickはsemaphore待ちでは無意味なので0へ戻す。
+     */
     task->state = TASK_STATE_WAITING;
     task->wait_sem_id = sem_id;
+    task->wait_reason = TASK_WAIT_REASON_SEMAPHORE;
+    task->delay_ticks_remaining = 0;
 
     hal_console_write("[task] waiting: id=");
     task_write_int(task->id);
@@ -772,6 +836,73 @@ int task_mark_waiting_on_sem(int task_id, int sem_id)
     hal_console_write(task->name);
     hal_console_write(" wait_sem_id=");
     task_write_int(task->wait_sem_id);
+    hal_console_write(" wait_reason=");
+    hal_console_write(task_wait_reason_to_string(task->wait_reason));
+    hal_console_write(" delay_ticks_remaining=");
+    task_write_uint(task->delay_ticks_remaining);
+    hal_console_write(" state=");
+    hal_console_write(task_state_to_string(task->state));
+    hal_console_write("\n");
+
+    return 0;
+}
+
+/**
+ * @brief `dly_tsk()` 用にRUNNING taskをdelay WAITINGへ遷移させる。
+ *
+ * @details
+ * 第13章13.1の時間待ち入口で使う状態遷移である。semaphore待ちとは異なり、
+ * `wait_sem_id` は0のままにし、`wait_reason=TASK_WAIT_REASON_DELAY` と
+ * `delay_ticks_remaining` でdelay待ちを観測する。
+ *
+ * この関数はdelay queue、tickごとの残tick減算、tick到達時READY復帰、
+ * scheduler選択、dispatcher switchを行わない。それらは将来章または呼び出し元の
+ * 境界に残す。
+ *
+ * @param task_id delay待ちへ遷移するtask ID。
+ * @param delay_ticks 観測用に保持するdelay tick数。0は不正。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    if (task_id <= 0 || delay_ticks == 0U) {
+        return TASK_ERR_INVAL;
+    }
+
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * dly_tsk()はtask文脈APIなので、実行中current taskだけをdelay WAITINGへ落とす。
+     * READY/DORMANT/既存WAITING taskをここで再分類すると、schedulerやsemaphore待ちの
+     * 観測モデルを壊すため受け付けない。
+     */
+    if (task->state != TASK_STATE_RUNNING) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * delay待ちはsemaphore idを持たない。sig_sem()がこのtaskを誤って起こさないよう、
+     * wait_sem_idではなくwait_reasonとdelay_ticks_remainingで観測する。
+     */
+    task->state = TASK_STATE_WAITING;
+    task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_DELAY;
+    task->delay_ticks_remaining = delay_ticks;
+
+    hal_console_write("[task] delay waiting: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" delay_ticks=");
+    task_write_uint(task->delay_ticks_remaining);
+    hal_console_write(" wait_reason=");
+    hal_console_write(task_wait_reason_to_string(task->wait_reason));
+    hal_console_write(" wait_sem_id=");
+    hal_console_write("none");
     hal_console_write(" state=");
     hal_console_write(task_state_to_string(task->state));
     hal_console_write("\n");
@@ -806,7 +937,9 @@ const tcb_t *task_find_waiting_on_sem(int sem_id)
          * READY taskに古いwait_sem_idが残るような不整合が将来起きても、
          * wakeup候補として誤認しないためである。
          */
-        if (task->state == TASK_STATE_WAITING && task->wait_sem_id == sem_id) {
+        if (task->state == TASK_STATE_WAITING &&
+            task->wait_reason == TASK_WAIT_REASON_SEMAPHORE &&
+            task->wait_sem_id == sem_id) {
             return task;
         }
     }
@@ -844,7 +977,8 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
             continue;
         }
 
-        if (task->wait_sem_id != sem_id) {
+        if (task->wait_reason != TASK_WAIT_REASON_SEMAPHORE ||
+            task->wait_sem_id != sem_id) {
             continue;
         }
 
@@ -852,8 +986,14 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
          * 第6章6.1のwakeupは「最初に見つかった1件だけ」をREADYへ戻す。
          * ここにはFIFO/priorityの意味を持たせず、将来wait queueで置き換える。
          */
+        /*
+         * semaphore待ちからREADYへ戻ったtaskは、以後scheduler候補として扱う。
+         * wakeup済みのtaskを再度semaphore待ちとして見つけないよう待ち情報を消す。
+         */
         task->state = TASK_STATE_READY;
         task->wait_sem_id = 0;
+        task->wait_reason = TASK_WAIT_REASON_NONE;
+        task->delay_ticks_remaining = 0;
 
         /*
          * 呼び出し側がwakeup対象を追加ログや検証に使えるようIDを返す。
@@ -869,6 +1009,10 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id)
         hal_console_write(task->name);
         hal_console_write(" wait_sem_id=");
         hal_console_write("none");
+        hal_console_write(" wait_reason=");
+        hal_console_write(task_wait_reason_to_string(task->wait_reason));
+        hal_console_write(" delay_ticks_remaining=");
+        task_write_uint(task->delay_ticks_remaining);
         hal_console_write(" state=");
         hal_console_write(task_state_to_string(task->state));
         hal_console_write("\n");
@@ -907,12 +1051,20 @@ int task_wake_waiting_on_sem_by_id(int task_id, int sem_id)
      * wait queueから取り出したtaskだけをwakeup対象にする。queueとTCBがずれている場合は
      * 12.3の検証上の不整合として失敗させ、別taskを探して補正しない。
      */
-    if (task->state != TASK_STATE_WAITING || task->wait_sem_id != sem_id) {
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE ||
+        task->wait_sem_id != sem_id) {
         return TASK_ERR_BAD_STATE;
     }
 
+    /*
+     * queueからdequeueされたtaskだけをREADYへ戻す。復帰後はsemaphore待ちではないため、
+     * wait_reasonもdelay残tickも未待ち状態へ戻して、再wakeup対象から外す。
+     */
     task->state = TASK_STATE_READY;
     task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_NONE;
+    task->delay_ticks_remaining = 0;
 
     hal_console_write("[task] ready: id=");
     task_write_int(task->id);
@@ -920,6 +1072,10 @@ int task_wake_waiting_on_sem_by_id(int task_id, int sem_id)
     hal_console_write(task->name);
     hal_console_write(" wait_sem_id=");
     hal_console_write("none");
+    hal_console_write(" wait_reason=");
+    hal_console_write(task_wait_reason_to_string(task->wait_reason));
+    hal_console_write(" delay_ticks_remaining=");
+    task_write_uint(task->delay_ticks_remaining);
     hal_console_write(" state=");
     hal_console_write(task_state_to_string(task->state));
     hal_console_write("\n");

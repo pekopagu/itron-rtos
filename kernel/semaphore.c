@@ -502,6 +502,22 @@ int sem_enqueue_waiter(int sem_id, int task_id)
         return SEM_ERR_INVAL;
     }
 
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE ||
+        task->wait_sem_id != sem_id) {
+        /*
+         * 13.1ではdelay待ちも同じWAITING stateを使うため、semaphore queueには
+         * semaphore待ちとして遷移済みのtaskだけを登録する。delay待ちtaskをここで
+         * 受け入れると `sig_sem()` が時間待ちtaskを起こせてしまう。
+         */
+        hal_console_write("[sem-wq] enqueue rejected: reason=not-semaphore-waiter sem_id=");
+        sem_write_int(sem_id);
+        hal_console_write(" task id=");
+        sem_write_int(task_id);
+        hal_console_write("\n");
+        return SEM_ERR_TASK;
+    }
+
     if (sem->wait_count >= MAX_TASKS) {
         return SEM_ERR_OVERFLOW;
     }

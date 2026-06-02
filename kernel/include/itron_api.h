@@ -17,6 +17,8 @@
 #ifndef ITRON_RTOS_ITRON_API_H
 #define ITRON_RTOS_ITRON_API_H
 
+#include <stdint.h>
+
 /**
  * @brief `yield_tsk()` の観測成功を示す戻り値。
  *
@@ -72,6 +74,42 @@
 #define WAI_SEM_ERR_DISPATCH (-3)
 
 /**
+ * @brief `dly_tsk()` の観測成功を示す戻り値。
+ *
+ * @details
+ * RUNNING current taskをdelay WAITINGへ遷移させ、次READY taskがある場合は
+ * dispatcher/context switch境界へ到達したことを示す。delay満了によるREADY復帰は
+ * 13.1ではまだ扱わない。
+ */
+#define DLY_TSK_OK 0
+
+/**
+ * @brief `dly_tsk()` の不正delay指定を示す戻り値。
+ *
+ * @details
+ * 13.1では `delay_ticks == 0` をno-opではなくエラーとして扱う。エラー時は
+ * current taskの状態、待ち理由、delay残tickを変更しない。
+ */
+#define DLY_TSK_ERR_INVALID_DELAY (-1)
+
+/**
+ * @brief `dly_tsk()` のcurrent task不正状態を示す戻り値。
+ *
+ * @details
+ * dispatcher currentが存在しない、またはRUNNINGではない場合に返す。`dly_tsk()` は
+ * task文脈APIであり、timer IRQ handler本体から呼ぶAPIではない。
+ */
+#define DLY_TSK_ERR_INVALID_CURRENT_STATE (-2)
+
+/**
+ * @brief `dly_tsk()` の状態遷移またはswitch失敗を示す戻り値。
+ *
+ * @details
+ * RUNNING->WAITING遷移、task再取得、dispatcher switch境界で失敗した場合に返す。
+ */
+#define DLY_TSK_ERR_DISPATCH (-3)
+
+/**
  * @brief μITRON風の自発的yield要求入口。
  *
  * @details
@@ -103,5 +141,22 @@ int yield_tsk(void);
  * @return 成功時はWAI_SEM_OK。失敗時はWAI_SEM_ERR_*。
  */
 int wai_sem(int sem_id);
+
+/**
+ * @brief μITRON風のdelay待ちAPI入口。
+ *
+ * @details
+ * dispatcherが保持するcurrent taskをtask文脈の呼び出し元として扱い、
+ * `delay_ticks > 0` の場合だけRUNNING current taskをdelay理由のWAITINGへ遷移させる。
+ * その後、既存schedulerで次READY taskを選択し、存在すれば既存
+ * `dispatcher_switch_to()` 境界へ進む。
+ *
+ * 13.1ではsleep/delay queue、tickごとのdelay decrement、tick到達時READY復帰、
+ * timeout付き `twai_sem`、timer IRQ handlerからの呼び出しは実装しない。
+ *
+ * @param delay_ticks delay待ちとして観測するtick数。0は不正。
+ * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
+ */
+int dly_tsk(uint32_t delay_ticks);
 
 #endif

@@ -20,6 +20,8 @@
 #ifndef ITRON_RTOS_TASK_H
 #define ITRON_RTOS_TASK_H
 
+#include <stdint.h>
+
 #define MAX_TASKS 256
 
 #define TASK_ERR_FULL        (-1)
@@ -29,6 +31,21 @@
 #define TASK_ERR_BAD_STATE   (-5)
 
 typedef void (*task_entry_t)(void);
+
+/**
+ * @enum task_wait_reason_t
+ * @brief WAITING taskの待ち理由を観測するための分類。
+ *
+ * @details
+ * 第13章13.1では、同じ `TASK_STATE_WAITING` でもsemaphore待ちとdelay待ちを
+ * 区別できるようにする。これは観測用の最小モデルであり、delay queue、tickごとの
+ * 減算、tick到達時のREADY復帰、timeout付き待ちはまだ実装しない。
+ */
+typedef enum {
+    TASK_WAIT_REASON_NONE = 0,      /**< 待ちなし。READY/RUNNING/DORMANT/UNUSEDで使う。 */
+    TASK_WAIT_REASON_SEMAPHORE,     /**< `wai_sem()` によるsemaphore待ち。 */
+    TASK_WAIT_REASON_DELAY,         /**< `dly_tsk()` によるdelay待ち。 */
+} task_wait_reason_t;
 
 /**
  * @struct task_context_t
@@ -121,6 +138,8 @@ typedef struct {
     int priority;              /**< scheduler選択用優先度。数値が小さいほど高優先度として扱い、将来の優先度制御の基礎にする。 */
     task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
     int wait_sem_id;           /**< セマフォ待ち対象ID。0は待ちなし。第6章6.1では観測用で、timeoutやwait queueとは接続しない。 */
+    task_wait_reason_t wait_reason; /**< WAITINGの理由。semaphore待ちとdelay待ちを区別する観測値。 */
+    uint32_t delay_ticks_remaining; /**< delay待ちの残tick観測値。13.1では減算やREADY復帰は行わない。 */
     void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */
     unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。将来のスタック検証に使えるよう、現段階からTCBに含める。 */
     /**
@@ -317,6 +336,24 @@ int task_mark_dormant_from_entry_return(int task_id);
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
  */
 int task_mark_waiting_on_sem(int task_id, int sem_id);
+
+/**
+ * @brief 指定taskをdelay待ちのWAITING状態へ遷移させる。
+ *
+ * @details
+ * 第13章13.1の `dly_tsk()` 用の最小状態遷移APIである。対象taskはRUNNINGで
+ * ある必要があり、遷移後は `wait_reason=TASK_WAIT_REASON_DELAY`、
+ * `wait_sem_id=0`、`delay_ticks_remaining=delay_ticks` として観測できる。
+ *
+ * このAPIはsleep/delay queueを作らず、tickごとの減算、tick到達時READY復帰、
+ * timer IRQ handlerからの呼び出しも扱わない。scheduler選択やdispatcher switchは
+ * 呼び出し元の `dly_tsk()` が担当する。
+ *
+ * @param task_id delay待ちへ入れるtask ID。
+ * @param delay_ticks 観測用に保持するdelay tick数。0は不正。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks);
 
 /**
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。

@@ -60,8 +60,11 @@ static unsigned char task_yield_from_stack[TASK_STACK_SIZE] __attribute__((align
 static unsigned char task_yield_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_wai_sem_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_wai_sem_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_dly_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_dly_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 static void task_wai_sem_to(void);
+static void task_dly_to(void);
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -996,6 +999,44 @@ static void kernel_run_semaphore_smoke(int current_task_id)
 }
 
 /**
+ * @brief 第13章13.1のdelay task API smoke sequenceを実行する。
+ *
+ * @details
+ * `dly_tsk(0)` のinvalid-delay経路と、`dly_tsk(10)` によるRUNNING current taskの
+ * delay WAITING化、schedulerによる次READY選択、既存dispatcher switch境界への接続を
+ * 起動時ログで観測する。
+ *
+ * この検証はtask文脈APIの入口だけを扱う。sleep/delay queue、tickごとのdelay decrement、
+ * tick到達時READY復帰、timer IRQ handlerからの `dly_tsk()` 呼び出しは行わない。
+ *
+ * @param current_task_id `dly_tsk()` を呼ぶRUNNING current taskのid。
+ */
+static void kernel_run_delay_smoke(int current_task_id)
+{
+    hal_console_write("[dly-smoke] begin\n");
+
+    if (dispatcher_commit_current(task_get_by_id(current_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[dly-smoke] stop: reason=current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * 0 tickはyield相当やno-opにせず、13.1の仕様として入力エラーにする。
+     * この呼び出しではRUNNING current taskの状態を維持し、続く10 tick検証へ進む。
+     */
+    (void)dly_tsk(0U);
+
+    /*
+     * RUNNING current taskをdelay WAITINGへ落とし、既存schedulerが次READY taskだけを
+     * 選ぶことを確認する。delay満了によるREADY復帰はまだ実装しない。
+     */
+    (void)dly_tsk(10U);
+
+    task_dump();
+    hal_console_write("[dly-smoke] end\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -1120,6 +1161,31 @@ static void task_wai_sem_to(void)
 }
 
 /**
+ * @brief 13.1 dly_tsk smokeでdelay WAITINGへ入る側のtask entry。
+ *
+ * @details
+ * このentryは登録とcontext switch smokeの到達確認用であり、entry本体から
+ * `dly_tsk()` を呼ばない。13.1ではkernel smoke側でtask文脈API呼び出しを観測し、
+ * timer IRQ handlerやentry内自動delay処理とは接続しない。
+ */
+static void task_dly_from(void)
+{
+    hal_console_write("[task_dly_from] executed\n");
+}
+
+/**
+ * @brief 13.1 dly_tsk smokeでdelay WAITING後に選ばれるREADY task entry。
+ *
+ * @details
+ * `dly_tsk()` がRUNNING current taskをWAITINGへ落とした後、既存schedulerが選ぶ
+ * READY taskとして使う。delay満了復帰やround-robinはまだ扱わない。
+ */
+static void task_dly_to(void)
+{
+    hal_console_write("[task_dly_to] executed\n");
+}
+
+/**
  * @brief kernelのメインエントリポイント。
  *
  * @details
@@ -1144,6 +1210,8 @@ void kernel_main(void)
     int task_yield_from_id;
     int task_yield_to_id;
     int task_wai_sem_from_id;
+    int task_dly_from_id;
+    int task_dly_to_id;
     const tcb_t *selected_task;
     const tcb_t *context_next_task;
 
@@ -1386,6 +1454,33 @@ void kernel_main(void)
 
     if (task_wai_sem_from_id > 0) {
         kernel_run_semaphore_smoke(task_wai_sem_from_id);
+    }
+
+    /*
+     * 第13章13.1では、semaphore待ちとは別にdelay待ちの入口だけを観測する。
+     * delay queue、tick decrement、tick到達時READY復帰はまだ実装せず、RUNNING currentを
+     * delay WAITINGへ落として既存dispatcher境界へ進むところまでを確認する。
+     */
+    task_dly_from_id = task_register(
+        "task_dly_from",
+        task_dly_from,
+        5,
+        task_dly_from_stack,
+        sizeof(task_dly_from_stack)
+    );
+    kernel_log_task_register_result("task_dly_from", task_dly_from_id);
+
+    task_dly_to_id = task_register(
+        "task_dly_to",
+        task_dly_to,
+        1,
+        task_dly_to_stack,
+        sizeof(task_dly_to_stack)
+    );
+    kernel_log_task_register_result("task_dly_to", task_dly_to_id);
+
+    if (task_dly_from_id > 0 && task_dly_to_id > 0) {
+        kernel_run_delay_smoke(task_dly_from_id);
     }
 
     for (;;) {

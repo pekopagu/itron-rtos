@@ -82,6 +82,7 @@ The current implementation covers the following milestones:
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
+| 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -678,6 +679,23 @@ Chapter 12 Section 12.4 adds a wakeup-after-preemption check to `sig_sem()`:
   incremented only when the wait queue is empty.
 * Priority-ordered wait queues, timeout waits, sleep/delay queues,
   same-priority time slicing, and round-robin remain unimplemented.
+
+Chapter 13 Section 13.1 adds a `dly_tsk()`-style delay task API foundation:
+
+* `dly_tsk(uint32_t delay_ticks)` is introduced as a task-context API entry.
+* `delay_ticks == 0` is treated as an invalid delay and returns
+  `action=invalid-delay` without changing task state.
+* When `delay_ticks > 0`, the RUNNING current task transitions to WAITING with
+  `wait_reason=delay`, `wait_sem_id=0`, and `delay_ticks_remaining` preserved
+  for observation.
+* Delay waiting is distinct from semaphore waiting. `wai_sem()` still uses
+  `wait_reason=semaphore` and `wait_sem_id`, and `sig_sem()` does not wake
+  delay-waiting tasks.
+* After delay WAITING, the scheduler selects the next READY task and
+  `dly_tsk()` proceeds to the existing `dispatcher_switch_to(from, to)`
+  boundary when a READY task exists.
+* Sleep/delay queues, tick decrement, tick-reached READY return, timeout
+  `twai_sem`, same-priority time slicing, and round-robin remain unimplemented.
 
 ---
 
@@ -1283,14 +1301,15 @@ The following features are intentionally not implemented yet:
 * Interrupt return with `iretq`
 * Recoverable exception handling
 * Time slice
-* `dly_tsk`
+* Sleep/delay queue
+* Tick-based delay decrement
+* Tick-reached READY return for delay waiting tasks
 * Dynamic memory allocation
 * Timer-driven stack switching
 * Timeout wait (`twai_sem`)
 * Polling semaphore wait (`pol_sem`)
 * Priority semaphore wait queue
 * Timer-integrated semaphore blocking
-* Sleep or delay queue
 * Round-robin scheduling
 * Tick-based time slice management
 * Same-priority task ordering for time slicing
@@ -1396,6 +1415,13 @@ higher-priority wakeup proceeds to the existing dispatcher switch boundary, whil
 priority-ordered wait queues, timeout waits, same-priority time slice,
 round-robin, timer IRQ handler calls to `sig_sem()`, and complete
 interrupt-return-frame switching remain out of scope.
+For Chapter 13 Section 13.1, comments document that `dly_tsk()` is a
+task-context API entry which moves only a RUNNING current task to delay
+WAITING, records `wait_reason=delay` and `delay_ticks_remaining`, and then uses
+the existing scheduler/dispatcher switch boundary. They also state that
+sleep/delay queues, tick decrement, tick-reached READY return, timeout
+`twai_sem`, timer IRQ handler calls to `dly_tsk()`, and complete timer-based
+wakeup integration remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1555,6 +1581,7 @@ See the LICENSE file for details.
 * [x] sig_sem waiting task to READY transition
 * [x] semaphore FIFO wait queue
 * [x] semaphore wakeup preemption decision
+* [x] dly_tsk delay task API foundation
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1616,6 +1643,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 12      | 12.2    | sig_sem waiting task to READY transition   | v12.2-sig-sem-waiting-to-ready | Completed |
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
+| 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 
 ---
 

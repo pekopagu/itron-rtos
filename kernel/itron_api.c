@@ -60,6 +60,35 @@ static void itron_api_write_int(int value)
 }
 
 /**
+ * @brief APIログ用に符号なし32bit値を10進数で出力する。
+ *
+ * @details
+ * `dly_tsk()` のdelay tick値は `uint32_t` として受け取る。freestanding環境で
+ * printfを使わずHAL consoleだけで観測ログを出すため、表示専用の変換を持つ。
+ *
+ * @param value 出力する符号なし値。
+ */
+static void itron_api_write_uint32(uint32_t value)
+{
+    char buffer[10];
+    int index = 0;
+
+    if (value == 0U) {
+        hal_console_putc('0');
+        return;
+    }
+
+    while (value > 0U) {
+        buffer[index++] = (char)('0' + (value % 10U));
+        value /= 10U;
+    }
+
+    while (index > 0) {
+        hal_console_putc(buffer[--index]);
+    }
+}
+
+/**
  * @brief task状態をyield APIログ用の固定文字列へ変換する。
  *
  * @details
@@ -448,4 +477,157 @@ int wai_sem(int sem_id)
     }
 
     return WAI_SEM_OK;
+}
+
+/**
+ * @brief μITRON風 `dly_tsk()` のtask文脈API入口。
+ *
+ * @details
+ * 第13章13.1では、RUNNING current taskをdelay理由のWAITINGへ遷移させる
+ * 最小入口だけを実装する。`delay_ticks == 0` はno-opではなくエラーとして扱い、
+ * task状態も待ち観測フィールドも変更しない。
+ *
+ * delay WAITING化後は既存schedulerで次READY taskを選び、存在する場合だけ既存
+ * `dispatcher_switch_to()` 境界へ進む。sleep/delay queue、tickごとの減算、
+ * tick到達時READY復帰、timer IRQ handlerからの呼び出しはまだ扱わない。
+ *
+ * @param delay_ticks delay待ちとして観測するtick数。0は不正。
+ * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
+ */
+int dly_tsk(uint32_t delay_ticks)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *next;
+    tcb_t *current_mutable;
+    tcb_t *next_mutable;
+    int wait_result;
+    int switch_result;
+
+    if (current == NULL) {
+        /*
+         * dispatcher currentがない状態では「どのtaskをdelay待ちへ落とすか」が
+         * 決められない。delay_ticksの妥当性より先に呼び出し文脈の欠落を記録する。
+         */
+        hal_console_write("[dly-tsk] called: delay_ticks=");
+        itron_api_write_uint32(delay_ticks);
+        hal_console_write(" current=none\n");
+        hal_console_write("[dly-tsk] rejected: reason=invalid-current-state current=none\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return DLY_TSK_ERR_INVALID_CURRENT_STATE;
+    }
+
+    hal_console_write("[dly-tsk] called: delay_ticks=");
+    itron_api_write_uint32(delay_ticks);
+    hal_console_write(" current");
+    itron_api_log_task_identity(current);
+    hal_console_write("\n");
+
+    if (delay_ticks == 0U) {
+        /*
+         * 13.1では0 tick delayをyield相当やno-opにせず、明確な入力エラーにする。
+         * 状態変更前に返すことで、current taskのRUNNING状態と既存待ち情報を保つ。
+         */
+        hal_console_write("[dly-tsk] invalid delay: delay_ticks=0\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_INVALID_DELAY);
+        hal_console_write(" action=invalid-delay\n");
+        return DLY_TSK_ERR_INVALID_DELAY;
+    }
+
+    if (current->state != TASK_STATE_RUNNING) {
+        /*
+         * dly_tsk()はtask文脈APIなので、READY/DORMANT/WAITINGを再分類しない。
+         * 特に既存WAITING taskをdelay待ちへ上書きすると、semaphore待ちとの分離が壊れる。
+         */
+        hal_console_write("[dly-tsk] rejected: reason=invalid-current-state current");
+        itron_api_log_task_identity(current);
+        hal_console_write("\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return DLY_TSK_ERR_INVALID_CURRENT_STATE;
+    }
+
+    wait_result = task_mark_waiting_on_delay(current->id, delay_ticks);
+    if (wait_result != 0) {
+        /*
+         * currentのRUNNING確認後でも、task table側の状態が変わっていれば失敗させる。
+         * API層で補正せず、task moduleの所有する状態遷移契約を優先する。
+         */
+        hal_console_write("[dly-tsk] rejected: reason=delay-transition-failed err=");
+        itron_api_write_int(wait_result);
+        hal_console_write("\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        hal_console_write(" action=delay-transition-failed\n");
+        return DLY_TSK_ERR_DISPATCH;
+    }
+
+    hal_console_write("[dly-tsk] state transition: current");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" RUNNING->WAITING reason=delay\n");
+
+    next = scheduler_select_next();
+    if (next == NULL) {
+        /*
+         * idle taskはまだ導入していないため、次READYなしはログで止める。
+         * delay WAITING化は完了済みだが、無理にswitch先を作らない。
+         */
+        hal_console_write("[dly-tsk] no next task: reason=no-ready-task action=unsupported-stop\n");
+        hal_console_write("[dly-tsk] completed: result=0 action=no-ready-task\n");
+        return DLY_TSK_OK;
+    }
+
+    hal_console_write("[dly-tsk] next selected:");
+    itron_api_log_next_candidate(next);
+    hal_console_write("\n");
+
+    /*
+     * scheduler/dispatcherは読み取り用TCBを返すため、switch境界へ渡す直前に
+     * 更新可能TCBを取り直す。見つからない場合は不整合としてswitchしない。
+     */
+    current_mutable = task_get_mutable_by_id(current->id);
+    next_mutable = task_get_mutable_by_id(next->id);
+    if (current_mutable == NULL || next_mutable == NULL) {
+        hal_console_write("[dly-tsk] rejected: reason=switch-task-not-found\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        hal_console_write(" action=delay-switch-failed\n");
+        return DLY_TSK_ERR_DISPATCH;
+    }
+
+    hal_console_write("[dly-tsk] switch begin: from");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" to");
+    itron_api_log_task_id_name(next);
+    hal_console_write("\n");
+
+    /*
+     * delay WAITING化後の実際の切替は、既存dispatcher境界へ委譲する。
+     * dly_tsk()側ではx86_64のstack/register詳細を直接扱わない。
+     */
+    switch_result = dispatcher_switch_to(current_mutable, next_mutable);
+
+    /*
+     * dispatcher境界の結果をAPIログへ戻し、delay APIからswitchへ進んだ証跡を残す。
+     */
+    hal_console_write("[dly-tsk] switch end: result=");
+    itron_api_write_int(switch_result);
+    hal_console_write("\n");
+
+    if (switch_result != DISPATCHER_OK) {
+        /*
+         * delay WAITING化は完了済みでも、dispatcher境界の失敗はAPIのswitch失敗として
+         * 観測する。ここでdelay taskをREADYへ戻す復旧処理は13.1の範囲外に置く。
+         */
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        hal_console_write(" action=delay-switch-failed\n");
+        return DLY_TSK_ERR_DISPATCH;
+    }
+
+    hal_console_write("[dly-tsk] completed: result=0 action=delay-switch\n");
+    return DLY_TSK_OK;
 }
