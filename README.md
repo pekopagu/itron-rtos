@@ -83,6 +83,7 @@ The current implementation covers the following milestones:
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
+| 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -697,6 +698,21 @@ Chapter 13 Section 13.1 adds a `dly_tsk()`-style delay task API foundation:
 * Sleep/delay queues, tick decrement, tick-reached READY return, timeout
   `twai_sem`, same-priority time slicing, and round-robin remain unimplemented.
 
+Chapter 13 Section 13.2 adds a sleep/delay queue for delay waiting tasks:
+
+* The kernel initializes a fixed-length delay queue at boot.
+* `dly_tsk(delay_ticks > 0)` checks that the delay queue can accept the current
+  task before changing it to WAITING, so a full or duplicate queue does not
+  leave an inconsistent WAITING task behind.
+* After delay WAITING is recorded with `wait_reason=delay`, `wait_sem_id=0`,
+  and `delay_ticks_remaining`, the task is enqueued into the delay queue.
+* Delay queue logs and dumps show task id, name, remaining ticks, wait reason,
+  state, and queue count.
+* The delay queue is separate from semaphore wait queues. `sig_sem()` still
+  wakes only semaphore waiters and does not return delay queue tasks to READY.
+* Tick decrement, tick-reached READY return, delay dequeue wakeup, timeout
+  `twai_sem`, same-priority time slicing, and round-robin remain unimplemented.
+
 ---
 
 ## Development Environment
@@ -1301,7 +1317,6 @@ The following features are intentionally not implemented yet:
 * Interrupt return with `iretq`
 * Recoverable exception handling
 * Time slice
-* Sleep/delay queue
 * Tick-based delay decrement
 * Tick-reached READY return for delay waiting tasks
 * Dynamic memory allocation
@@ -1422,6 +1437,12 @@ the existing scheduler/dispatcher switch boundary. They also state that
 sleep/delay queues, tick decrement, tick-reached READY return, timeout
 `twai_sem`, timer IRQ handler calls to `dly_tsk()`, and complete timer-based
 wakeup integration remain out of scope.
+For Chapter 13 Section 13.2, comments document that `dly_tsk()` now enqueues
+delay WAITING tasks into a dedicated delay queue before continuing to the
+existing scheduler/dispatcher switch boundary. They also state that remaining
+ticks are observation-only and that tick decrement, tick-reached READY return,
+delay dequeue wakeup, timeout `twai_sem`, timer IRQ handler calls to task APIs,
+and complete timer-based wakeup integration remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1582,6 +1603,7 @@ See the LICENSE file for details.
 * [x] semaphore FIFO wait queue
 * [x] semaphore wakeup preemption decision
 * [x] dly_tsk delay task API foundation
+* [x] sleep/delay queue
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1644,6 +1666,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 12      | 12.3    | semaphore FIFO wait queue                  | v12.3-semaphore-wait-queue | Completed |
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
+| 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue     | Completed |
 
 ---
 

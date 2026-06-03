@@ -157,6 +157,20 @@ int wai_sem(int sem_id);
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
  * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
  */
+/**
+ * @brief 13.2時点のdelay queue接続済みdelay待ちAPI。
+ *
+ * @details
+ * `dly_tsk(delay_ticks > 0)` はRUNNING current taskをdelay WAITINGへ落とし、
+ * `wait_reason=delay` とremaining tickを保持したうえで専用delay queueへ登録する。
+ * queue満杯や二重登録ではWAITING化前に失敗し、不整合なWAITING taskを残さない。
+ *
+ * tick decrement、tick到達時READY復帰、delay queueからのdequeue wakeup、
+ * timeout付き `twai_sem`、timer IRQ handlerからの呼び出しは13.2では未実装である。
+ *
+ * @param delay_ticks delay queueへ観測用に登録するtick数。0は不正。
+ * @return 成功時は `DLY_TSK_OK`、失敗時は `DLY_TSK_ERR_*`。
+ */
 int dly_tsk(uint32_t delay_ticks);
 
 #endif

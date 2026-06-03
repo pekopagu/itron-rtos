@@ -31,6 +31,7 @@
  */
 
 #include "dispatcher.h"
+#include "delay_queue.h"
 #include "dispatch_pending.h"
 #include "hal/console.h"
 #include "hal/interrupt.h"
@@ -1253,6 +1254,11 @@ void kernel_main(void)
 
     /* タスク管理台帳だけを初期化し、スケジューラや実行コンテキストは作らない。 */
     task_init();
+    /*
+     * 13.2のsleep/delay queueを空状態へ初期化する。
+     * ここではdelay待ちtaskの観測queueだけを準備し、tick decrementやREADY復帰はまだ行わない。
+     */
+    delay_queue_init();
     scheduler_init();
     dispatcher_init();
 

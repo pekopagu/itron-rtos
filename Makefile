@@ -28,6 +28,7 @@ TIMER_OBJ := $(BUILD_DIR)/timer.o
 SCHEDULER_OBJ := $(BUILD_DIR)/scheduler.o
 DISPATCHER_OBJ := $(BUILD_DIR)/dispatcher.o
 ITRON_API_OBJ := $(BUILD_DIR)/itron_api.o
+DELAY_QUEUE_OBJ := $(BUILD_DIR)/delay_queue.o
 PREEMPTION_OBJ := $(BUILD_DIR)/preemption.o
 DISPATCH_PENDING_OBJ := $(BUILD_DIR)/dispatch_pending.o
 TASK_CONTEXT_OBJ := $(BUILD_DIR)/task_context.o
@@ -38,7 +39,7 @@ ARCH_PIC_OBJ := $(BUILD_DIR)/arch/x86_64/pic.o
 SERIAL_OBJ := $(BUILD_DIR)/arch/x86_64/serial.o
 ARCH_INTERRUPT_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt.o
 ARCH_INTERRUPT_ENTRY_OBJ := $(BUILD_DIR)/arch/x86_64/interrupt_entry.o
-OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(ITRON_API_OBJ) $(PREEMPTION_OBJ) $(DISPATCH_PENDING_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(ARCH_INTERRUPT_OBJ) $(ARCH_INTERRUPT_ENTRY_OBJ) $(ARCH_PIC_OBJ) $(HAL_CONSOLE_OBJ) $(HAL_INTERRUPT_OBJ) $(SERIAL_OBJ)
+OBJECTS := $(BOOT_OBJ) $(KERNEL_OBJ) $(TASK_OBJ) $(SEMAPHORE_OBJ) $(TIMER_OBJ) $(SCHEDULER_OBJ) $(DISPATCHER_OBJ) $(ITRON_API_OBJ) $(DELAY_QUEUE_OBJ) $(PREEMPTION_OBJ) $(DISPATCH_PENDING_OBJ) $(TASK_CONTEXT_OBJ) $(ARCH_CONTEXT_SWITCH_OBJ) $(ARCH_INTERRUPT_OBJ) $(ARCH_INTERRUPT_ENTRY_OBJ) $(ARCH_PIC_OBJ) $(HAL_CONSOLE_OBJ) $(HAL_INTERRUPT_OBJ) $(SERIAL_OBJ)
 
 CFLAGS := -target x86_64-elf -ffreestanding -fno-stack-protector -fno-pic -fno-pie -mno-red-zone -Wall -Wextra -I. -Ikernel/include -Iarch/x86_64
 LDFLAGS := -nostdlib -T linker.ld
@@ -61,7 +62,7 @@ dirs:
 $(BOOT_OBJ): boot/boot.asm | dirs
 	$(NASM) -f elf64 boot/boot.asm -o $(BOOT_OBJ)
 
-$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/interrupt.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/dispatch_pending.h kernel/include/preemption.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h | dirs
+$(KERNEL_OBJ): kernel/kernel.c kernel/include/hal/console.h kernel/include/hal/interrupt.h kernel/include/task.h kernel/include/scheduler.h kernel/include/dispatcher.h kernel/include/dispatch_pending.h kernel/include/preemption.h kernel/include/task_context.h kernel/include/semaphore.h kernel/include/timer.h kernel/include/delay_queue.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/kernel.c -o $(KERNEL_OBJ)
 
 $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | dirs
@@ -79,8 +80,11 @@ $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/t
 $(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/include/task.h kernel/include/task_context.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/dispatcher.c -o $(DISPATCHER_OBJ)
 
-$(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/semaphore.h kernel/include/task.h kernel/include/hal/console.h | dirs
+$(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/semaphore.h kernel/include/task.h kernel/include/delay_queue.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/itron_api.c -o $(ITRON_API_OBJ)
+
+$(DELAY_QUEUE_OBJ): kernel/delay_queue.c kernel/include/delay_queue.h kernel/include/task.h kernel/include/hal/console.h | dirs
+	$(CLANG) $(CFLAGS) -c kernel/delay_queue.c -o $(DELAY_QUEUE_OBJ)
 
 $(PREEMPTION_OBJ): kernel/preemption.c kernel/include/preemption.h kernel/include/dispatch_pending.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/preemption.c -o $(PREEMPTION_OBJ)

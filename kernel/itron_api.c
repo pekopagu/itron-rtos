@@ -16,6 +16,7 @@
 #include <stddef.h>
 
 #include "dispatcher.h"
+#include "delay_queue.h"
 #include "hal/console.h"
 #include "itron_api.h"
 #include "scheduler.h"
@@ -494,6 +495,28 @@ int wai_sem(int sem_id)
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
  * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
  */
+/**
+ * @brief 13.2時点のdelay queue接続済み `dly_tsk()`。
+ *
+ * @details
+ * `delay_ticks > 0` の場合、RUNNING current taskをdelay WAITINGへ落とす前に
+ * delay queueへ登録可能かを確認する。登録不能な場合はtask状態を変更せず、
+ * `result=-1` とqueue失敗actionをログへ残す。登録可能な場合だけWAITING化し、
+ * `wait_reason=delay` のtaskをdelay queueへenqueueしてから既存scheduler/dispatcher
+ * 境界へ進む。
+ *
+ * enqueue可否確認は、queue満杯または二重enqueueのときに不整合なWAITING taskを
+ * 残さないための13.2の重要な境界である。enqueue本体でもdelay WAITINGであることを
+ * 再確認し、semaphore待ちtaskをdelay queueへ混入させない。
+ *
+ * 13.2ではdelay queue entryのremaining tickは観測用であり、tick decrement、
+ * tick到達時READY復帰、delay queueからのdequeue wakeup、timeout付き `twai_sem`、
+ * timer IRQ handlerからのAPI呼び出しはまだ行わない。
+ *
+ * @param delay_ticks delay queueへ観測用に登録するtick数。0はinvalid-delayとして扱う。
+ * @return 成功時は `DLY_TSK_OK`。invalid delay、invalid current、dispatch失敗時は `DLY_TSK_ERR_*`。
+ * @note 13.2ではdelay queue登録成功後もtimer連動のwakeupは行わない。
+ */
 int dly_tsk(uint32_t delay_ticks)
 {
     const tcb_t *current = dispatcher_get_current();
@@ -501,6 +524,7 @@ int dly_tsk(uint32_t delay_ticks)
     tcb_t *current_mutable;
     tcb_t *next_mutable;
     int wait_result;
+    int delay_queue_result;
     int switch_result;
 
     if (current == NULL) {
@@ -550,6 +574,49 @@ int dly_tsk(uint32_t delay_ticks)
         return DLY_TSK_ERR_INVALID_CURRENT_STATE;
     }
 
+    /*
+     * WAITING化前にdelay queueの容量と二重enqueueを確認する。
+     * ここで失敗させることで、不整合なWAITING taskを残さない。
+     */
+    delay_queue_result = delay_queue_can_enqueue(current->id);
+    if (delay_queue_result != DELAY_QUEUE_OK) {
+        /*
+         * queueへ入れられない場合は、task_mark_waiting_on_delay()を呼ばない。
+         * これにより、queueに存在しないdelay WAITING taskを作らない。
+         */
+        if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
+            hal_console_write("[delay-q] enqueue failed: reason=full task id=");
+        } else if (delay_queue_result == DELAY_QUEUE_ERR_DUPLICATE) {
+            hal_console_write("[delay-q] enqueue failed: reason=duplicate task id=");
+        } else {
+            hal_console_write("[delay-q] enqueue failed: reason=invalid task id=");
+        }
+        /*
+         * 失敗ログにもtask id/name/delay_ticksを含める。
+         * WAITING化前に拒否されたtaskを特定し、queue防御が働いたことを観測できるようにする。
+         */
+        itron_api_write_int(current->id);
+        hal_console_write(" name=");
+        hal_console_write((current->name != NULL) ? current->name : "(null)");
+        hal_console_write(" delay_ticks=");
+        itron_api_write_uint32(delay_ticks);
+        hal_console_write("\n");
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_INVALID_DELAY);
+        /*
+         * 13.2では戻り値を増やさず、action文字列でqueue失敗理由を区別する。
+         * 満杯時は仕様例に合わせて `delay-queue-full` を出す。
+         */
+        if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
+            hal_console_write(" action=delay-queue-full\n");
+        } else if (delay_queue_result == DELAY_QUEUE_ERR_DUPLICATE) {
+            hal_console_write(" action=delay-queue-duplicate\n");
+        } else {
+            hal_console_write(" action=delay-queue-invalid\n");
+        }
+        return DLY_TSK_ERR_INVALID_DELAY;
+    }
+
     wait_result = task_mark_waiting_on_delay(current->id, delay_ticks);
     if (wait_result != 0) {
         /*
@@ -569,6 +636,27 @@ int dly_tsk(uint32_t delay_ticks)
     itron_api_log_task_id_name(current);
     hal_console_write(" RUNNING->WAITING reason=delay\n");
 
+    /*
+     * WAITING化済みtaskだけをdelay queueへ登録する。
+     * delay queue側でもwait_reason=delayを再確認し、semaphore待ちの混入を防ぐ。
+     */
+    delay_queue_result = delay_queue_enqueue(current->id, delay_ticks);
+    if (delay_queue_result != DELAY_QUEUE_OK) {
+        /*
+         * ここに到達する失敗は、WAITING化後の防御的な再確認で検出された不整合である。
+         * 13.2ではdelay READY復帰や状態巻き戻しを実装しないため、dispatch失敗として明示的に止める。
+         */
+        hal_console_write("[dly-tsk] completed: result=");
+        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        hal_console_write(" action=delay-queue-enqueue-failed\n");
+        return DLY_TSK_ERR_DISPATCH;
+    }
+
+    /*
+     * 13.2ではremaining tickを減らさず、queue上で観測できることだけをdumpで確認する。
+     */
+    delay_queue_dump();
+
     next = scheduler_select_next();
     if (next == NULL) {
         /*
@@ -580,6 +668,10 @@ int dly_tsk(uint32_t delay_ticks)
         return DLY_TSK_OK;
     }
 
+    /*
+     * queue登録後もschedulerの責務はREADY taskだけを選ぶことに限定する。
+     * delay WAITINGになったcurrent taskはREADY候補から自然に外れる。
+     */
     hal_console_write("[dly-tsk] next selected:");
     itron_api_log_next_candidate(next);
     hal_console_write("\n");
@@ -628,6 +720,6 @@ int dly_tsk(uint32_t delay_ticks)
         return DLY_TSK_ERR_DISPATCH;
     }
 
-    hal_console_write("[dly-tsk] completed: result=0 action=delay-switch\n");
+    hal_console_write("[dly-tsk] completed: result=0 action=delay-queued-switch\n");
     return DLY_TSK_OK;
 }
