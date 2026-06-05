@@ -9,8 +9,8 @@
 ## Goals
 
 - delay queueをsemaphore wait queueとは完全に分離して導入する。
-- `dly_tsk(delay_ticks > 0)` がdelay WAITING化するtaskをdelay queueへenqueueする。
-- enqueue失敗時にWAITING化済みtaskを残さない。
+- `dly_tsk(delay_ticks > 0)` でdelay WAITING化するtaskをdelay queueへenqueueする。
+- enqueue失敗時にWAITING化済みだがqueue未登録のtaskを残さない。
 - delay queue dumpでtask id/name/remaining/state/reasonを確認できる。
 - 10.4、11.4、12.4、13.1の既存経路を維持する。
 
@@ -29,18 +29,18 @@
 
 ### This Spec Owns
 
-- `delay_queue.h` / `delay_queue.c` の固定長delay queue管理
-- `delay_queue_init()`、enqueue可否確認、enqueue、dump
-- `dly_tsk()` のWAITING化前enqueue可否確認とWAITING化後enqueue確定
-- README、Doxygen、serial log、spec成果物更新
+- `kernel/include/delay_queue.h` / `kernel/delay_queue.c` の固定長delay queue管理。
+- `delay_queue_init()`、`delay_queue_can_enqueue()`、`delay_queue_enqueue()`、`delay_queue_dump()`。
+- `dly_tsk()` のWAITING化前enqueue可否確認、WAITING化後enqueue、dump、`delay-queued-switch` action。
+- README、Doxygen、serial log、spec成果物更新。
 
 ### Out of Boundary
 
-- timer IRQ handler内のdelay queue操作
-- delay queue entryのdecrement
-- delay満了時のREADY復帰
-- semaphore wait queueの意味変更
-- schedulerのREADY選択規則変更
+- timer IRQ handler内のdelay queue操作。
+- delay queue entryのdecrement。
+- delay満了時のREADY復帰。
+- semaphore wait queueの意味変更。
+- schedulerのREADY選択規則変更。
 
 ### Allowed Dependencies
 
@@ -71,9 +71,9 @@ dly_tsk(delay_ticks)
   -> dispatcher_switch_to(from, to)
 ```
 
-`delay_queue_can_enqueue()` は二重enqueueと満杯をWAITING化前に検出する。`delay_queue_enqueue()` は防御として再確認を行い、対象taskが `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` であることだけを受け入れる。
+`delay_queue_can_enqueue()` は二重enqueueと満杯をWAITING化前に検出する。`delay_queue_enqueue()` は防御として再確認し、対象taskが `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` の場合だけ受け入れる。
 
-満杯時は `dly_tsk()` が `DLY_TSK_ERR_INVALID_DELAY` と同じ `-1` を返す。13.2では新しい戻り値カテゴリを増やさず、ログの `action=delay-queue-full` で原因を観測する。
+満杯時は `dly_tsk()` が `-1` を返し、`action=delay-queue-full` を出す。13.2では戻り値カテゴリを増やさず、ログactionで理由を観測する。
 
 ## File Structure Plan
 
@@ -87,7 +87,7 @@ dly_tsk(delay_ticks)
 - `kernel/itron_api.c`: `dly_tsk()` にWAITING化前のenqueue可否確認、WAITING化後enqueue、dump、`delay-queued-switch` actionを追加する。
 - `kernel/kernel.c`: 起動初期化で `delay_queue_init()` を呼ぶ。
 - `Makefile`: `delay_queue.c` をビルド対象へ追加する。
-- `README.md`: 13.2の到達点、Zenn tag候補、未実装範囲を更新する。
+- `README.md`: 13.2到達点、Zenn tag候補、未実装範囲を更新する。
 - `docs/logs/qemu-serial.log`: fresh `make run` 出力へ更新する。
 - `.kiro/specs/sleep-delay-queue/requirements.md`, `design.md`, `tasks.md`: 最終成果物として3ファイルだけ残す。
 
@@ -121,7 +121,7 @@ dly_tsk(delay_ticks)
 ## Testing Strategy
 
 - `make` で通常buildが通ることを確認する。
-- `make run` で delay queue enqueue、dump、`delay-queued-switch`、既存semaphore/yield evidenceを確認する。
+- `make run` でdelay queue enqueue、dump、`delay-queued-switch`、既存semaphore/yield evidenceを確認する。
 - `make run VALIDATE_TIMER_IRQ_ENTRY=1` でtimer IRQ preemption / dispatch pending経路が維持されることを確認する。
 - `rg` でtimer IRQ handler本体から `dly_tsk()`、`wai_sem()`、`sig_sem()`、`yield_tsk()`、`dispatcher_switch_to()` を直接呼んでいないことを確認する。
 - `.kiro/specs/sleep-delay-queue/` が最終的に `requirements.md`、`design.md`、`tasks.md` の3ファイルだけであることを確認する。

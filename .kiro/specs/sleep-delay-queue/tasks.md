@@ -19,7 +19,7 @@
   - queue満杯または二重enqueue時はWAITING化せず、失敗ログと `result=-1` を返す。
   - Requirements: 2.1, 3.1, 3.2, 3.3, 3.4
 
-- [x] 2.2 delay WAITING化後にdelay queueへenqueueしdumpする
+- [x] 2.2 delay WAITING化後にdelay queueへenqueueしてdumpする
   - `_Boundary:_ DelayTaskAPI`
   - queue entryにtask id/name/remaining/state/reasonが出力され、成功時actionが `delay-queued-switch` になる。
   - Requirements: 2.2, 2.3, 2.4, 4.2, 4.4, 5.2

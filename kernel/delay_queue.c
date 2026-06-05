@@ -38,12 +38,9 @@ static int delay_queue_count;
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
  *
- * @details
- * freestanding環境では標準printfを使わないため、delay queueの観測ログに必要な
- * 最小限の10進数出力だけをこのhelperで行う。queueやtask状態は変更しない。
- *
  * @param value 出力する値。
- * @note 表示専用helperであり、桁数がbufferを超えない `unsigned long` の10進表現を前提にする。
+ *
+ * @note 表示専用helperであり、queueやtask状態は変更しない。
  */
 static void delay_queue_write_uint(unsigned long value)
 {
@@ -56,13 +53,13 @@ static void delay_queue_write_uint(unsigned long value)
         return;
     }
 
-    /* 10進数の下位桁からbufferへ積み、後で逆順に出力できる形にする。 */
+    /* 下位桁からbufferへ積み、後で逆順に出力できる形にする。 */
     while (value > 0UL) {
         buffer[index++] = (char)('0' + (value % 10UL));
         value /= 10UL;
     }
 
-    /* bufferには逆順で格納されているため、末尾から戻しながら通常の桁順で出力する。 */
+    /* buffer内の逆順桁を末尾から戻しながら通常の桁順で出力する。 */
     while (index > 0) {
         hal_console_putc(buffer[--index]);
     }
@@ -71,12 +68,9 @@ static void delay_queue_write_uint(unsigned long value)
 /**
  * @brief 符号付き整数をHAL consoleへ10進出力する。
  *
- * @details
- * delay queueの戻り値やtask idをログへ出すための表示専用helperである。
- * 負値は符号を出した後、絶対値部分を `delay_queue_write_uint()` に委譲する。
- *
  * @param value 出力する値。
- * @note TCB、queue entry、scheduler状態は変更しない。
+ *
+ * @note 表示専用helperであり、TCBやqueue entryは変更しない。
  */
 static void delay_queue_write_int(int value)
 {
@@ -94,12 +88,9 @@ static void delay_queue_write_int(int value)
 /**
  * @brief task状態をログ用文字列へ変換する。
  *
- * @details
- * delay queue dumpでは、queue entryが指すtaskの現在状態を人が読める文字列で確認する。
- * WAITING taskがschedulerのREADY候補から外れていることを観測しやすくするための表示変換である。
- *
  * @param state 変換対象のtask状態。
  * @return 固定文字列。
+ *
  * @note 未知の値はdump継続のため `UNKNOWN` として扱う。
  */
 static const char *delay_queue_task_state_name(task_state_t state)
@@ -124,12 +115,9 @@ static const char *delay_queue_task_state_name(task_state_t state)
 /**
  * @brief WAITING理由をログ用文字列へ変換する。
  *
- * @details
- * delay queueはdelay待ち専用だが、dump時にはTCBの `wait_reason` を読み直して出力する。
- * これにより、semaphore待ちtaskがdelay queueへ混入していないことをログから確認できる。
- *
  * @param reason 変換対象のWAITING理由。
  * @return 固定文字列。
+ *
  * @note 未知の値はdump継続のため `unknown` として扱う。
  */
 static const char *delay_queue_wait_reason_name(task_wait_reason_t reason)
@@ -150,14 +138,10 @@ static const char *delay_queue_wait_reason_name(task_wait_reason_t reason)
 /**
  * @brief 指定taskがqueue内に存在するかを線形探索する。
  *
- * @details
- * 13.2ではdelay queueは固定長の観測queueであり、登録件数も `MAX_TASKS` に限定される。
- * そのため、二重enqueue防御のための単純な線形探索を採用する。
- * priority順queueやdelta queue最適化はこのhelperの責務ではない。
- *
  * @param task_id 探索対象task ID。
  * @return 見つかったentry index。存在しなければ -1。
- * @note queue entryやtask状態は変更しない。
+ *
+ * @note priority順queueやdelta queue最適化は13.2の責務ではない。
  */
 static int delay_queue_find_index_by_task_id(int task_id)
 {
@@ -165,7 +149,7 @@ static int delay_queue_find_index_by_task_id(int task_id)
 
     /*
      * delay queueは13.2時点では固定長の小さな観測queueなので、単純な線形探索にする。
-     * priority順やdelta queue最適化は将来章に残し、ここでは重複検出だけを担う。
+     * 重複検出だけを担い、entry順序の最適化は将来章に残す。
      */
     for (index = 0; index < delay_queue_count; index++) {
         /* task idが一致したentryを見つけたら、そのindexを返して呼び出し側で判定できるようにする。 */
@@ -174,24 +158,10 @@ static int delay_queue_find_index_by_task_id(int task_id)
         }
     }
 
-    /* 見つからない場合は-1を返し、未登録taskとして扱えるようにする。 */
+    /* 見つからない場合は未登録taskとして扱えるように -1 を返す。 */
     return -1;
 }
 
-/**
- * @brief delay queueの実体を空状態へ初期化する。
- *
- * @details
- * すべての固定長entryを未使用値へ戻し、queue countを0にする。
- * これは起動時の観測状態を再現可能にするための処理であり、task table、
- * semaphore wait queue、scheduler、dispatcher currentには触れない。
- *
- * 13.2では、この初期化はtimer IRQ handlerから呼ばれない。
- * tick decrement、満了taskのREADY復帰、dequeue wakeupの準備もここでは行わない。
- *
- * @return 常に `DELAY_QUEUE_OK`。
- * @note 起動時初期化専用の同期なし実装である。
- */
 int delay_queue_init(void)
 {
     int index;
@@ -207,21 +177,6 @@ int delay_queue_init(void)
     return DELAY_QUEUE_OK;
 }
 
-/**
- * @brief delay queueへ安全に登録できるかを事前確認する。
- *
- * @details
- * `dly_tsk()` がRUNNING current taskをWAITINGへ変更する前に呼び出す。
- * queue満杯または同一taskの二重登録を先に検出することで、WAITING化したが
- * queueに存在しないtaskを残さない。
- *
- * この関数は確認専用であり、queue entry、task state、wait reason、
- * delay_ticks_remainingを変更しない。
- *
- * @param task_id 登録予定のtask ID。
- * @return 登録可能なら `DELAY_QUEUE_OK`。不正ID、満杯、重複の場合は `DELAY_QUEUE_ERR_*`。
- * @note taskが実在するか、delay WAITINGかはenqueue本体で確認する。
- */
 int delay_queue_can_enqueue(int task_id)
 {
     /* task id 0以下は登録済みtaskを指さないため、queue状態を見ずに不正入力として扱う。 */
@@ -229,7 +184,7 @@ int delay_queue_can_enqueue(int task_id)
         return DELAY_QUEUE_ERR_INVAL;
     }
 
-    /* 同じtaskを二重にqueueへ入れると、後続のdecrement設計で状態が分裂するため拒否する。 */
+    /* 同じtaskを二重にqueueへ入れると将来のdecrement設計で状態が分裂するため拒否する。 */
     if (delay_queue_find_index_by_task_id(task_id) >= 0) {
         return DELAY_QUEUE_ERR_DUPLICATE;
     }
@@ -242,23 +197,6 @@ int delay_queue_can_enqueue(int task_id)
     return DELAY_QUEUE_OK;
 }
 
-/**
- * @brief delay WAITING taskをdelay queueへ登録する。
- *
- * @details
- * 呼び出し側でWAITING化されたtaskを、13.2の観測用delay queueへ追加する。
- * 対象taskは `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` でなければならない。
- * この条件により、semaphore待ちtaskがdelay queueへ混入することを防ぐ。
- *
- * queue entryはtask idとremaining tickだけを保持する。task名、state、wait reasonは
- * dump時にtask tableから読み直すため、task状態管理の責務はtask moduleに残る。
- * `wait_sem_id` はdelay queue管理には使わない。
- *
- * @param task_id delay WAITING化済みtask ID。
- * @param delay_ticks 観測用に保存するremaining tick数。0は不正。
- * @return 登録成功なら `DELAY_QUEUE_OK`。不正入力、満杯、重複、task状態不一致なら `DELAY_QUEUE_ERR_*`。
- * @note tick decrement、READY復帰、dequeue wakeupは13.2では実装しない。
- */
 int delay_queue_enqueue(int task_id, uint32_t delay_ticks)
 {
     const tcb_t *task = task_get_by_id(task_id);
@@ -266,7 +204,7 @@ int delay_queue_enqueue(int task_id, uint32_t delay_ticks)
 
     /*
      * enqueue本体でも入力を再確認する。
-     * dly_tsk()側の事前確認だけに依存せず、防御的に不正なtick値や存在しないtaskを拒否する。
+     * dly_tsk()側の事前確認だけに依存せず、不正なtick値や存在しないtaskを拒否する。
      */
     if (delay_ticks == 0U || task == NULL) {
         return DELAY_QUEUE_ERR_INVAL;
@@ -283,7 +221,7 @@ int delay_queue_enqueue(int task_id, uint32_t delay_ticks)
 
     can_enqueue_result = delay_queue_can_enqueue(task_id);
     /*
-     * 事前確認後に呼び出し順が変わった場合でも、満杯はqueue側の責務としてログに残す。
+     * 事前確認後に呼び出し順が変わった場合でも、満杯と重複はqueue側の責務としてログに残す。
      * 現在は単一CPUのboot-time modelだが、将来の拡張前提として防御を二重に置く。
      */
     if (can_enqueue_result == DELAY_QUEUE_ERR_FULL) {
@@ -335,19 +273,6 @@ int delay_queue_enqueue(int task_id, uint32_t delay_ticks)
     return DELAY_QUEUE_OK;
 }
 
-/**
- * @brief delay queueの現在内容を観測ログへ出力する。
- *
- * @details
- * queue count、各entryのindex、task id、task名、remaining tick、wait reason、stateを出力する。
- * delay queueがsemaphore wait queueと分離され、delay待ちtaskだけを保持していることを
- * boot-time smokeで確認するためのdumpである。
- *
- * dumpは読み取り専用であり、queue entry、TCB、scheduler候補、dispatcher currentを変更しない。
- * task idが見つからない場合でもdumpを継続し、queue側に残っているentryを観測できるようにする。
- *
- * @note 13.2ではtimer IRQ handlerから呼ばず、tick満了判定も行わない。
- */
 void delay_queue_dump(void)
 {
     int index;

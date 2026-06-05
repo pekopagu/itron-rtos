@@ -2,17 +2,17 @@
 
 ## Project Description
 
-μITRON風RTOSを学習目的で段階的に開発する開発者は、13.1で `dly_tsk(delay_ticks)` によるRUNNING current taskのdelay WAITING化を観測できるようになった。しかし現状では、delay待ちtaskをsemaphore wait queueとは独立して管理するsleep/delay queueが存在せず、delay_ticks_remainingをqueue上で観測できない。13.2では、tick decrementやREADY復帰はまだ実装せず、`dly_tsk(delay_ticks > 0)` がWAITING化するtaskを専用delay queueへ登録し、semaphore待ちと混ざらないことを確認できるようにする。
+μITRON風RTOSを学習目的で段階的に開発している開発者は、13.1で `dly_tsk(delay_ticks)` 風APIによりRUNNING current taskをdelay理由のWAITINGへ落とせるようになった。現状ではdelay待ちtaskをsemaphore wait queueとは独立して観測するsleep/delay queueが必要である。13.2では、tick decrementやREADY復帰には進まず、`dly_tsk(delay_ticks > 0)` でWAITING化するtaskを専用delay queueへ登録し、remaining tickを観測できるようにする。
 
 ## Boundary Context
 
-- **In scope**: delay queue初期化、enqueue、二重enqueue防御、満杯時の失敗処理、dump/log、`dly_tsk()` からのenqueue接続、README/Doxygen/log/spec更新。
+- **In scope**: delay queue初期化、enqueue可否確認、enqueue、二重enqueue防御、満杯時失敗、dump/log、`dly_tsk()` からの接続、README/Doxygen/log/spec成果物更新。
 - **Out of scope**: tickごとのdelay decrement、tick到達時READY復帰、delay queueからのdequeueによるREADY化、timeout付き `twai_sem`、`slp_tsk` / `wup_tsk`、priority順delay queue、delta queue、time slice、round-robin、timer IRQ handlerからのtask APIまたはdispatcher直接呼び出し。
-- **Adjacent expectations**: 13.1の `dly_tsk()` 入口、12.4のsemaphore wakeup後preemption、10.4の `yield_tsk()`、11.4のtimer IRQ preemption / dispatch pending経路を維持する。
+- **Adjacent expectations**: 13.1の `dly_tsk()` 入口、12.4のsemaphore wakeup後preemption、10.4の `yield_tsk()`、11.4のtimer IRQ preemption / dispatch pendingログ仕様を維持する。
 
 ## Requirements
 
-### Requirement 1: delay queue管理の観測
+### Requirement 1: delay queue管理と観測
 
 **Objective:** delay WAITING taskをsemaphore wait queueとは独立した固定長queueで観測できるようにする。
 
@@ -49,7 +49,7 @@
 
 ### Requirement 4: semaphore待ちとの分離
 
-**Objective:** delay queueとsemaphore wait queueが相互にtaskを混入させないことを維持する。
+**Objective:** delay queueとsemaphore wait queueが互いにtaskを混入させないことを維持する。
 
 #### Acceptance Criteria
 

@@ -4,7 +4,7 @@
 
 /**
  * @file delay_queue.h
- * @brief 13.2 sleep/delay queueの観測用管理API。
+ * @brief 13.2 sleep/delay queue の観測用管理API。
  *
  * @details
  * このヘッダは、`dly_tsk()` によってdelay WAITINGへ入ったtaskを
@@ -47,7 +47,7 @@
  * @brief delay queueを空状態へ初期化する。
  *
  * @details
- * 起動時に呼び出し、過去の観測entryが残らないように固定長entry配列を消去する。
+ * 起動時に呼び出し、過去の観測entryが残らないよう固定長entry配列を消去する。
  * semaphore tableやtask tableは変更しない。13.2ではtimer IRQ handlerから呼ばない。
  *
  * @return `DELAY_QUEUE_OK`。
