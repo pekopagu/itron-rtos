@@ -146,6 +146,20 @@ int sem_enqueue_waiter(int sem_id, int task_id);
 int sem_dequeue_waiter(int sem_id, int *task_id);
 
 /**
+ * @brief timeout到達taskをsemaphore wait queueからtask id指定で削除する。
+ *
+ * @details
+ * 13.4のtimeout付きsemaphore待ち用APIである。`sig_sem()` のFIFO dequeueとは別に、
+ * delay queueでtimeout到達を検出したtaskだけを対象semaphoreのwait queueから取り除く。
+ * queueの残り順序は維持する。task状態は変更しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 削除するWAITING task ID。
+ * @return 成功時はSEM_OK。対象なしはSEM_WAIT_QUEUE_EMPTY。失敗時はSEM_ERR_*。
+ */
+int sem_remove_waiter(int sem_id, int task_id);
+
+/**
  * @brief 12.2のsig_sem相当のセマフォ返却を行う。
  *
  * @details

@@ -493,8 +493,9 @@ int wai_sem(int sem_id)
  * semaphore wait queueとdelay queueの両方へ登録可能かをWAITING化前に確認し、
  * 成功した場合だけtimeout付きsemaphore WAITINGへ遷移させる。
  *
- * 13.3ではtimeout tickのdecrement、timeout到達時READY復帰、timeout時の
- * semaphore wait queue削除、`sig_sem()` 成功時のdelay queue削除は扱わない。
+ * 13.4ではtimeout tickのdecrement、timeout到達時READY復帰、timeout時の
+ * semaphore wait queue削除はdelay queue tick処理が担当する。`sig_sem()` 成功時の
+ * delay queue削除はまだ扱わない。
  *
  * @param sem_id 対象semaphore ID。
  * @param timeout_ticks timeout観測用tick数。0はinvalid timeout。
@@ -731,7 +732,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
 
     /*
      * delay queue上のremaining tickとwait reasonを観測する。
-     * dumpは表示専用であり、tick減算やREADY復帰は行わない。
+     * 13.4では後続のtimer tickでdecrementとREADY復帰が行われる。
      */
     delay_queue_dump();
 
@@ -808,8 +809,8 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
  * task状態も待ち観測フィールドも変更しない。
  *
  * delay WAITING化後は既存schedulerで次READY taskを選び、存在する場合だけ既存
- * `dispatcher_switch_to()` 境界へ進む。sleep/delay queue、tickごとの減算、
- * tick到達時READY復帰、timer IRQ handlerからの呼び出しはまだ扱わない。
+ * `dispatcher_switch_to()` 境界へ進む。tick到達時READY復帰は13.4のdelay queue tick処理が扱う。
+ * timer IRQ handlerからの `dly_tsk()` 呼び出しは引き続き扱わない。
  *
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
  * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
@@ -828,13 +829,12 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
  * 残さないための13.2の重要な境界である。enqueue本体でもdelay WAITINGであることを
  * 再確認し、semaphore待ちtaskをdelay queueへ混入させない。
  *
- * 13.2ではdelay queue entryのremaining tickは観測用であり、tick decrement、
- * tick到達時READY復帰、delay queueからのdequeue wakeup、timeout付き `twai_sem`、
- * timer IRQ handlerからのAPI呼び出しはまだ行わない。
+ * 13.4ではdelay queue entryのremaining tickはtimer tickごとに減算され、
+ * tick到達時にREADY復帰する。timer IRQ handlerからのtask API呼び出しは行わない。
  *
  * @param delay_ticks delay queueへ観測用に登録するtick数。0はinvalid-delayとして扱う。
  * @return 成功時は `DLY_TSK_OK`。invalid delay、invalid current、dispatch失敗時は `DLY_TSK_ERR_*`。
- * @note 13.2ではdelay queue登録成功後もtimer連動のwakeupは行わない。
+ * @note 13.4ではdelay queue登録後のtimer tickでwakeupが行われる。
  */
 int dly_tsk(uint32_t delay_ticks)
 {
@@ -963,7 +963,7 @@ int dly_tsk(uint32_t delay_ticks)
     if (delay_queue_result != DELAY_QUEUE_OK) {
         /*
          * ここに到達する失敗は、WAITING化後の防御的な再確認で検出された不整合である。
-         * 13.2ではdelay READY復帰や状態巻き戻しを実装しないため、dispatch失敗として明示的に止める。
+         * WAITING化後のqueue登録失敗は境界不整合として扱い、dispatch失敗として明示的に止める。
          */
         hal_console_write("[dly-tsk] completed: result=");
         itron_api_write_int(DLY_TSK_ERR_DISPATCH);

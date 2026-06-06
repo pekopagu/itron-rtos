@@ -71,7 +71,7 @@ $(TASK_OBJ): kernel/task.c kernel/include/task.h kernel/include/hal/console.h | 
 $(SEMAPHORE_OBJ): kernel/semaphore.c kernel/include/semaphore.h kernel/include/task.h kernel/include/dispatcher.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/semaphore.c -o $(SEMAPHORE_OBJ)
 
-$(TIMER_OBJ): kernel/timer.c kernel/include/timer.h kernel/include/hal/console.h | dirs
+$(TIMER_OBJ): kernel/timer.c kernel/include/timer.h kernel/include/delay_queue.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/timer.c -o $(TIMER_OBJ)
 
 $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/task.h | dirs
@@ -83,7 +83,7 @@ $(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/includ
 $(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/semaphore.h kernel/include/task.h kernel/include/delay_queue.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/itron_api.c -o $(ITRON_API_OBJ)
 
-$(DELAY_QUEUE_OBJ): kernel/delay_queue.c kernel/include/delay_queue.h kernel/include/task.h kernel/include/hal/console.h | dirs
+$(DELAY_QUEUE_OBJ): kernel/delay_queue.c kernel/include/delay_queue.h kernel/include/semaphore.h kernel/include/task.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/delay_queue.c -o $(DELAY_QUEUE_OBJ)
 
 $(PREEMPTION_OBJ): kernel/preemption.c kernel/include/preemption.h kernel/include/dispatch_pending.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/task.h kernel/include/hal/console.h | dirs

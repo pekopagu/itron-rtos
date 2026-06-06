@@ -10,8 +10,8 @@
  * このヘッダは、`dly_tsk()` によってdelay WAITINGへ入ったtaskを
  * semaphore wait queueとは独立して保持する固定長queueを公開する。
  * 13.3では `twai_sem()` のtimeout付きsemaphore待ちtaskもtimeout観測用に
- * 受け入れる。ただしremaining tickを観測用に保持するだけで、tickごとのdecrement、
- * tick到達時READY復帰、dequeueによるwakeup、`sig_sem()` 成功時の削除はまだ実装しない。
+ * 受け入れる。13.4ではremaining tickをtickごとに減算し、tick到達時にREADY復帰させる。
+ * ただし `sig_sem()` 成功時のdelay queue削除はまだ実装しない。
  */
 
 #ifndef ITRON_RTOS_DELAY_QUEUE_H
@@ -75,7 +75,7 @@ int delay_queue_can_enqueue(int task_id);
  * 対象taskは `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` または
  * `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` でなければならない。
  * `wait_sem_id` はdelay queue管理に使わず、queue entryはtask idとremaining tickだけを
- * 保持する。13.3では登録後のdecrementやREADY復帰は行わない。
+ * 保持する。13.4では `delay_queue_tick()` が登録後のdecrementやREADY復帰を担当する。
  *
  * @param task_id delay WAITING化済みtask ID。
  * @param delay_ticks 観測用に保持するremaining tick数。0は不正。
@@ -91,5 +91,20 @@ int delay_queue_enqueue(int task_id, uint32_t delay_ticks);
  * dumpは観測専用で、queue entry、task状態、scheduler候補、dispatcher currentを変更しない。
  */
 void delay_queue_dump(void);
+
+/**
+ * @brief timer tick到達に合わせてdelay queueのremaining tickを進める。
+ *
+ * @details
+ * 13.4のtick到達READY復帰モデルである。各entryのremaining tickを1減算し、
+ * 0になったdelay待ちtaskをREADYへ戻す。timeout付きsemaphore待ちtaskの場合は、
+ * READY復帰前に対象semaphore wait queueからも削除する。
+ *
+ * この関数はdispatcher switchを直接呼ばない。READY復帰後のpreemption判定は、
+ * 呼び出し側のtimer IRQ後続処理またはboot-time smokeが既存preemption境界で観測する。
+ *
+ * @return timeout到達によりREADY復帰を試みたentry数。
+ */
+int delay_queue_tick(void);
 
 #endif

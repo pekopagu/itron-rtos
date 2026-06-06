@@ -17,6 +17,7 @@
  */
 
 #include "hal/console.h"
+#include "delay_queue.h"
 #include "timer.h"
 
 static unsigned long system_ticks;
@@ -92,9 +93,16 @@ void timer_tick(void)
      */
     system_ticks++;
 
-    hal_console_write("[timer] tick: ");
+    hal_console_write("[timer] tick: count=");
     timer_write_uint(system_ticks);
     hal_console_write("\n");
+
+    /*
+     * 13.4ではtimer tickの進行に合わせてdelay queueのremaining tickを進める。
+     * READY復帰後のpreemption判定はtimer IRQ handlerの後続境界へ委譲し、
+     * ここからdispatcher_switch_to()を直接呼ばない。
+     */
+    (void)delay_queue_tick();
 }
 
 /**

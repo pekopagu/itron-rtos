@@ -65,10 +65,16 @@ static unsigned char task_dly_from_stack[TASK_STACK_SIZE] __attribute__((aligned
 static unsigned char task_dly_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_twai_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_twai_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_tick_delay_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_tick_twai_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_tick_current_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 static void task_wai_sem_to(void);
 static void task_dly_to(void);
 static void task_twai_to(void);
+static void task_tick_delay(void);
+static void task_tick_twai(void);
+static void task_tick_current(void);
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -1010,8 +1016,8 @@ static void kernel_run_semaphore_smoke(int current_task_id)
  * delay WAITING化、schedulerによる次READY選択、既存dispatcher switch境界への接続を
  * 起動時ログで観測する。
  *
- * この検証はtask文脈APIの入口だけを扱う。sleep/delay queue、tickごとのdelay decrement、
- * tick到達時READY復帰、timer IRQ handlerからの `dly_tsk()` 呼び出しは行わない。
+ * この検証はtask文脈APIの入口だけを扱う。tick到達時READY復帰は13.4の専用smokeで確認する。
+ * timer IRQ handlerからの `dly_tsk()` 呼び出しは行わない。
  *
  * @param current_task_id `dly_tsk()` を呼ぶRUNNING current taskのid。
  */
@@ -1032,7 +1038,7 @@ static void kernel_run_delay_smoke(int current_task_id)
 
     /*
      * RUNNING current taskをdelay WAITINGへ落とし、既存schedulerが次READY taskだけを
-     * 選ぶことを確認する。delay満了によるREADY復帰はまだ実装しない。
+     * 選ぶことを確認する。delay満了によるREADY復帰は後続の13.4 smokeで確認する。
      */
     (void)dly_tsk(10U);
 
@@ -1049,7 +1055,7 @@ static void kernel_run_delay_smoke(int current_task_id)
  * timeout待ちに入ったtaskはsemaphore wait queueとdelay queueの両方へ登録される。
  *
  * この検証はtask文脈APIのsmokeであり、timer IRQ handlerから `twai_sem()` を呼ばない。
- * tick decrement、timeout到達時READY復帰、timeout時のsemaphore wait queue削除、
+ * timeout到達時READY復帰とtimeout時のsemaphore wait queue削除は後続の13.4 smokeで確認する。
  * `sig_sem()` 成功時のdelay queue削除はまだ行わない。
  *
  * @param current_task_id `twai_sem()` を呼ぶRUNNING current taskのid。
@@ -1096,6 +1102,87 @@ static void kernel_run_twai_sem_smoke(int current_task_id)
     task_dump();
     sem_dump();
     hal_console_write("[twai-smoke] end\n");
+}
+
+/**
+ * @brief 第13章13.4のtick到達READY復帰 smoke sequenceを実行する。
+ *
+ * @details
+ * `dly_tsk(1)` と `twai_sem(sem, 1)` でdelay queueへ登録したtaskを、
+ * 明示的な `timer_tick()` でtimeout到達させる。timeout付きsemaphore待ちtaskは
+ * semaphore wait queueからも削除される。READY復帰後は既存のIRQ preemption境界を
+ * 明示的に呼び、timer IRQ handler本体から直接dispatcherへ進まない設計を観測する。
+ *
+ * @param delay_task_id delay timeout復帰を確認するtask ID。
+ * @param twai_task_id timeout付きsemaphore復帰を確認するtask ID。
+ * @param current_task_id timeout後preemption比較のcurrentになる低優先度task ID。
+ */
+static void kernel_run_tick_ready_wakeup_smoke(
+    int delay_task_id,
+    int twai_task_id,
+    int current_task_id
+)
+{
+    int sem_tick_id;
+    const char *not_requested_reason;
+
+    hal_console_write("[tick-ready-smoke] begin\n");
+
+    sem_tick_id = sem_create("sem_tick_timeout", 0, 1);
+    if (sem_tick_id < 0) {
+        hal_console_write("[tick-ready-smoke] stop: reason=create-failed\n");
+        return;
+    }
+
+    if (dispatcher_commit_current(task_get_by_id(delay_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[tick-ready-smoke] stop: reason=delay-current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * 13.4 smokeではtick処理そのものを観測するため、task/queue helperで1 tickの
+     * delay待ち状態を作る。dly_tsk()のtask文脈API経路は直前の13.1/13.2 smokeで確認済みである。
+     */
+    if (task_mark_waiting_on_delay(delay_task_id, 1U) != 0 ||
+        delay_queue_enqueue(delay_task_id, 1U) != DELAY_QUEUE_OK) {
+        hal_console_write("[tick-ready-smoke] stop: reason=delay-queue-setup-failed\n");
+        return;
+    }
+
+    if (dispatcher_commit_current(task_get_by_id(twai_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[tick-ready-smoke] stop: reason=twai-current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * timeout付きsemaphore待ちtaskも1 tickで満了するよう両queueへ登録する。
+     * twai_sem()のAPI経路は直前の13.3 smokeで確認済みであり、ここではtimeout到達後の
+     * semaphore wait queue削除とREADY復帰を明示的に観測する。
+     */
+    if (task_mark_waiting_on_sem_timeout(twai_task_id, sem_tick_id, 1U) != 0 ||
+        sem_enqueue_waiter(sem_tick_id, twai_task_id) != SEM_OK ||
+        delay_queue_enqueue(twai_task_id, 1U) != DELAY_QUEUE_OK) {
+        hal_console_write("[tick-ready-smoke] stop: reason=twai-queue-setup-failed\n");
+        return;
+    }
+
+    if (dispatcher_commit_current(task_get_by_id(current_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[tick-ready-smoke] stop: reason=low-current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * 1 tick進めることで2つの13.4対象entryをtimeout到達させる。
+     * READY復帰後のpreemption pendingは既存IRQ preemption境界で観測する。
+     */
+    timer_tick();
+    not_requested_reason = preemption_evaluate_from_irq();
+    dispatch_pending_log_state_from_irq(not_requested_reason);
+
+    delay_queue_dump();
+    task_dump();
+    sem_dump();
+    hal_console_write("[tick-ready-smoke] end\n");
 }
 
 /**
@@ -1273,6 +1360,42 @@ static void task_twai_to(void)
 }
 
 /**
+ * @brief 13.4 tick READY復帰smoke用のdelay待ちtask entry。
+ *
+ * @details
+ * entry本体から `dly_tsk()` は呼ばない。kernel smoke側でtask文脈APIを呼び、
+ * timer tick到達時のREADY復帰を観測する。
+ */
+static void task_tick_delay(void)
+{
+    hal_console_write("[task_tick_delay] executed\n");
+}
+
+/**
+ * @brief 13.4 tick READY復帰smoke用のtimeout付きsemaphore待ちtask entry。
+ *
+ * @details
+ * entry本体から `twai_sem()` は呼ばない。kernel smoke側でtask文脈APIを呼び、
+ * timeout時のsemaphore wait queue削除を観測する。
+ */
+static void task_tick_twai(void)
+{
+    hal_console_write("[task_tick_twai] executed\n");
+}
+
+/**
+ * @brief 13.4 tick READY復帰smoke用の低優先度current task entry。
+ *
+ * @details
+ * READY復帰した高優先度taskとのpreemption比較対象にするための観測用entryである。
+ * このentry本体は呼び出さない。
+ */
+static void task_tick_current(void)
+{
+    hal_console_write("[task_tick_current] executed\n");
+}
+
+/**
  * @brief kernelのメインエントリポイント。
  *
  * @details
@@ -1301,6 +1424,9 @@ void kernel_main(void)
     int task_dly_to_id;
     int task_twai_from_id;
     int task_twai_to_id;
+    int task_tick_delay_id;
+    int task_tick_twai_id;
+    int task_tick_current_id;
     const tcb_t *selected_task;
     const tcb_t *context_next_task;
 
@@ -1344,7 +1470,7 @@ void kernel_main(void)
     task_init();
     /*
      * 13.2のsleep/delay queueを空状態へ初期化する。
-     * ここではdelay待ちtaskの観測queueだけを準備し、tick decrementやREADY復帰はまだ行わない。
+     * 13.4以降はtimer tickによりremaining tickが減算され、timeout到達taskがREADYへ戻る。
      */
     delay_queue_init();
     scheduler_init();
@@ -1552,8 +1678,8 @@ void kernel_main(void)
 
     /*
      * 第13章13.1では、semaphore待ちとは別にdelay待ちの入口だけを観測する。
-     * delay queue、tick decrement、tick到達時READY復帰はまだ実装せず、RUNNING currentを
-     * delay WAITINGへ落として既存dispatcher境界へ進むところまでを確認する。
+     * RUNNING currentをdelay WAITINGへ落として既存dispatcher境界へ進むところを確認する。
+     * tick到達時READY復帰は後続の13.4 smokeで確認する。
      */
     task_dly_from_id = task_register(
         "task_dly_from",
@@ -1581,7 +1707,7 @@ void kernel_main(void)
      * 第13章13.3では、timeout付きsemaphore待ちを観測する。
      * twai_sem()はtask文脈APIとしてkernel smoke側から呼び、timer IRQ handlerや
      * task entry本体からは呼ばない。timeout待ちtaskはsemaphore wait queueと
-     * delay queueの両方へ登録されるが、timeout到達時READY復帰はまだ行わない。
+     * delay queueの両方へ登録される。timeout到達時READY復帰は後続の13.4 smokeで確認する。
      */
     task_twai_from_id = task_register(
         "task_twai_from",
@@ -1603,6 +1729,45 @@ void kernel_main(void)
 
     if (task_twai_from_id > 0 && task_twai_to_id > 0) {
         kernel_run_twai_sem_smoke(task_twai_from_id);
+    }
+
+    /*
+     * 第13章13.4では、timer tick到達時にdelay queue上のtaskをREADYへ復帰させる。
+     * timeout付きsemaphore待ちtaskはsemaphore wait queueからも削除する。
+     */
+    task_tick_delay_id = task_register(
+        "task_tick_delay",
+        task_tick_delay,
+        1,
+        task_tick_delay_stack,
+        sizeof(task_tick_delay_stack)
+    );
+    kernel_log_task_register_result("task_tick_delay", task_tick_delay_id);
+
+    task_tick_twai_id = task_register(
+        "task_tick_twai",
+        task_tick_twai,
+        0,
+        task_tick_twai_stack,
+        sizeof(task_tick_twai_stack)
+    );
+    kernel_log_task_register_result("task_tick_twai", task_tick_twai_id);
+
+    task_tick_current_id = task_register(
+        "task_tick_current",
+        task_tick_current,
+        5,
+        task_tick_current_stack,
+        sizeof(task_tick_current_stack)
+    );
+    kernel_log_task_register_result("task_tick_current", task_tick_current_id);
+
+    if (task_tick_delay_id > 0 && task_tick_twai_id > 0 && task_tick_current_id > 0) {
+        kernel_run_tick_ready_wakeup_smoke(
+            task_tick_delay_id,
+            task_tick_twai_id,
+            task_tick_current_id
+        );
     }
 
     for (;;) {

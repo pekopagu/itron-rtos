@@ -658,6 +658,92 @@ int sem_dequeue_waiter(int sem_id, int *task_id)
 }
 
 /**
+ * @brief timeout到達taskをsemaphore wait queueからtask id指定で取り除く。
+ *
+ * @details
+ * 13.4のtimeout付きsemaphore待ち復帰で使う。`sig_sem()` のFIFO dequeueとは別に、
+ * delay queue側でtimeout到達を検出したtaskだけを対象semaphoreのwait queueから削除する。
+ * 残りのwaiterのFIFO順は維持する。
+ *
+ * この関数はtask状態をREADYへ戻さない。task state cleanupはtask moduleの専用helperへ委譲し、
+ * semaphore moduleはwait queue所有権だけを扱う。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 削除するtask ID。
+ * @return 成功時はSEM_OK。対象がない場合はSEM_WAIT_QUEUE_EMPTY。入力不正時はSEM_ERR_INVAL。
+ */
+int sem_remove_waiter(int sem_id, int task_id)
+{
+    semaphore_t *sem = find_semaphore_by_id(sem_id);
+    const tcb_t *task;
+    const char *task_name;
+    int kept_queue[MAX_TASKS];
+    int original_count;
+    int kept_count = 0;
+    int removed = 0;
+    int index;
+
+    /* semaphore IDまたはtask IDが不正な場合は、queue内容を変更せずに拒否する。 */
+    if (sem == NULL || task_id <= 0) {
+        return SEM_ERR_INVAL;
+    }
+
+    original_count = sem->wait_count;
+    /* 空queueではtimeout削除対象が存在しないため、状態を変更せず対象なしとして返す。 */
+    if (original_count <= 0) {
+        return SEM_WAIT_QUEUE_EMPTY;
+    }
+
+    /*
+     * ring bufferを先頭から論理順に読み、timeout到達taskだけを取り除く。
+     * 残りのtask idは順序を保って一時配列へ退避する。
+     */
+    for (index = 0; index < original_count; index++) {
+        int queue_index = (sem->wait_head + index) % MAX_TASKS;
+        int queued_task_id = sem->wait_queue[queue_index];
+
+        if (!removed && queued_task_id == task_id) {
+            removed = 1;
+            continue;
+        }
+
+        kept_queue[kept_count++] = queued_task_id;
+    }
+
+    if (!removed) {
+        return SEM_WAIT_QUEUE_EMPTY;
+    }
+
+    /*
+     * 削除後のFIFO順を単純化してhead 0から再構成する。
+     * priority順化や別queueへの移譲は13.4の範囲外である。
+     */
+    for (index = 0; index < MAX_TASKS; index++) {
+        sem->wait_queue[index] = 0;
+    }
+    sem->wait_head = 0;
+    sem->wait_tail = kept_count % MAX_TASKS;
+    sem->wait_count = kept_count;
+    for (index = 0; index < kept_count; index++) {
+        sem->wait_queue[index] = kept_queue[index];
+    }
+
+    task = task_get_by_id(task_id);
+    task_name = (task != NULL && task->name != NULL) ? task->name : "(null)";
+    hal_console_write("[sem-wq] remove: sem id=");
+    sem_write_int(sem_id);
+    hal_console_write(" task id=");
+    sem_write_int(task_id);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" reason=timeout queue_count=");
+    sem_write_int(sem->wait_count);
+    hal_console_write("\n");
+
+    return SEM_OK;
+}
+
+/**
  * @brief 12.4のtask文脈sig_semとしてwakeup後preemption判定まで実行する。
  *
  * @details

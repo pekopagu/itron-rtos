@@ -39,8 +39,8 @@ typedef void (*task_entry_t)(void);
  * @details
  * 第13章13.1では、同じ `TASK_STATE_WAITING` でもsemaphore待ちとdelay待ちを
  * 区別できるようにする。第13章13.3ではtimeout付きsemaphore待ちも別理由として
- * 観測できるようにする。これは観測用の最小モデルであり、tickごとの減算、
- * tick到達時のREADY復帰、timeout時のqueue削除はまだ実装しない。
+ * 観測できるようにする。13.4ではtick到達時のREADY復帰とtimeout時のqueue削除を
+ * delay queue tick処理へ接続する。
  */
 typedef enum {
     TASK_WAIT_REASON_NONE = 0,      /**< 待ちなし。READY/RUNNING/DORMANT/UNUSEDで使う。 */
@@ -141,7 +141,7 @@ typedef struct {
     task_state_t state;        /**< 空き判定、scheduler候補判定、dispatcher確定判定の根拠。状態遷移を一箇所で観測できるようTCBに持たせる。 */
     int wait_sem_id;           /**< セマフォ待ち対象ID。0は待ちなし。第6章6.1では観測用で、timeoutやwait queueとは接続しない。 */
     task_wait_reason_t wait_reason; /**< WAITINGの理由。semaphore待ちとdelay待ちを区別する観測値。 */
-    uint32_t delay_ticks_remaining; /**< delay待ちの残tick観測値。13.1では減算やREADY復帰は行わない。 */
+    uint32_t delay_ticks_remaining; /**< delay/timeout待ちの残tick観測値。13.4ではdelay queue tick処理が減算する。 */
     void *stack_base;          /**< 将来のスタック管理に渡す基底アドレス。現段階では保持と表示のみで、切り替えには使わない。 */
     unsigned long stack_size;  /**< stack_baseが指す領域のサイズ。将来のスタック検証に使えるよう、現段階からTCBに含める。 */
     /**
@@ -347,8 +347,8 @@ int task_mark_waiting_on_sem(int task_id, int sem_id);
  * ある必要があり、遷移後は `wait_reason=TASK_WAIT_REASON_DELAY`、
  * `wait_sem_id=0`、`delay_ticks_remaining=delay_ticks` として観測できる。
  *
- * このAPIはsleep/delay queueを作らず、tickごとの減算、tick到達時READY復帰、
- * timer IRQ handlerからの呼び出しも扱わない。scheduler選択やdispatcher switchは
+ * このAPIはdelay WAITING状態への遷移だけを担当し、tickごとの減算、tick到達時READY復帰、
+ * timer IRQ handlerからの呼び出しは扱わない。scheduler選択やdispatcher switchは
  * 呼び出し元の `dly_tsk()` が担当する。
  *
  * @param task_id delay待ちへ入れるtask ID。
@@ -419,5 +419,34 @@ int task_wake_one_waiting_on_sem(int sem_id, int *woken_task_id);
  * @return 成功時は0。失敗時はTASK_ERR_*。
  */
 int task_wake_waiting_on_sem_by_id(int task_id, int sem_id);
+
+/**
+ * @brief 指定taskをdelay timeout到達によりREADYへ戻す。
+ *
+ * @details
+ * 13.4のdelay queue tick処理から呼ばれる。対象taskは
+ * `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` である必要がある。
+ * READY復帰後はwait reason、wait semaphore id、remaining tickを未待ち状態へ戻す。
+ * この関数はscheduler選択やdispatcher switchを行わない。
+ *
+ * @param task_id READYへ戻すdelay待ちtask ID。
+ * @return 成功時は0。失敗時はTASK_ERR_*。
+ */
+int task_wake_waiting_on_delay_by_id(int task_id);
+
+/**
+ * @brief 指定taskをtimeout付きsemaphore待ちのtimeout到達によりREADYへ戻す。
+ *
+ * @details
+ * 13.4のdelay queue tick処理から呼ばれる。対象taskは
+ * `TASK_STATE_WAITING`、`TASK_WAIT_REASON_SEMAPHORE_TIMEOUT`、指定semaphore ID待ちで
+ * ある必要がある。READY復帰後はwait reason、wait semaphore id、remaining tickを
+ * 未待ち状態へ戻す。この関数はsemaphore wait queue削除やdispatcher switchを行わない。
+ *
+ * @param task_id READYへ戻すtimeout付きsemaphore待ちtask ID。
+ * @param sem_id taskが待っているべきsemaphore ID。
+ * @return 成功時は0。失敗時はTASK_ERR_*。
+ */
+int task_wake_waiting_on_sem_timeout_by_id(int task_id, int sem_id);
 
 #endif

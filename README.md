@@ -85,6 +85,7 @@ The current implementation covers the following milestones:
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue | Completed |
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
+| 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -735,6 +736,24 @@ observation path:
   semaphore wait, same-priority time slicing, and round-robin remain
   unimplemented.
 
+Chapter 13 Section 13.4 connects timer tick progress to delay queue wakeup:
+
+* `timer_tick()` now calls `delay_queue_tick()` after incrementing the system
+  tick count.
+* Each delay queue entry decrements its remaining tick by one and logs the
+  before/after value, wait reason, and task state.
+* When a delay waiter reaches remaining tick zero, it is removed from the delay
+  queue and moved from WAITING back to READY.
+* When a timeout semaphore waiter reaches remaining tick zero, it is removed
+  from the target semaphore wait queue, removed from the delay queue, and moved
+  from WAITING back to READY.
+* READY wakeup is visible to the existing scheduler/preemption path. Timer IRQ
+  handling still observes dispatch pending and does not call
+  `dispatcher_switch_to()` directly.
+* `sig_sem()` success-time delay queue removal, timeout return-value delivery,
+  polling semaphore wait, same-priority time slicing, and round-robin remain
+  unimplemented.
+
 ---
 
 ## Development Environment
@@ -1318,6 +1337,11 @@ The current kernel includes:
 * `sig_sem()` no-waiting-task semaphore count increment path
 * Semaphore-local FIFO wait queue for `wai_sem()` / `sig_sem()`
 * `sig_sem()` wakeup-after-preemption check for higher-priority READY tasks
+* Tick-based delay queue remaining decrement
+* Tick-reached READY return for delay waiting tasks
+* Tick-reached READY return for timeout semaphore waiting tasks
+* Timeout-side removal from the semaphore wait queue
+* Preemption pending observation after tick-driven READY wakeup
 * Japanese Doxygen comments for interrupt/PIC observation intent and limits
 
 ---
@@ -1339,11 +1363,6 @@ The following features are intentionally not implemented yet:
 * Interrupt return with `iretq`
 * Recoverable exception handling
 * Time slice
-* Tick-based delay decrement
-* Tick-reached READY return for delay waiting tasks
-* Tick-based timeout decrement for timeout semaphore waiting tasks
-* Timeout-reached READY return for timeout semaphore waiting tasks
-* Timeout-side removal from the semaphore wait queue
 * Delay-queue removal when `sig_sem()` wakes a timeout semaphore waiter
 * Dynamic memory allocation
 * Timer-driven stack switching
@@ -1474,6 +1493,12 @@ classifies the current task as `semaphore-timeout` WAITING and registers it in
 both the semaphore wait queue and delay queue for observation. They also state
 that tick decrement, timeout-reached READY return, timeout-side semaphore queue
 removal, and `sig_sem()` success-time delay queue removal remain out of scope.
+For Chapter 13 Section 13.4, comments document that `timer_tick()` advances the
+delay queue, that delay waiters and timeout semaphore waiters return from
+WAITING to READY when remaining tick reaches zero, and that timeout semaphore
+waiters are removed from the semaphore wait queue on timeout. They also state
+that timer IRQ handler bodies still do not directly call task APIs or
+`dispatcher_switch_to()`.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1700,6 +1725,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue     | Completed |
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
+| 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 
 ---
 

@@ -857,9 +857,8 @@ int task_mark_waiting_on_sem(int task_id, int sem_id)
  * `wait_sem_id` は0のままにし、`wait_reason=TASK_WAIT_REASON_DELAY` と
  * `delay_ticks_remaining` でdelay待ちを観測する。
  *
- * この関数はdelay queue、tickごとの残tick減算、tick到達時READY復帰、
- * scheduler選択、dispatcher switchを行わない。それらは将来章または呼び出し元の
- * 境界に残す。
+ * この関数はdelay WAITING状態への遷移だけを担当し、delay queue登録、tickごとの残tick減算、
+ * tick到達時READY復帰、scheduler選択、dispatcher switchを行わない。
  *
  * @param task_id delay待ちへ遷移するtask ID。
  * @param delay_ticks 観測用に保持するdelay tick数。0は不正。
@@ -918,7 +917,8 @@ int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks)
  * @details
  * timeout付きsemaphore待ちは、通常のsemaphore待ちとdelay待ちの両方の性質を持つ。
  * `wait_sem_id` はsemaphore wakeup対象を示すためだけに使い、timeout観測値は
- * `delay_ticks_remaining` に保存する。13.3ではtick decrementやtimeout到達時READY復帰は行わない。
+ * `delay_ticks_remaining` に保存する。13.4ではtick decrementやtimeout到達時READY復帰は
+ * delay queue tick処理が担当するため、この関数は状態設定だけを行う。
  *
  * @param task_id timeout付きsemaphore待ちへ入るtask ID。
  * @param sem_id 待ち対象semaphore ID。
@@ -1153,6 +1153,119 @@ int task_wake_waiting_on_sem_by_id(int task_id, int sem_id)
     hal_console_write(" state=");
     hal_console_write(task_state_to_string(task->state));
     hal_console_write("\n");
+
+    return 0;
+}
+
+/**
+ * @brief delay timeout到達済みtaskをWAITINGからREADYへ戻す。
+ *
+ * @details
+ * 13.4のdelay queue tick処理から呼ばれる。対象taskがdelay待ちとしてWAITING中であることを
+ * 確認し、READY復帰後にwait reason、wait semaphore id、remaining tickを未待ち状態へ戻す。
+ *
+ * この関数はscheduler選択、preemption判定、dispatcher switchを行わない。
+ * READYへ戻したtaskが次に実行されるかどうかは、呼び出し側のscheduler/preemption境界が判断する。
+ *
+ * @param task_id READYへ戻すdelay待ちtask ID。
+ * @return 成功時は0。入力不正、taskなし、状態不整合ではTASK_ERR_*。
+ */
+int task_wake_waiting_on_delay_by_id(int task_id)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /* 不正なtask IDではTCBを探さず、task tableの状態を変更しない。 */
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    /* task tableに存在しないIDは、queueとtask tableの境界不整合として扱う。 */
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * delay queueのtimeout到達で戻せるのは、delay待ちとしてWAITING中のtaskだけである。
+     * semaphore待ちやREADY済みtaskを補正してREADYへ戻すことはしない。
+     */
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_DELAY) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * timeout到達により待ち状態を完了させる。ここではscheduler候補へ戻すだけで、
+     * dispatcher switchやpreemption判定はtimer/preemption境界へ委譲する。
+     */
+    task->state = TASK_STATE_READY;
+    task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_NONE;
+    task->delay_ticks_remaining = 0;
+
+    hal_console_write("[task] delay wakeup: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" WAITING->READY\n");
+
+    return 0;
+}
+
+/**
+ * @brief timeout付きsemaphore待ちtaskをtimeout到達によりWAITINGからREADYへ戻す。
+ *
+ * @details
+ * 13.4のdelay queue tick処理から呼ばれる。対象taskが指定semaphoreを待つ
+ * timeout付きsemaphore WAITINGであることを確認し、READY復帰後にwait reason、
+ * wait semaphore id、remaining tickを未待ち状態へ戻す。
+ *
+ * semaphore wait queueからの削除はこの関数では行わない。delay queue tick処理が
+ * `sem_remove_waiter()` を先に呼ぶことで、queue所有権とtask状態所有権を分離する。
+ *
+ * @param task_id READYへ戻すtimeout付きsemaphore待ちtask ID。
+ * @param sem_id taskが待っているべきsemaphore ID。
+ * @return 成功時は0。入力不正、taskなし、状態不整合ではTASK_ERR_*。
+ */
+int task_wake_waiting_on_sem_timeout_by_id(int task_id, int sem_id)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /* 不正なtask IDまたはsemaphore IDでは、TCBを変更せずに拒否する。 */
+    if (task_id <= 0 || sem_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    /* task tableに存在しないIDは、delay queue側の古いentryとして扱い失敗させる。 */
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * timeout付きsemaphore待ちとして登録されたtaskだけをtimeout READY復帰対象にする。
+     * 通常のsemaphore待ちはsig_sem()の責務として残す。
+     */
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE_TIMEOUT ||
+        task->wait_sem_id != sem_id) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * timeout到達により待ち状態を完了させる。戻り値伝達の本格機構はまだ持たず、
+     * TCBの観測値を未待ち状態へ整理する。
+     */
+    task->state = TASK_STATE_READY;
+    task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_NONE;
+    task->delay_ticks_remaining = 0;
+
+    hal_console_write("[task] semaphore timeout wakeup: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" sem id=");
+    task_write_int(sem_id);
+    hal_console_write(" WAITING->READY\n");
 
     return 0;
 }

@@ -8,14 +8,15 @@
  *
  * @details
  * `dly_tsk()` でdelay WAITINGへ入ったtaskを、semaphore wait queueとは別の
- * 固定長queueに登録する。13.2のqueueは観測用であり、tick decrement、
- * delay満了時READY復帰、dequeue、timer IRQ handler連携はまだ行わない。
+ * 固定長queueに登録する。13.4ではtimer tickごとにremaining tickを減算し、
+ * timeout到達taskをREADYへ戻す。ただしtimer IRQ handler本体から直接dispatcherへは進まない。
  */
 
 #include <stddef.h>
 
 #include "delay_queue.h"
 #include "hal/console.h"
+#include "semaphore.h"
 #include "task.h"
 
 /**
@@ -29,7 +30,7 @@
  */
 typedef struct {
     int task_id;                       /**< delay WAITING taskのID。0は未使用entry。 */
-    uint32_t delay_ticks_remaining;    /**< 13.2では観測用に保持するremaining tick。 */
+    uint32_t delay_ticks_remaining;    /**< 13.4ではtickごとに減算するremaining tick。 */
 } delay_queue_entry_t;
 
 static delay_queue_entry_t delay_queue_entries[MAX_TASKS];
@@ -327,4 +328,148 @@ void delay_queue_dump(void)
 
     /* dumpの終端を明示し、後続のscheduler/dispatcherログと混ざらないようにする。 */
     hal_console_write("[delay-q] dump end\n");
+}
+
+/**
+ * @brief delay queueのentryを指定indexから削除する。
+ *
+ * @param remove_index 削除するentry index。
+ * @note 固定長配列内で後続entryを1つずつ詰める。delta queue最適化は行わない。
+ */
+static void delay_queue_remove_at(int remove_index)
+{
+    int index;
+
+    /* 削除位置より後ろのentryを前へ詰め、queue順を保ったままcountを減らす。 */
+    for (index = remove_index; index < delay_queue_count - 1; index++) {
+        delay_queue_entries[index] = delay_queue_entries[index + 1];
+    }
+
+    /* 末尾に残る古いentryを消して、後続dumpでstale値が見えないようにする。 */
+    if (delay_queue_count > 0) {
+        delay_queue_entries[delay_queue_count - 1].task_id = 0;
+        delay_queue_entries[delay_queue_count - 1].delay_ticks_remaining = 0U;
+        delay_queue_count--;
+    }
+}
+
+/**
+ * @brief timer tickに合わせてdelay queue上のremaining tickを1つ進める。
+ *
+ * @details
+ * 13.4のtick到達READY復帰モデルである。queue上の各entryを順に確認し、
+ * remaining tickを1減算する。0になったdelay待ちtaskはREADYへ戻し、
+ * timeout付きsemaphore待ちtaskは対象semaphore wait queueから削除してからREADYへ戻す。
+ *
+ * この関数はtimer IRQ handlerから呼ばれても直接dispatcherへ進まない。
+ * READY復帰後のpreemption判定とdispatch pending設定は、呼び出し側の後続境界へ委譲する。
+ *
+ * @return timeout到達として処理したentry数。
+ */
+int delay_queue_tick(void)
+{
+    int index = 0;
+    int expired_count = 0;
+
+    /* tick処理の開始時点でqueue件数を出し、今回のtickがどの待ち集合を対象にしたかを観測する。 */
+    hal_console_write("[delay-q] tick begin: count=");
+    delay_queue_write_int(delay_queue_count);
+    hal_console_write("\n");
+
+    /*
+     * 削除時は同じindexへ次entryが詰められるため、timeout処理した場合はindexを進めない。
+     * remainingが残るentryだけ次indexへ進める。
+     */
+    while (index < delay_queue_count) {
+        delay_queue_entry_t *entry = &delay_queue_entries[index];
+        tcb_t *task = task_get_mutable_by_id(entry->task_id);
+        uint32_t before = entry->delay_ticks_remaining;
+        uint32_t after = (before > 0U) ? (before - 1U) : 0U;
+        const char *task_name = (task != NULL && task->name != NULL) ? task->name : "(null)";
+        task_wait_reason_t reason = (task != NULL) ? task->wait_reason : TASK_WAIT_REASON_NONE;
+
+        /* queue entryとTCBのremaining観測値を同じtick結果へ揃える。 */
+        entry->delay_ticks_remaining = after;
+        if (task != NULL) {
+            task->delay_ticks_remaining = after;
+        }
+
+        hal_console_write("[delay-q] tick entry: task id=");
+        delay_queue_write_int(entry->task_id);
+        hal_console_write(" name=");
+        hal_console_write(task_name);
+        hal_console_write(" remaining ");
+        delay_queue_write_uint(before);
+        hal_console_write("->");
+        delay_queue_write_uint(after);
+        hal_console_write(" reason=");
+        hal_console_write(delay_queue_wait_reason_name(reason));
+        hal_console_write(" state=");
+        hal_console_write((task != NULL) ? delay_queue_task_state_name(task->state) : "UNKNOWN");
+        hal_console_write("\n");
+
+        if (after > 0U) {
+            index++;
+            continue;
+        }
+
+        expired_count++;
+        hal_console_write("[delay-q] timeout reached: task id=");
+        delay_queue_write_int(entry->task_id);
+        hal_console_write(" name=");
+        hal_console_write(task_name);
+        hal_console_write(" reason=");
+        hal_console_write(delay_queue_wait_reason_name(reason));
+        if (task != NULL && reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
+            hal_console_write(" sem id=");
+            delay_queue_write_int(task->wait_sem_id);
+        }
+        hal_console_write("\n");
+
+        /*
+         * timeout付きsemaphore待ちはsig_sem()のwakeup対象queueにも残っているため、
+         * READY復帰前に対象semaphore wait queueから取り除く。
+         */
+        if (task != NULL && reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
+            int sem_remove_result = sem_remove_waiter(task->wait_sem_id, task->id);
+            if (sem_remove_result == SEM_OK) {
+                (void)task_wake_waiting_on_sem_timeout_by_id(task->id, task->wait_sem_id);
+            } else {
+                hal_console_write("[delay-q] semaphore timeout cleanup failed: task id=");
+                delay_queue_write_int(task->id);
+                hal_console_write(" err=");
+                delay_queue_write_int(sem_remove_result);
+                hal_console_write("\n");
+            }
+        } else if (task != NULL && reason == TASK_WAIT_REASON_DELAY) {
+            (void)task_wake_waiting_on_delay_by_id(task->id);
+        } else {
+            hal_console_write("[delay-q] timeout skipped: reason=invalid-task-state task id=");
+            delay_queue_write_int(entry->task_id);
+            hal_console_write("\n");
+        }
+
+        /*
+         * timeout到達entryはdelay queueから削除する。
+         * task状態復帰に失敗した場合も、0 tick entryを残して毎tick再処理しない。
+         */
+        hal_console_write("[delay-q] remove: task id=");
+        delay_queue_write_int(entry->task_id);
+        hal_console_write(" name=");
+        hal_console_write(task_name);
+        hal_console_write(" reason=");
+        hal_console_write(delay_queue_wait_reason_name(reason));
+        delay_queue_remove_at(index);
+        hal_console_write(" queue_count=");
+        delay_queue_write_int(delay_queue_count);
+        hal_console_write("\n");
+    }
+
+    hal_console_write("[delay-q] tick end: expired=");
+    delay_queue_write_int(expired_count);
+    hal_console_write(" count=");
+    delay_queue_write_int(delay_queue_count);
+    hal_console_write("\n");
+
+    return expired_count;
 }

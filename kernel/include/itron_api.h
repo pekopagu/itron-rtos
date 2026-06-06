@@ -79,7 +79,7 @@
  * @details
  * RUNNING current taskをdelay WAITINGへ遷移させ、次READY taskがある場合は
  * dispatcher/context switch境界へ到達したことを示す。delay満了によるREADY復帰は
- * 13.1ではまだ扱わない。
+ * 13.4のdelay queue tick処理が担当する。
  */
 #define DLY_TSK_OK 0
 
@@ -188,9 +188,8 @@ int wai_sem(int sem_id);
  * その後、既存schedulerで次READY taskを選択し、存在すれば既存
  * `dispatcher_switch_to()` 境界へ進む。
  *
- * 13.1ではsleep/delay queue、tickごとのdelay decrement、tick到達時READY復帰、
- * timeout付きsemaphore待ちは実装しない。13.3で `twai_sem()` は追加されたが、
- * timer IRQ handlerからの呼び出しやtimeout満了処理は引き続き行わない。
+ * tick到達時READY復帰は13.4のdelay queue tick処理が担当する。
+ * timer IRQ handlerからの呼び出しは引き続き扱わない。
  *
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
  * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
@@ -204,8 +203,8 @@ int wai_sem(int sem_id);
  * queue満杯や二重登録ではWAITING化前に失敗し、不整合なWAITING taskを残さない。
  *
  * tick decrement、tick到達時READY復帰、delay queueからのdequeue wakeup、
- * timeout付きsemaphore待ちのtimeout満了処理、timer IRQ handlerからの呼び出しは
- * 13.3時点でも未実装である。
+ * timeout付きsemaphore待ちのtimeout満了処理は13.4のdelay queue tick処理が担当する。
+ * timer IRQ handlerからの呼び出しは引き続き扱わない。
  *
  * @param delay_ticks delay queueへ観測用に登録するtick数。0は不正。
  * @return 成功時は `DLY_TSK_OK`、失敗時は `DLY_TSK_ERR_*`。
@@ -224,9 +223,9 @@ int dly_tsk(uint32_t delay_ticks);
  * `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` のWAITINGへ遷移させ、semaphore wait queueには
  * `sig_sem()` のwakeup対象として、delay queueにはtimeout tick観測対象として登録する。
  *
- * 13.3ではtickごとのtimeout decrement、timeout到達時READY復帰、timeout時のsemaphore
- * wait queue削除、`sig_sem()` 成功時のdelay queue削除は行わない。timer IRQ handler本体から
- * 呼び出すAPIでもない。
+ * 13.4ではtickごとのtimeout decrement、timeout到達時READY復帰、timeout時のsemaphore
+ * wait queue削除をdelay queue tick処理へ接続する。`sig_sem()` 成功時のdelay queue削除は
+ * まだ行わない。timer IRQ handler本体から呼び出すAPIでもない。
  *
  * @param sem_id 対象semaphore ID。
  * @param timeout_ticks timeout観測用tick数。0はinvalid timeout。
