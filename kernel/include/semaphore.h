@@ -104,6 +104,20 @@ const semaphore_t *sem_get_by_id(int sem_id);
 int sem_take_if_available(int sem_id, int *count_before, int *count_after);
 
 /**
+ * @brief 待ちtaskがいない `sig_sem()` 経路用にsemaphore countを1つ増やす。
+ *
+ * @details
+ * semaphore moduleがcountの所有権を持つため、API層はcountを直接変更しない。
+ * max_countを超える場合は失敗し、countは変更しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param count_before 更新前countの格納先。NULL可。
+ * @param count_after 更新後countの格納先。NULL可。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_increment_count(int sem_id, int *count_before, int *count_after);
+
+/**
  * @brief WAITING化前にsemaphore wait queueへ登録可能かを確認する。
  *
  * @details
@@ -188,7 +202,7 @@ int sem_remove_waiter(int sem_id, int task_id);
  * @param sem_id 対象semaphore ID。
  * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
-int sig_sem(int sem_id);
+/* sig_sem() は14.3以降、μITRON風API層の itron_api.c が所有する。 */
 
 /**
  * @brief 登録済みセマフォの一覧をHAL consoleへ出力する。

@@ -88,6 +88,7 @@ The current implementation covers the following milestones:
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
+| 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1512,6 +1513,12 @@ returns only WAITING(sleep) tasks to READY. They also state that READY wakeup is
 connected to the existing preemption pending boundary, while semaphore waits,
 delay waits, timeout semaphore waits, wakeup request counting, sleep timeout,
 and timer IRQ handler calls to `slp_tsk()` / `wup_tsk()` remain out of scope.
+For Chapter 14 Section 14.3, comments document that `wai_sem()` / `sig_sem()` /
+`pol_sem()` / `twai_sem()` are organized as the μITRON-like semaphore API layer.
+`pol_sem()` performs non-blocking acquisition, `twai_sem()` registers timeout
+semaphore waiters in both semaphore and delay queues, and `sig_sem()` restores
+normal or timeout semaphore waiters to READY while connecting higher-priority
+wakeups to the existing preemption pending boundary.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1741,6 +1748,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
+| 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 
 ---
 

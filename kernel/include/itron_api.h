@@ -76,6 +76,52 @@
 #define WAI_SEM_ERR_DISPATCH (-3)
 
 /**
+ * @brief `pol_sem()` の観測成功を示す戻り値。
+ *
+ * @details
+ * semaphore countを即時取得できた場合に返す。WAITING遷移は行わない。
+ */
+#define POL_SEM_OK 0
+
+/**
+ * @brief `pol_sem()` が待たずに取得できないことを示す戻り値。
+ *
+ * @details
+ * countが0の場合に返す。task状態、wait metadata、queue membershipは変更しない。
+ */
+#define POL_SEM_ERR_WOULD_BLOCK (-1)
+
+/**
+ * @brief `pol_sem()` のcurrent task不正状態を示す戻り値。
+ */
+#define POL_SEM_ERR_INVALID_CURRENT_STATE (-2)
+
+/**
+ * @brief `pol_sem()` のsemaphore不正状態を示す戻り値。
+ */
+#define POL_SEM_ERR_SEMAPHORE (-3)
+
+/**
+ * @brief `sig_sem()` の観測成功を示す戻り値。
+ */
+#define SIG_SEM_OK 0
+
+/**
+ * @brief `sig_sem()` のsemaphore不正状態を示す戻り値。
+ */
+#define SIG_SEM_ERR_SEMAPHORE (-1)
+
+/**
+ * @brief `sig_sem()` のwakeup対象task不整合を示す戻り値。
+ */
+#define SIG_SEM_ERR_TASK (-2)
+
+/**
+ * @brief `sig_sem()` のcount上限超過を示す戻り値。
+ */
+#define SIG_SEM_ERR_OVERFLOW (-3)
+
+/**
  * @brief `dly_tsk()` の観測成功を示す戻り値。
  *
  * @details
@@ -293,6 +339,32 @@ int wup_tsk(int tskid);
  * @return 成功時はWAI_SEM_OK。失敗時はWAI_SEM_ERR_*。
  */
 int wai_sem(int sem_id);
+
+/**
+ * @brief μITRON風のsemaphore返却API入口。
+ *
+ * @details
+ * 対象semaphoreのwait queueにsemaphore待ちtaskがあればREADYへ戻す。
+ * timeout付きsemaphore待ちtaskを起こす場合はdelay queue側の登録も削除する。
+ * 待ちtaskがいなければsemaphore countを増やす。READY化したtaskがcurrentより高優先度なら
+ * 既存preemption pendingへ接続し、APIから直接context switchしない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はSIG_SEM_OK。失敗時はSIG_SEM_ERR_*。
+ */
+int sig_sem(int sem_id);
+
+/**
+ * @brief μITRON風のsemaphore非ブロッキング取得API入口。
+ *
+ * @details
+ * countが残っている場合だけ取得して成功する。countが0の場合はWAITINGへ遷移せず、
+ * 即時エラーを返す。timer IRQ handler本体から呼ぶAPIではない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はPOL_SEM_OK。失敗時はPOL_SEM_ERR_*。
+ */
+int pol_sem(int sem_id);
 
 /**
  * @brief μITRON風のdelay待ちAPI入口。

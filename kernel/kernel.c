@@ -965,6 +965,7 @@ static void kernel_run_cooperative_entries(void)
 static void kernel_run_semaphore_smoke(int current_task_id)
 {
     int sem_a_id;
+    int sem_pol_id;
     int signaler_task_id;
 
     hal_console_write("[sem-smoke] begin\n");
@@ -979,7 +980,8 @@ static void kernel_run_semaphore_smoke(int current_task_id)
      * 1回目のwai_semは成功、2回目のwai_semはWAITINGという流れを確実に作る。
      */
     sem_a_id = sem_create("sem_a", 1, 1);
-    if (sem_a_id < 0) {
+    sem_pol_id = sem_create("sem_pol", 1, 1);
+    if (sem_a_id < 0 || sem_pol_id < 0) {
         hal_console_write("[sem-smoke] stop: reason=create-failed\n");
         return;
     }
@@ -992,6 +994,9 @@ static void kernel_run_semaphore_smoke(int current_task_id)
         hal_console_write("[sem-smoke] stop: reason=current-commit-failed\n");
         return;
     }
+    (void)pol_sem(sem_pol_id);
+    (void)pol_sem(sem_pol_id);
+    (void)pol_sem(-1);
     (void)wai_sem(sem_a_id);
     (void)wai_sem(sem_a_id);
 
@@ -1116,6 +1121,12 @@ static void kernel_run_twai_sem_smoke(int current_task_id)
      * この時点でcurrent taskはsemaphore wait queueとdelay queueの両方に登録される。
      */
     (void)twai_sem(sem_twai_id, 10U);
+
+    /*
+     * 14.3ではtimeout付きsemaphore待ちtaskをsig_sem()で起こした場合に、
+     * delay queue側の登録も削除されることを観測する。
+     */
+    (void)sig_sem(sem_twai_id);
 
     task_dump();
     sem_dump();

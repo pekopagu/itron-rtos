@@ -84,6 +84,19 @@ int delay_queue_can_enqueue(int task_id);
 int delay_queue_enqueue(int task_id, uint32_t delay_ticks);
 
 /**
+ * @brief timeout付きsemaphore待ちtaskをdelay queueから削除する。
+ *
+ * @details
+ * `sig_sem()` がtimeout付きsemaphore待ちtaskをREADYへ戻す前に呼ぶ。
+ * 対象taskはWAITINGかつ `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` でなければならない。
+ * sleep待ち、delay待ち、通常semaphore待ち、READY/RUNNING/DORMANT taskは削除しない。
+ *
+ * @param task_id 削除対象task ID。
+ * @return 成功時はDELAY_QUEUE_OK。失敗時はDELAY_QUEUE_ERR_*。
+ */
+int delay_queue_remove_sem_timeout_waiter(int task_id);
+
+/**
  * @brief delay queueの観測dumpをHAL consoleへ出力する。
  *
  * @details

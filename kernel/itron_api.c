@@ -940,6 +940,260 @@ int wai_sem(int sem_id)
 }
 
 /**
+ * @brief μITRON風のsemaphore非ブロッキング取得API。
+ *
+ * @details
+ * countが残っている場合だけ取得する。countが0の場合はWAITINGへ遷移せず、
+ * task状態、wait metadata、semaphore wait queue、delay queueを変更しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はPOL_SEM_OK。失敗時はPOL_SEM_ERR_*。
+ */
+int pol_sem(int sem_id)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const semaphore_t *sem;
+    int count_before = 0;
+    int count_after = 0;
+    int take_result;
+
+    if (current == NULL) {
+        hal_console_write("[pol-sem] called: semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" current=none\n");
+        hal_console_write("[pol-sem] completed: result=");
+        itron_api_write_int(POL_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return POL_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    hal_console_write("[pol-sem] called: semid=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" current");
+    itron_api_log_next_candidate(current);
+    hal_console_write("\n");
+
+    /* pol_sem()はtask文脈APIなので、RUNNING current以外では状態を変更しない。 */
+    if (current->state != TASK_STATE_RUNNING) {
+        hal_console_write("[pol-sem] rejected: reason=invalid-current-state current");
+        itron_api_log_task_identity(current);
+        hal_console_write("\n");
+        hal_console_write("[pol-sem] completed: result=");
+        itron_api_write_int(POL_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return POL_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    /* 不正semaphoreではcountもtask状態も変更しない。 */
+    sem = sem_get_by_id(sem_id);
+    if (sem == NULL) {
+        hal_console_write("[pol-sem] rejected: reason=invalid-semaphore semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write("\n");
+        hal_console_write("[pol-sem] completed: result=");
+        itron_api_write_int(POL_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=invalid-semaphore\n");
+        return POL_SEM_ERR_SEMAPHORE;
+    }
+
+    /* countが残っている場合だけsemaphore moduleに取得を委譲する。 */
+    take_result = sem_take_if_available(sem_id, &count_before, &count_after);
+    if (take_result == SEM_OK) {
+        hal_console_write("[sem] acquire: semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" count ");
+        itron_api_write_int(count_before);
+        hal_console_write("->");
+        itron_api_write_int(count_after);
+        hal_console_write("\n");
+        hal_console_write("[pol-sem] completed: result=0 action=acquired\n");
+        return POL_SEM_OK;
+    }
+
+    /* countが0ならWAITING化せず、即時would-blockとして返す。 */
+    if (take_result == SEM_WAIT_REQUIRED) {
+        hal_console_write("[sem] poll failed: semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" count=");
+        itron_api_write_int(count_after);
+        hal_console_write("\n");
+        hal_console_write("[pol-sem] completed: result=");
+        itron_api_write_int(POL_SEM_ERR_WOULD_BLOCK);
+        hal_console_write(" action=would-block\n");
+        return POL_SEM_ERR_WOULD_BLOCK;
+    }
+
+    hal_console_write("[pol-sem] rejected: reason=semaphore-error err=");
+    itron_api_write_int(take_result);
+    hal_console_write("\n");
+    hal_console_write("[pol-sem] completed: result=");
+    itron_api_write_int(POL_SEM_ERR_SEMAPHORE);
+    hal_console_write(" action=semaphore-error\n");
+    return POL_SEM_ERR_SEMAPHORE;
+}
+
+/**
+ * @brief μITRON風のsemaphore返却API。
+ *
+ * @details
+ * semaphore wait queueに待ちtaskがいればREADYへ戻す。timeout付きsemaphore待ちtaskの場合は
+ * delay queue側の登録を削除してからREADYへ戻す。高優先度taskを起こした場合は既存の
+ * dispatch pendingへ接続し、APIから直接dispatcher switchしない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @return 成功時はSIG_SEM_OK。失敗時はSIG_SEM_ERR_*。
+ */
+int sig_sem(int sem_id)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *waiting_task;
+    const tcb_t *ready_task;
+    const semaphore_t *sem;
+    int woken_task_id = 0;
+    int dequeue_result;
+    int wake_result;
+    int delay_remove_result;
+    int count_before = 0;
+    int count_after = 0;
+    int increment_result;
+    task_wait_reason_t reason;
+
+    hal_console_write("[sig-sem] called: semid=");
+    itron_api_write_int(sem_id);
+    if (current == NULL) {
+        hal_console_write(" current=none\n");
+    } else {
+        hal_console_write(" current");
+        itron_api_log_next_candidate(current);
+        hal_console_write("\n");
+    }
+
+    /* 不正semaphoreではcountもtask状態も変更しない。 */
+    sem = sem_get_by_id(sem_id);
+    if (sem == NULL) {
+        hal_console_write("[sig-sem] rejected: reason=invalid-semaphore semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write("\n");
+        hal_console_write("[sig-sem] completed: result=");
+        itron_api_write_int(SIG_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=invalid-semaphore\n");
+        return SIG_SEM_ERR_SEMAPHORE;
+    }
+
+    /* semaphore wait queueから対象semaphoreの待ちtaskだけを取り出す。 */
+    dequeue_result = sem_dequeue_waiter(sem_id, &woken_task_id);
+    if (dequeue_result == SEM_WAIT_QUEUE_EMPTY) {
+        increment_result = sem_increment_count(sem_id, &count_before, &count_after);
+        if (increment_result != SEM_OK) {
+            hal_console_write("[sig-sem] rejected: reason=count-overflow semid=");
+            itron_api_write_int(sem_id);
+            hal_console_write(" count=");
+            itron_api_write_int(count_before);
+            hal_console_write("\n");
+            hal_console_write("[sig-sem] completed: result=");
+            itron_api_write_int(SIG_SEM_ERR_OVERFLOW);
+            hal_console_write(" action=count-overflow\n");
+            return SIG_SEM_ERR_OVERFLOW;
+        }
+
+        hal_console_write("[sem] signal: semid=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" no-waiter count ");
+        itron_api_write_int(count_before);
+        hal_console_write("->");
+        itron_api_write_int(count_after);
+        hal_console_write("\n");
+        hal_console_write("[sig-sem] completed: result=0 action=count-increment\n");
+        return SIG_SEM_OK;
+    }
+
+    if (dequeue_result != SEM_OK) {
+        hal_console_write("[sig-sem] rejected: reason=wait-queue-error err=");
+        itron_api_write_int(dequeue_result);
+        hal_console_write("\n");
+        hal_console_write("[sig-sem] completed: result=");
+        itron_api_write_int(SIG_SEM_ERR_TASK);
+        hal_console_write(" action=wait-queue-error\n");
+        return SIG_SEM_ERR_TASK;
+    }
+
+    waiting_task = task_get_by_id(woken_task_id);
+    if (waiting_task == NULL) {
+        hal_console_write("[sig-sem] completed: result=");
+        itron_api_write_int(SIG_SEM_ERR_TASK);
+        hal_console_write(" action=task-not-found\n");
+        return SIG_SEM_ERR_TASK;
+    }
+
+    reason = waiting_task->wait_reason;
+    hal_console_write("[sem] wakeup: semid=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" task");
+    itron_api_log_task_id_name(waiting_task);
+    hal_console_write(" reason=");
+    hal_console_write(itron_api_wait_reason_name(reason));
+    hal_console_write("\n");
+
+    if (reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
+        /* timeout waiterをsemaphoreで起こす場合はdelay queueから先に削除する。 */
+        delay_remove_result = delay_queue_remove_sem_timeout_waiter(woken_task_id);
+        if (delay_remove_result != DELAY_QUEUE_OK) {
+            hal_console_write("[sig-sem] completed: result=");
+            itron_api_write_int(SIG_SEM_ERR_TASK);
+            hal_console_write(" action=delay-queue-remove-failed\n");
+            return SIG_SEM_ERR_TASK;
+        }
+        wake_result = task_wake_waiting_on_sem_timeout_by_id(woken_task_id, sem_id);
+    } else if (reason == TASK_WAIT_REASON_SEMAPHORE) {
+        wake_result = task_wake_waiting_on_sem_by_id(woken_task_id, sem_id);
+    } else {
+        hal_console_write("[sig-sem] completed: result=");
+        itron_api_write_int(SIG_SEM_ERR_TASK);
+        hal_console_write(" action=invalid-waiter-reason\n");
+        return SIG_SEM_ERR_TASK;
+    }
+
+    if (wake_result != 0) {
+        hal_console_write("[sig-sem] completed: result=");
+        itron_api_write_int(SIG_SEM_ERR_TASK);
+        hal_console_write(" action=wakeup-failed\n");
+        return SIG_SEM_ERR_TASK;
+    }
+
+    ready_task = task_get_by_id(woken_task_id);
+    hal_console_write("[task] wakeup:");
+    itron_api_log_task_id_name(waiting_task);
+    hal_console_write(" WAITING->READY reason=");
+    hal_console_write(itron_api_wait_reason_name(reason));
+    hal_console_write("\n");
+    hal_console_write("[sig-sem] ready:");
+    itron_api_log_next_candidate(ready_task);
+    hal_console_write("\n");
+
+    if (current != NULL && current->state == TASK_STATE_RUNNING &&
+        ready_task != NULL && ready_task->state == TASK_STATE_READY) {
+        hal_console_write("[preempt] evaluate: current");
+        itron_api_log_next_candidate(current);
+        hal_console_write(" ready");
+        itron_api_log_next_candidate(ready_task);
+        hal_console_write("\n");
+        if (ready_task->priority < current->priority) {
+            dispatch_request_from_task_wakeup(current, ready_task);
+            hal_console_write("[preempt] pending set: reason=semaphore-wakeup\n");
+            hal_console_write("[sig-sem] completed: result=0 action=wakeup-preempt-pending\n");
+            return SIG_SEM_OK;
+        }
+    }
+
+    if (reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
+        hal_console_write("[sig-sem] completed: result=0 action=wakeup-timeout-waiter\n");
+    } else {
+        hal_console_write("[sig-sem] completed: result=0 action=wakeup\n");
+    }
+    return SIG_SEM_OK;
+}
+
+/**
  * @brief 13.3時点のtimeout付きsemaphore待ちAPI。
  *
  * @details

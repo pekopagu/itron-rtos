@@ -354,6 +354,66 @@ static void delay_queue_remove_at(int remove_index)
 }
 
 /**
+ * @brief timeout付きsemaphore待ちtaskをdelay queueから削除する。
+ *
+ * @details
+ * `sig_sem()` がtimeout付きsemaphore待ちtaskをREADYへ戻す前に呼ぶ。
+ * delay queueはtask idとremaining tickだけを保持するため、task tableから
+ * wait reasonを読み直してsemaphore-timeout待ちだけを削除する。
+ *
+ * @param task_id 削除対象task ID。
+ * @return 成功時はDELAY_QUEUE_OK。失敗時はDELAY_QUEUE_ERR_*。
+ */
+int delay_queue_remove_sem_timeout_waiter(int task_id)
+{
+    int index;
+    tcb_t *task = task_get_mutable_by_id(task_id);
+    const char *task_name = (task != NULL && task->name != NULL) ? task->name : "(null)";
+
+    /* 不正IDや未登録taskではqueueを変更しない。 */
+    if (task_id <= 0 || task == NULL) {
+        return DELAY_QUEUE_ERR_INVAL;
+    }
+
+    /*
+     * timeout付きsemaphore待ちだけをsig_sem()側削除の対象にする。
+     * delay待ちやsleep待ちをここで削除すると別APIの待ち状態を壊す。
+     */
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
+        hal_console_write("[delay-q] remove rejected: task id=");
+        delay_queue_write_int(task_id);
+        hal_console_write(" name=");
+        hal_console_write(task_name);
+        hal_console_write(" reason=");
+        hal_console_write(delay_queue_wait_reason_name(task->wait_reason));
+        hal_console_write(" state=");
+        hal_console_write(delay_queue_task_state_name(task->state));
+        hal_console_write("\n");
+        return DELAY_QUEUE_ERR_TASK_STATE;
+    }
+
+    /* task idでdelay queue entryを探す。 */
+    index = delay_queue_find_index_by_task_id(task_id);
+    if (index < 0) {
+        return DELAY_QUEUE_ERR_INVAL;
+    }
+
+    /* 見つかったentryだけを削除し、後続entryを詰める。 */
+    hal_console_write("[delay-q] remove: task id=");
+    delay_queue_write_int(task_id);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" reason=semaphore-timeout");
+    delay_queue_remove_at(index);
+    hal_console_write(" queue_count=");
+    delay_queue_write_int(delay_queue_count);
+    hal_console_write("\n");
+
+    return DELAY_QUEUE_OK;
+}
+
+/**
  * @brief timer tickに合わせてdelay queue上のremaining tickを1つ進める。
  *
  * @details

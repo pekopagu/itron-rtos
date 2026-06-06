@@ -470,6 +470,49 @@ int sem_take_if_available(int sem_id, int *count_before, int *count_after)
 }
 
 /**
+ * @brief semaphore countを1つ増やす。
+ *
+ * @details
+ * `sig_sem()` のwaiterなし経路で使うcount所有者側のhelperである。
+ * max_countを超える場合はcountを変更せず、SEM_ERR_OVERFLOWを返す。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param count_before 更新前countの格納先。NULL可。
+ * @param count_after 更新後countの格納先。NULL可。
+ * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_increment_count(int sem_id, int *count_before, int *count_after)
+{
+    semaphore_t *sem = find_semaphore_by_id(sem_id);
+
+    /* 存在しないsemaphoreではcountを変更しない。 */
+    if (sem == NULL) {
+        return SEM_ERR_INVAL;
+    }
+
+    /* 呼び出し側ログ用に、更新前countを返す。 */
+    if (count_before != NULL) {
+        *count_before = sem->count;
+    }
+
+    /* max_countを超える返却は不変条件違反として拒否する。 */
+    if (sem->count >= sem->max_count) {
+        if (count_after != NULL) {
+            *count_after = sem->count;
+        }
+        return SEM_ERR_OVERFLOW;
+    }
+
+    /* count所有者であるsemaphore module内で加算する。 */
+    sem->count++;
+    if (count_after != NULL) {
+        *count_after = sem->count;
+    }
+
+    return SEM_OK;
+}
+
+/**
  * @brief WAITING化前にsemaphore wait queueへ登録可能かを確認する。
  *
  * @details
@@ -758,7 +801,7 @@ int sem_remove_waiter(int sem_id, int task_id)
  * @param sem_id 対象semaphore ID。
  * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
-int sig_sem(int sem_id)
+int sem_legacy_sig_sem_disabled(int sem_id)
 {
     semaphore_t *sem = find_semaphore_by_id(sem_id);
     int count_before = 0;
