@@ -63,9 +63,12 @@ static unsigned char task_wai_sem_from_stack[TASK_STACK_SIZE] __attribute__((ali
 static unsigned char task_wai_sem_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_dly_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_dly_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_twai_from_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_twai_to_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 static void task_wai_sem_to(void);
 static void task_dly_to(void);
+static void task_twai_to(void);
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -1038,6 +1041,64 @@ static void kernel_run_delay_smoke(int current_task_id)
 }
 
 /**
+ * @brief 第13章13.3のtimeout付きsemaphore待ち smoke sequenceを実行する。
+ *
+ * @details
+ * `twai_sem(sem_id, 0)` のinvalid timeout、countが残る場合の即時取得、
+ * countが0の場合のtimeout付きsemaphore WAITING化を順に観測する。
+ * timeout待ちに入ったtaskはsemaphore wait queueとdelay queueの両方へ登録される。
+ *
+ * この検証はtask文脈APIのsmokeであり、timer IRQ handlerから `twai_sem()` を呼ばない。
+ * tick decrement、timeout到達時READY復帰、timeout時のsemaphore wait queue削除、
+ * `sig_sem()` 成功時のdelay queue削除はまだ行わない。
+ *
+ * @param current_task_id `twai_sem()` を呼ぶRUNNING current taskのid。
+ */
+static void kernel_run_twai_sem_smoke(int current_task_id)
+{
+    int sem_twai_id;
+
+    hal_console_write("[twai-smoke] begin\n");
+
+    /*
+     * 13.3の検証は専用semaphoreで行う。semaphore tableだけを初期化し、
+     * delay queueは13.2の観測entryを残したまま、両queue登録を確認する。
+     */
+    (void)sem_init();
+    sem_twai_id = sem_create("sem_twai", 1, 1);
+    if (sem_twai_id < 0) {
+        hal_console_write("[twai-smoke] stop: reason=create-failed\n");
+        return;
+    }
+
+    if (dispatcher_commit_current(task_get_by_id(current_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[twai-smoke] stop: reason=current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * 0 timeoutはpollではなくinvalid timeoutとして扱う。
+     * current taskをRUNNINGのまま保ち、後続の即時取得とtimeout待ち検証へ進む。
+     */
+    (void)twai_sem(sem_twai_id, 0U);
+
+    /*
+     * countが残る場合はtimeout待ちに入らず、即時取得として完了する。
+     */
+    (void)twai_sem(sem_twai_id, 10U);
+
+    /*
+     * countが0になった同じsemaphoreで、timeout付きsemaphore待ちへ入る。
+     * この時点でcurrent taskはsemaphore wait queueとdelay queueの両方に登録される。
+     */
+    (void)twai_sem(sem_twai_id, 10U);
+
+    task_dump();
+    sem_dump();
+    hal_console_write("[twai-smoke] end\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -1187,6 +1248,31 @@ static void task_dly_to(void)
 }
 
 /**
+ * @brief 13.3 twai_sem smokeでtimeout付きsemaphore WAITINGへ入る側のtask entry。
+ *
+ * @details
+ * このentryは登録とcontext switch smokeの到達確認用であり、entry本体から
+ * `twai_sem()` を呼ばない。13.3ではkernel smoke側でtask文脈API呼び出しを観測し、
+ * timer IRQ handlerやentry内自動timeout処理とは接続しない。
+ */
+static void task_twai_from(void)
+{
+    hal_console_write("[task_twai_from] executed\n");
+}
+
+/**
+ * @brief 13.3 twai_sem smokeでtimeout付きsemaphore WAITING後に選ばれるREADY task entry。
+ *
+ * @details
+ * `twai_sem()` がRUNNING current taskをWAITINGへ落とした後、既存schedulerが選ぶ
+ * READY taskとして使う。timeout満了復帰やround-robinはまだ扱わない。
+ */
+static void task_twai_to(void)
+{
+    hal_console_write("[task_twai_to] executed\n");
+}
+
+/**
  * @brief kernelのメインエントリポイント。
  *
  * @details
@@ -1213,6 +1299,8 @@ void kernel_main(void)
     int task_wai_sem_from_id;
     int task_dly_from_id;
     int task_dly_to_id;
+    int task_twai_from_id;
+    int task_twai_to_id;
     const tcb_t *selected_task;
     const tcb_t *context_next_task;
 
@@ -1487,6 +1575,34 @@ void kernel_main(void)
 
     if (task_dly_from_id > 0 && task_dly_to_id > 0) {
         kernel_run_delay_smoke(task_dly_from_id);
+    }
+
+    /*
+     * 第13章13.3では、timeout付きsemaphore待ちを観測する。
+     * twai_sem()はtask文脈APIとしてkernel smoke側から呼び、timer IRQ handlerや
+     * task entry本体からは呼ばない。timeout待ちtaskはsemaphore wait queueと
+     * delay queueの両方へ登録されるが、timeout到達時READY復帰はまだ行わない。
+     */
+    task_twai_from_id = task_register(
+        "task_twai_from",
+        task_twai_from,
+        5,
+        task_twai_from_stack,
+        sizeof(task_twai_from_stack)
+    );
+    kernel_log_task_register_result("task_twai_from", task_twai_from_id);
+
+    task_twai_to_id = task_register(
+        "task_twai_to",
+        task_twai_to,
+        0,
+        task_twai_to_stack,
+        sizeof(task_twai_to_stack)
+    );
+    kernel_log_task_register_result("task_twai_to", task_twai_to_id);
+
+    if (task_twai_from_id > 0 && task_twai_to_id > 0) {
+        kernel_run_twai_sem_smoke(task_twai_from_id);
     }
 
     for (;;) {

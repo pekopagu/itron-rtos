@@ -308,6 +308,8 @@ static const char *task_wait_reason_to_string(task_wait_reason_t reason)
         return "semaphore";
     case TASK_WAIT_REASON_DELAY:
         return "delay";
+    case TASK_WAIT_REASON_SEMAPHORE_TIMEOUT:
+        return "semaphore-timeout";
     default:
         return "unknown";
     }
@@ -911,6 +913,77 @@ int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks)
 }
 
 /**
+ * @brief `twai_sem()` 用にRUNNING taskをtimeout付きsemaphore WAITINGへ遷移させる。
+ *
+ * @details
+ * timeout付きsemaphore待ちは、通常のsemaphore待ちとdelay待ちの両方の性質を持つ。
+ * `wait_sem_id` はsemaphore wakeup対象を示すためだけに使い、timeout観測値は
+ * `delay_ticks_remaining` に保存する。13.3ではtick decrementやtimeout到達時READY復帰は行わない。
+ *
+ * @param task_id timeout付きsemaphore待ちへ入るtask ID。
+ * @param sem_id 待ち対象semaphore ID。
+ * @param timeout_ticks timeout観測用tick数。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_sem_timeout(int task_id, int sem_id, uint32_t timeout_ticks)
+{
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /*
+     * task ID、semaphore ID、timeout tickのいずれも有効な値が必要である。
+     * 不正値ではTCBを探す前に失敗させ、待ち情報を部分的に残さない。
+     */
+    if (task_id <= 0 || sem_id <= 0 || timeout_ticks == 0U) {
+        return TASK_ERR_INVAL;
+    }
+
+    /*
+     * 登録済みtaskだけを状態遷移対象にする。
+     * 存在しないIDに対してWAITING情報を作ることはできない。
+     */
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * twai_sem()はtask文脈APIなので、RUNNING current taskだけをtimeout付き
+     * semaphore WAITINGへ落とす。READYや既存WAITING taskの再分類は行わない。
+     */
+    if (task->state != TASK_STATE_RUNNING) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * semaphore待ち対象とtimeout観測値を別フィールドに保持する。
+     * wait_sem_idをdelay queue管理に流用しないことが13.3の境界である。
+     */
+    task->state = TASK_STATE_WAITING;
+    task->wait_sem_id = sem_id;
+    task->wait_reason = TASK_WAIT_REASON_SEMAPHORE_TIMEOUT;
+    task->delay_ticks_remaining = timeout_ticks;
+
+    /*
+     * timeout付きsemaphore待ちとして保持した全観測値を出力する。
+     * dumpを待たずに、状態遷移直後のTCB内容をQEMUログで確認できるようにする。
+     */
+    hal_console_write("[task] semaphore timeout waiting: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" sem id=");
+    task_write_int(task->wait_sem_id);
+    hal_console_write(" timeout_ticks=");
+    task_write_uint(task->delay_ticks_remaining);
+    hal_console_write(" wait_reason=");
+    hal_console_write(task_wait_reason_to_string(task->wait_reason));
+    hal_console_write(" state=");
+    hal_console_write(task_state_to_string(task->state));
+    hal_console_write("\n");
+
+    return 0;
+}
+
+/**
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
  *
  * @details
@@ -1052,7 +1125,8 @@ int task_wake_waiting_on_sem_by_id(int task_id, int sem_id)
      * 12.3の検証上の不整合として失敗させ、別taskを探して補正しない。
      */
     if (task->state != TASK_STATE_WAITING ||
-        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE ||
+        (task->wait_reason != TASK_WAIT_REASON_SEMAPHORE &&
+         task->wait_reason != TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) ||
         task->wait_sem_id != sem_id) {
         return TASK_ERR_BAD_STATE;
     }

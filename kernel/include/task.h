@@ -38,13 +38,15 @@ typedef void (*task_entry_t)(void);
  *
  * @details
  * 第13章13.1では、同じ `TASK_STATE_WAITING` でもsemaphore待ちとdelay待ちを
- * 区別できるようにする。これは観測用の最小モデルであり、delay queue、tickごとの
- * 減算、tick到達時のREADY復帰、timeout付き待ちはまだ実装しない。
+ * 区別できるようにする。第13章13.3ではtimeout付きsemaphore待ちも別理由として
+ * 観測できるようにする。これは観測用の最小モデルであり、tickごとの減算、
+ * tick到達時のREADY復帰、timeout時のqueue削除はまだ実装しない。
  */
 typedef enum {
     TASK_WAIT_REASON_NONE = 0,      /**< 待ちなし。READY/RUNNING/DORMANT/UNUSEDで使う。 */
     TASK_WAIT_REASON_SEMAPHORE,     /**< `wai_sem()` によるsemaphore待ち。 */
     TASK_WAIT_REASON_DELAY,         /**< `dly_tsk()` によるdelay待ち。 */
+    TASK_WAIT_REASON_SEMAPHORE_TIMEOUT, /**< `twai_sem()` によるtimeout付きsemaphore待ち。 */
 } task_wait_reason_t;
 
 /**
@@ -354,6 +356,26 @@ int task_mark_waiting_on_sem(int task_id, int sem_id);
  * @return 成功時は0、失敗時はTASK_ERR_*。
  */
 int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks);
+
+/**
+ * @brief `twai_sem()` 用にRUNNING taskをtimeout付きsemaphore WAITINGへ遷移させる。
+ *
+ * @details
+ * 第13章13.3のtimeout付きsemaphore待ち入口で使う状態遷移である。
+ * 通常の `wai_sem()` 待ちとは異なる `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` を設定し、
+ * `wait_sem_id` には待ち対象semaphore IDを、`delay_ticks_remaining` には
+ * timeout観測用tick数を保持する。
+ *
+ * この関数はsemaphore wait queue、delay queue、tickごとのdecrement、timeout到達時READY復帰、
+ * scheduler選択、dispatcher switchを行わない。queue登録とswitchは呼び出し元の
+ * `twai_sem()` が既存境界へ委譲する。
+ *
+ * @param task_id timeout付きsemaphore待ちへ入るtask ID。
+ * @param sem_id 待ち対象semaphore ID。0以下は不正。
+ * @param timeout_ticks timeout観測用に保持するtick数。0は不正。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_sem_timeout(int task_id, int sem_id, uint32_t timeout_ticks);
 
 /**
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。

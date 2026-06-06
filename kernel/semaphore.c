@@ -470,6 +470,45 @@ int sem_take_if_available(int sem_id, int *count_before, int *count_after)
 }
 
 /**
+ * @brief WAITING化前にsemaphore wait queueへ登録可能かを確認する。
+ *
+ * @details
+ * 第13章13.3の `twai_sem()` が不整合なWAITING taskを残さないためのprecheckである。
+ * semaphoreの存在、task ID、固定長queueの空きだけを確認し、TCB状態とqueue内容は変更しない。
+ * 通常の `wai_sem()` 経路には影響させず、timeout付きsemaphore待ちの事前確認に使う。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 登録予定のtask ID。
+ * @return 登録可能ならSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_can_enqueue_waiter(int sem_id, int task_id)
+{
+    semaphore_t *sem = find_semaphore_by_id(sem_id);
+
+    /*
+     * WAITING化前のprecheckではTCB stateを要求しない。
+     * ここでは対象semaphoreとtask ID、queue容量だけを確認し、queueは変更しない。
+     */
+    if (sem == NULL || task_id <= 0) {
+        return SEM_ERR_INVAL;
+    }
+
+    /*
+     * 固定長FIFO queueが満杯なら、WAITING化前に失敗を返す。
+     * この段階ではログ出力もqueue変更も行わず、呼び出し元に失敗理由を委譲する。
+     */
+    if (sem->wait_count >= MAX_TASKS) {
+        return SEM_ERR_OVERFLOW;
+    }
+
+    /*
+     * 登録可能であることだけを返す。
+     * 実際のenqueueとwait reason確認はWAITING化後のsem_enqueue_waiter()で再確認する。
+     */
+    return SEM_OK;
+}
+
+/**
  * @brief sig_sem相当の返却処理を実行する。
  *
  * @details
@@ -498,12 +537,21 @@ int sem_enqueue_waiter(int sem_id, int task_id)
     const tcb_t *task = task_get_by_id(task_id);
     const char *task_name;
 
+    /*
+     * queue所有者として、存在しないsemaphoreやtask IDは受け付けない。
+     * task状態の詳細判定へ進む前に、参照できない入力を拒否する。
+     */
     if (sem == NULL || task == NULL || task_id <= 0) {
         return SEM_ERR_INVAL;
     }
 
+    /*
+     * semaphore wait queueには通常semaphore待ちとtimeout付きsemaphore待ちだけを入れる。
+     * delay待ちを混入させるとsig_sem()が時間待ちtaskを起こせるため、ここで防ぐ。
+     */
     if (task->state != TASK_STATE_WAITING ||
-        task->wait_reason != TASK_WAIT_REASON_SEMAPHORE ||
+        (task->wait_reason != TASK_WAIT_REASON_SEMAPHORE &&
+         task->wait_reason != TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) ||
         task->wait_sem_id != sem_id) {
         /*
          * 13.1ではdelay待ちも同じWAITING stateを使うため、semaphore queueには
@@ -518,7 +566,18 @@ int sem_enqueue_waiter(int sem_id, int task_id)
         return SEM_ERR_TASK;
     }
 
+    /*
+     * 実enqueue時にも容量を再確認する。
+     * 事前確認後に呼び出し順が変わった場合でも、queue側の防御として満杯を拒否する。
+     */
     if (sem->wait_count >= MAX_TASKS) {
+        hal_console_write("[sem-wq] enqueue failed: reason=full sem id=");
+        sem_write_int(sem_id);
+        hal_console_write(" task id=");
+        sem_write_int(task_id);
+        hal_console_write(" name=");
+        hal_console_write((task->name != NULL) ? task->name : "(null)");
+        hal_console_write("\n");
         return SEM_ERR_OVERFLOW;
     }
 
@@ -531,7 +590,7 @@ int sem_enqueue_waiter(int sem_id, int task_id)
     sem->wait_count++;
 
     task_name = (task->name != NULL) ? task->name : "(null)";
-    hal_console_write("[sem-wq] enqueue: sem_id=");
+    hal_console_write("[sem-wq] enqueue: sem id=");
     sem_write_int(sem_id);
     hal_console_write(" task id=");
     sem_write_int(task_id);

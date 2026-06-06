@@ -130,6 +130,8 @@ static const char *delay_queue_wait_reason_name(task_wait_reason_t reason)
         return "semaphore";
     case TASK_WAIT_REASON_DELAY:
         return "delay";
+    case TASK_WAIT_REASON_SEMAPHORE_TIMEOUT:
+        return "semaphore-timeout";
     default:
         return "unknown";
     }
@@ -210,10 +212,14 @@ int delay_queue_enqueue(int task_id, uint32_t delay_ticks)
         return DELAY_QUEUE_ERR_INVAL;
     }
 
-    /* WAITING化後の防御として、delay待ち以外のtaskをdelay queueへ入れない。 */
+    /*
+     * WAITING化後の防御として、delay待ちまたはtimeout付きsemaphore待ちだけをdelay queueへ入れる。
+     * 通常semaphore待ちを受け入れるとtimeout観測queueとsemaphore wait queueの境界が崩れる。
+     */
     if (task->state != TASK_STATE_WAITING ||
-        task->wait_reason != TASK_WAIT_REASON_DELAY) {
-        hal_console_write("[delay-q] enqueue failed: reason=not-delay-waiter task id=");
+        (task->wait_reason != TASK_WAIT_REASON_DELAY &&
+         task->wait_reason != TASK_WAIT_REASON_SEMAPHORE_TIMEOUT)) {
+        hal_console_write("[delay-q] enqueue failed: reason=not-delay-compatible-waiter task id=");
         delay_queue_write_int(task_id);
         hal_console_write("\n");
         return DELAY_QUEUE_ERR_TASK_STATE;

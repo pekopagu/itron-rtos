@@ -207,6 +207,10 @@ int yield_tsk(void)
     int ready_result;
     int switch_result;
 
+    /*
+     * dispatcher currentが未確定なら、どのtaskを待ち入りさせるか決められない。
+     * そのためtimeout値やsemaphore IDの詳細検証より先に、呼び出し文脈を拒否する。
+     */
     if (current == NULL) {
         /*
          * current未設定は、まだdispatcherが実行中taskを確定していない状態である。
@@ -478,6 +482,321 @@ int wai_sem(int sem_id)
     }
 
     return WAI_SEM_OK;
+}
+
+/**
+ * @brief 13.3時点のtimeout付きsemaphore待ちAPI。
+ *
+ * @details
+ * `twai_sem()` はtask文脈APIであり、timer IRQ handler本体から呼ばない。
+ * semaphore countが残っている場合は即時取得して完了する。countが0の場合は
+ * semaphore wait queueとdelay queueの両方へ登録可能かをWAITING化前に確認し、
+ * 成功した場合だけtimeout付きsemaphore WAITINGへ遷移させる。
+ *
+ * 13.3ではtimeout tickのdecrement、timeout到達時READY復帰、timeout時の
+ * semaphore wait queue削除、`sig_sem()` 成功時のdelay queue削除は扱わない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param timeout_ticks timeout観測用tick数。0はinvalid timeout。
+ * @return 成功時はTWAI_SEM_OK。失敗時はTWAI_SEM_ERR_*。
+ */
+int twai_sem(int sem_id, uint32_t timeout_ticks)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *next;
+    tcb_t *current_mutable;
+    tcb_t *next_mutable;
+    const semaphore_t *sem;
+    int count_after = 0;
+    int take_result;
+    int sem_queue_result;
+    int delay_queue_result;
+    int wait_result;
+    int enqueue_result;
+    int switch_result;
+
+    if (current == NULL) {
+        hal_console_write("[twai-sem] called: sem id=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" timeout_ticks=");
+        itron_api_write_uint32(timeout_ticks);
+        hal_console_write(" current=none\n");
+        hal_console_write("[twai-sem] rejected: reason=invalid-current-state current=none\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return TWAI_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    /*
+     * 以降の分岐で同じcurrentを扱うため、最初に呼び出し条件を観測ログへ固定する。
+     * この時点ではTCBやsemaphore count、queue状態はまだ変更しない。
+     */
+    hal_console_write("[twai-sem] called: sem id=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" timeout_ticks=");
+    itron_api_write_uint32(timeout_ticks);
+    hal_console_write(" current");
+    itron_api_log_task_identity(current);
+    hal_console_write("\n");
+
+    if (timeout_ticks == 0U) {
+        /*
+         * 13.3では0 tick timeoutをpoll相当にせず、明示的な入力エラーとして扱う。
+         * current taskやqueueを変更しないため、後続の通常smokeへ影響しない。
+         */
+        hal_console_write("[twai-sem] invalid timeout: timeout_ticks=0\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_INVALID_TIMEOUT);
+        hal_console_write(" action=invalid-timeout\n");
+        return TWAI_SEM_ERR_INVALID_TIMEOUT;
+    }
+
+    if (current->state != TASK_STATE_RUNNING) {
+        /*
+         * twai_sem()はtask文脈APIなので、RUNNING current taskだけを待ち入り対象にする。
+         * READY/DORMANT/WAITING taskをここで再分類しない。
+         */
+        hal_console_write("[twai-sem] rejected: reason=invalid-current-state current");
+        itron_api_log_task_identity(current);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return TWAI_SEM_ERR_INVALID_CURRENT_STATE;
+    }
+
+    /*
+     * semaphore tableの存在確認だけを先に行う。
+     * 存在しないsemaphoreではcount取得もqueue登録も行わず、副作用なしで失敗させる。
+     */
+    sem = sem_get_by_id(sem_id);
+    if (sem == NULL) {
+        hal_console_write("[twai-sem] rejected: reason=invalid-semaphore sem id=");
+        itron_api_write_int(sem_id);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=invalid-semaphore\n");
+        return TWAI_SEM_ERR_SEMAPHORE;
+    }
+
+    /*
+     * count取得はsemaphore moduleへ委譲する。
+     * 取得できる場合はここで完了し、timeout待ちのTCB状態やqueueには触れない。
+     */
+    take_result = sem_take_if_available(sem_id, NULL, &count_after);
+    if (take_result == SEM_OK) {
+        /*
+         * countが残っている場合はtimeout待ちには入らない。
+         * queue登録もscheduler/dispatcher接続も行わず、通常の取得成功として完了する。
+         */
+        hal_console_write("[twai-sem] acquired immediately: sem id=");
+        itron_api_write_int(sem_id);
+        hal_console_write(" count=");
+        itron_api_write_int(count_after);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=0 action=acquired\n");
+        return TWAI_SEM_OK;
+    }
+
+    /*
+     * `SEM_WAIT_REQUIRED` 以外の戻り値はsemaphore層の異常として扱う。
+     * ここでもWAITING化やqueue登録へ進まず、current taskをRUNNINGのまま残す。
+     */
+    if (take_result != SEM_WAIT_REQUIRED) {
+        hal_console_write("[twai-sem] rejected: reason=semaphore-error err=");
+        itron_api_write_int(take_result);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=semaphore-error\n");
+        return TWAI_SEM_ERR_SEMAPHORE;
+    }
+
+    /*
+     * WAITING化前に両queueの受け入れ可否を確認する。
+     * ここで失敗した場合はTCBもqueueも変更せず、不整合な片側登録を残さない。
+     */
+    /*
+     * semaphore wait queueを先にprecheckする。
+     * ここで満杯ならdelay queue側にも触れず、片側だけの登録状態を作らない。
+     */
+    sem_queue_result = sem_can_enqueue_waiter(sem_id, current->id);
+    if (sem_queue_result != SEM_OK) {
+        if (sem_queue_result == SEM_ERR_OVERFLOW) {
+            hal_console_write("[sem-wq] enqueue failed: reason=full sem id=");
+            itron_api_write_int(sem_id);
+            hal_console_write(" task id=");
+            itron_api_write_int(current->id);
+            hal_console_write(" name=");
+            hal_console_write((current->name != NULL) ? current->name : "(null)");
+            hal_console_write("\n");
+            hal_console_write("[twai-sem] completed: result=");
+            itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+            hal_console_write(" action=sem-wait-queue-full\n");
+        } else {
+            hal_console_write("[twai-sem] completed: result=");
+            itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+            hal_console_write(" action=sem-wait-queue-invalid\n");
+        }
+        return TWAI_SEM_ERR_SEMAPHORE;
+    }
+
+    /*
+     * timeout観測用のdelay queueもWAITING化前にprecheckする。
+     * semaphore wait queueとdelay queueの両方が受け入れ可能な場合だけ状態遷移へ進む。
+     */
+    delay_queue_result = delay_queue_can_enqueue(current->id);
+    if (delay_queue_result != DELAY_QUEUE_OK) {
+        if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
+            hal_console_write("[delay-q] enqueue failed: reason=full task id=");
+        } else if (delay_queue_result == DELAY_QUEUE_ERR_DUPLICATE) {
+            hal_console_write("[delay-q] enqueue failed: reason=duplicate task id=");
+        } else {
+            hal_console_write("[delay-q] enqueue failed: reason=invalid task id=");
+        }
+        itron_api_write_int(current->id);
+        hal_console_write(" name=");
+        hal_console_write((current->name != NULL) ? current->name : "(null)");
+        hal_console_write(" delay_ticks=");
+        itron_api_write_uint32(timeout_ticks);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_DELAY_QUEUE);
+        if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
+            hal_console_write(" action=delay-queue-full\n");
+        } else if (delay_queue_result == DELAY_QUEUE_ERR_DUPLICATE) {
+            hal_console_write(" action=delay-queue-duplicate\n");
+        } else {
+            hal_console_write(" action=delay-queue-invalid\n");
+        }
+        return TWAI_SEM_ERR_DELAY_QUEUE;
+    }
+
+    /*
+     * 両queueのprecheckが通ったため、timeout付き待ち入りの開始を明示する。
+     * このログ以降で初めてTCBをWAITINGへ変更する。
+     */
+    hal_console_write("[twai-sem] wait begin: sem id=");
+    itron_api_write_int(sem_id);
+    hal_console_write(" current");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" timeout_ticks=");
+    itron_api_write_uint32(timeout_ticks);
+    hal_console_write("\n");
+
+    /*
+     * task moduleにTCB状態の所有権を残し、timeout付きsemaphore WAITINGへ遷移させる。
+     * API層は直接TCBを書き換えず、状態遷移の成否だけを受け取る。
+     */
+    wait_result = task_mark_waiting_on_sem_timeout(current->id, sem_id, timeout_ticks);
+    if (wait_result != 0) {
+        hal_console_write("[twai-sem] rejected: reason=timeout-wait-transition-failed err=");
+        itron_api_write_int(wait_result);
+        hal_console_write("\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=timeout-wait-transition-failed\n");
+        return TWAI_SEM_ERR_DISPATCH;
+    }
+
+    /*
+     * timeout付きsemaphore待ちは `sig_sem()` のwakeup対象でもあるため、
+     * 対象semaphoreのwait queueへ登録する。
+     */
+    enqueue_result = sem_enqueue_waiter(sem_id, current->id);
+    if (enqueue_result != SEM_OK) {
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=sem-wait-queue-enqueue-failed\n");
+        return TWAI_SEM_ERR_SEMAPHORE;
+    }
+
+    /*
+     * timeout観測用に同じtaskをdelay queueへも登録する。
+     * wait_sem_idはsemaphore待ち対象として残し、delay queue metadataには使わない。
+     */
+    delay_queue_result = delay_queue_enqueue(current->id, timeout_ticks);
+    if (delay_queue_result != DELAY_QUEUE_OK) {
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_DELAY_QUEUE);
+        hal_console_write(" action=delay-queue-enqueue-failed\n");
+        return TWAI_SEM_ERR_DELAY_QUEUE;
+    }
+
+    hal_console_write("[twai-sem] state transition: current");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" RUNNING->WAITING reason=semaphore-timeout\n");
+
+    /*
+     * delay queue上のremaining tickとwait reasonを観測する。
+     * dumpは表示専用であり、tick減算やREADY復帰は行わない。
+     */
+    delay_queue_dump();
+
+    /*
+     * WAITING化したcurrent taskはREADY候補から外れる。
+     * 既存scheduler境界を使い、次に動けるREADY taskだけを選ぶ。
+     */
+    next = scheduler_select_next();
+    if (next == NULL) {
+        hal_console_write("[twai-sem] no next task: reason=no-ready-task action=unsupported-stop\n");
+        hal_console_write("[twai-sem] completed: result=0 action=no-ready-task\n");
+        return TWAI_SEM_OK;
+    }
+
+    /*
+     * schedulerが選んだ候補をswitch前にログへ固定する。
+     * このログは候補観測であり、dispatcher currentの更新はまだ行わない。
+     */
+    hal_console_write("[twai-sem] next selected:");
+    itron_api_log_next_candidate(next);
+    hal_console_write("\n");
+
+    /*
+     * dispatcher境界へ渡す直前に、読み取り専用TCBではなく更新可能TCBを取り直す。
+     * task table所有権を守るため、API層ではID lookupに限定する。
+     */
+    current_mutable = task_get_mutable_by_id(current->id);
+    next_mutable = task_get_mutable_by_id(next->id);
+    if (current_mutable == NULL || next_mutable == NULL) {
+        hal_console_write("[twai-sem] rejected: reason=switch-task-not-found\n");
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=timeout-wait-switch-failed\n");
+        return TWAI_SEM_ERR_DISPATCH;
+    }
+
+    /*
+     * 13.3の実行切替は既存dispatcher switch境界へ委譲する。
+     * twai_sem()自身はarch context switchの詳細やstack切替を扱わない。
+     */
+    hal_console_write("[twai-sem] switch begin: from");
+    itron_api_log_task_id_name(current);
+    hal_console_write(" to");
+    itron_api_log_task_id_name(next);
+    hal_console_write("\n");
+
+    /*
+     * dispatcher_switch_to()の結果をAPIログへ戻し、timeout待ち入り後の切替証跡にする。
+     * 失敗してもtimeout満了処理やqueue巻き戻しは13.3の範囲外である。
+     */
+    switch_result = dispatcher_switch_to(current_mutable, next_mutable);
+
+    hal_console_write("[twai-sem] switch end: result=");
+    itron_api_write_int(switch_result);
+    hal_console_write("\n");
+
+    if (switch_result != DISPATCHER_OK) {
+        hal_console_write("[twai-sem] completed: result=");
+        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=timeout-wait-switch-failed\n");
+        return TWAI_SEM_ERR_DISPATCH;
+    }
+
+    hal_console_write("[twai-sem] completed: result=0 action=timeout-wait-queued-switch\n");
+    return TWAI_SEM_OK;
 }
 
 /**

@@ -9,8 +9,9 @@
  * @details
  * このヘッダは、`dly_tsk()` によってdelay WAITINGへ入ったtaskを
  * semaphore wait queueとは独立して保持する固定長queueを公開する。
- * 13.2ではremaining tickを観測用に保持するだけで、tickごとのdecrement、
- * tick到達時READY復帰、dequeueによるwakeupはまだ実装しない。
+ * 13.3では `twai_sem()` のtimeout付きsemaphore待ちtaskもtimeout観測用に
+ * 受け入れる。ただしremaining tickを観測用に保持するだけで、tickごとのdecrement、
+ * tick到達時READY復帰、dequeueによるwakeup、`sig_sem()` 成功時の削除はまだ実装しない。
  */
 
 #ifndef ITRON_RTOS_DELAY_QUEUE_H
@@ -71,9 +72,10 @@ int delay_queue_can_enqueue(int task_id);
  * @brief delay WAITING化済みtaskをdelay queueへ登録する。
  *
  * @details
- * 対象taskは `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` でなければならない。
+ * 対象taskは `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_DELAY` または
+ * `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` でなければならない。
  * `wait_sem_id` はdelay queue管理に使わず、queue entryはtask idとremaining tickだけを
- * 保持する。13.2では登録後のdecrementやREADY復帰は行わない。
+ * 保持する。13.3では登録後のdecrementやREADY復帰は行わない。
  *
  * @param task_id delay WAITING化済みtask ID。
  * @param delay_ticks 観測用に保持するremaining tick数。0は不正。

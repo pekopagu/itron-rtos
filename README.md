@@ -84,6 +84,7 @@ The current implementation covers the following milestones:
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue | Completed |
+| 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -713,6 +714,27 @@ Chapter 13 Section 13.2 adds a sleep/delay queue for delay waiting tasks:
 * Tick decrement, tick-reached READY return, delay dequeue wakeup, timeout
   `twai_sem`, same-priority time slicing, and round-robin remain unimplemented.
 
+Chapter 13 Section 13.3 adds a `twai_sem()`-style timeout semaphore wait
+observation path:
+
+* `twai_sem(int sem_id, uint32_t timeout_ticks)` is introduced as a task-context
+  API entry.
+* `timeout_ticks == 0` is treated as an invalid timeout and is not used as a
+  polling semaphore wait.
+* When semaphore count is available, `twai_sem()` acquires it immediately,
+  logs `action=acquired`, and does not enqueue or switch tasks.
+* When semaphore count is zero and `timeout_ticks > 0`, the RUNNING current
+  task transitions to WAITING with `wait_reason=semaphore-timeout`,
+  `wait_sem_id` set to the target semaphore, and `delay_ticks_remaining`
+  preserved for timeout observation.
+* The timeout semaphore waiter is enqueued into the semaphore wait queue for
+  `sig_sem()` wakeup observation and into the delay queue for remaining tick
+  observation.
+* Tick decrement, timeout-reached READY return, timeout-side semaphore wait
+  queue removal, `sig_sem()` success-time delay queue removal, polling
+  semaphore wait, same-priority time slicing, and round-robin remain
+  unimplemented.
+
 ---
 
 ## Development Environment
@@ -1319,9 +1341,12 @@ The following features are intentionally not implemented yet:
 * Time slice
 * Tick-based delay decrement
 * Tick-reached READY return for delay waiting tasks
+* Tick-based timeout decrement for timeout semaphore waiting tasks
+* Timeout-reached READY return for timeout semaphore waiting tasks
+* Timeout-side removal from the semaphore wait queue
+* Delay-queue removal when `sig_sem()` wakes a timeout semaphore waiter
 * Dynamic memory allocation
 * Timer-driven stack switching
-* Timeout wait (`twai_sem`)
 * Polling semaphore wait (`pol_sem`)
 * Priority semaphore wait queue
 * Timer-integrated semaphore blocking
@@ -1443,6 +1468,12 @@ existing scheduler/dispatcher switch boundary. They also state that remaining
 ticks are observation-only and that tick decrement, tick-reached READY return,
 delay dequeue wakeup, timeout `twai_sem`, timer IRQ handler calls to task APIs,
 and complete timer-based wakeup integration remain out of scope.
+For Chapter 13 Section 13.3, comments document that `twai_sem()` is a
+task-context API which immediately acquires an available semaphore count, or
+classifies the current task as `semaphore-timeout` WAITING and registers it in
+both the semaphore wait queue and delay queue for observation. They also state
+that tick decrement, timeout-reached READY return, timeout-side semaphore queue
+removal, and `sig_sem()` success-time delay queue removal remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1604,6 +1635,7 @@ See the LICENSE file for details.
 * [x] semaphore wakeup preemption decision
 * [x] dly_tsk delay task API foundation
 * [x] sleep/delay queue
+* [x] twai_sem timeout semaphore wait observation
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1667,6 +1699,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 12      | 12.4    | semaphore wakeup preemption decision       | v12.4-semaphore-wakeup-preemption | Completed |
 | 13      | 13.1    | dly_tsk delay task API foundation          | v13.1-delay-task-api-foundation | Completed |
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue     | Completed |
+| 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 
 ---
 

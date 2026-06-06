@@ -104,12 +104,27 @@ const semaphore_t *sem_get_by_id(int sem_id);
 int sem_take_if_available(int sem_id, int *count_before, int *count_after);
 
 /**
+ * @brief WAITING化前にsemaphore wait queueへ登録可能かを確認する。
+ *
+ * @details
+ * `twai_sem()` がRUNNING current taskをWAITINGへ変更する前に呼び、対象semaphoreの存在、
+ * task ID、固定長wait queueの空きだけを確認する。task状態やqueue内容は変更しない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param task_id 登録予定のtask ID。
+ * @return 登録可能ならSEM_OK。失敗時はSEM_ERR_*。
+ */
+int sem_can_enqueue_waiter(int sem_id, int task_id);
+
+/**
  * @brief 12.3のFIFO wait queueへWAITING task idを登録する。
  *
  * @details
  * `wai_sem()` がRUNNING taskをWAITINGへ落とした後に呼ぶqueue操作である。
  * この関数はtask状態を変更せず、対象semaphoreが所有する固定長FIFO queueだけを更新する。
- * priority順、timeout、wakeup後preemption、time slice、round-robinはここでは扱わない。
+ * priority順、timeout到達処理、time slice、round-robinはここでは扱わない。
+ * 第13章13.3では `twai_sem()` のtimeout付きsemaphore waiterも `sig_sem()` の
+ * wakeup対象として同じFIFO queueへ登録できるが、timeout時のqueue削除はまだ行わない。
  *
  * @param sem_id 対象semaphore ID。
  * @param task_id WAITING化済みtask ID。

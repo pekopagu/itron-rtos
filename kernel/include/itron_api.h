@@ -110,6 +110,43 @@
 #define DLY_TSK_ERR_DISPATCH (-3)
 
 /**
+ * @brief `twai_sem()` の観測成功を示す戻り値。
+ *
+ * @details
+ * semaphore countを即時取得した場合、またはtimeout付きsemaphore待ちとして
+ * queue登録と次READY taskへのswitch境界まで到達した場合に返す。
+ */
+#define TWAI_SEM_OK 0
+
+/**
+ * @brief `twai_sem()` の不正timeout指定を示す戻り値。
+ *
+ * @details
+ * 13.3では `timeout_ticks == 0` をpoll相当として扱わず、invalid timeoutとして拒否する。
+ */
+#define TWAI_SEM_ERR_INVALID_TIMEOUT (-1)
+
+/**
+ * @brief `twai_sem()` のcurrent task不正状態を示す戻り値。
+ */
+#define TWAI_SEM_ERR_INVALID_CURRENT_STATE (-2)
+
+/**
+ * @brief `twai_sem()` のsemaphore不正またはsemaphore queue失敗を示す戻り値。
+ */
+#define TWAI_SEM_ERR_SEMAPHORE (-3)
+
+/**
+ * @brief `twai_sem()` のdelay queue登録不可を示す戻り値。
+ */
+#define TWAI_SEM_ERR_DELAY_QUEUE (-4)
+
+/**
+ * @brief `twai_sem()` の状態遷移またはdispatcher接続失敗を示す戻り値。
+ */
+#define TWAI_SEM_ERR_DISPATCH (-5)
+
+/**
  * @brief μITRON風の自発的yield要求入口。
  *
  * @details
@@ -152,7 +189,8 @@ int wai_sem(int sem_id);
  * `dispatcher_switch_to()` 境界へ進む。
  *
  * 13.1ではsleep/delay queue、tickごとのdelay decrement、tick到達時READY復帰、
- * timeout付き `twai_sem`、timer IRQ handlerからの呼び出しは実装しない。
+ * timeout付きsemaphore待ちは実装しない。13.3で `twai_sem()` は追加されたが、
+ * timer IRQ handlerからの呼び出しやtimeout満了処理は引き続き行わない。
  *
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
  * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
@@ -166,11 +204,34 @@ int wai_sem(int sem_id);
  * queue満杯や二重登録ではWAITING化前に失敗し、不整合なWAITING taskを残さない。
  *
  * tick decrement、tick到達時READY復帰、delay queueからのdequeue wakeup、
- * timeout付き `twai_sem`、timer IRQ handlerからの呼び出しは13.2では未実装である。
+ * timeout付きsemaphore待ちのtimeout満了処理、timer IRQ handlerからの呼び出しは
+ * 13.3時点でも未実装である。
  *
  * @param delay_ticks delay queueへ観測用に登録するtick数。0は不正。
  * @return 成功時は `DLY_TSK_OK`、失敗時は `DLY_TSK_ERR_*`。
  */
 int dly_tsk(uint32_t delay_ticks);
+
+/**
+ * @brief 13.3時点のtimeout付きsemaphore待ちAPI。
+ *
+ * @details
+ * `timeout_ticks > 0` のtask文脈APIとして扱う。対象semaphoreのcountが残っている場合は
+ * countを1つ取得して即時成功し、queue登録やcontext switchは行わない。
+ *
+ * countが0の場合は、WAITING化前にsemaphore wait queueとdelay queueの両方へ登録可能かを
+ * 確認する。両方が登録可能な場合だけcurrent RUNNING taskを
+ * `TASK_WAIT_REASON_SEMAPHORE_TIMEOUT` のWAITINGへ遷移させ、semaphore wait queueには
+ * `sig_sem()` のwakeup対象として、delay queueにはtimeout tick観測対象として登録する。
+ *
+ * 13.3ではtickごとのtimeout decrement、timeout到達時READY復帰、timeout時のsemaphore
+ * wait queue削除、`sig_sem()` 成功時のdelay queue削除は行わない。timer IRQ handler本体から
+ * 呼び出すAPIでもない。
+ *
+ * @param sem_id 対象semaphore ID。
+ * @param timeout_ticks timeout観測用tick数。0はinvalid timeout。
+ * @return 成功時は `TWAI_SEM_OK`。失敗時は `TWAI_SEM_ERR_*`。
+ */
+int twai_sem(int sem_id, uint32_t timeout_ticks);
 
 #endif
