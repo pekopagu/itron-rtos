@@ -71,6 +71,12 @@ static unsigned char task_tick_current_stack[TASK_STACK_SIZE] __attribute__((ali
 static unsigned char task_api_current_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_api_created_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_api_high_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_current_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_next_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_waker_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_sem_wait_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_delay_wait_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_sleep_twai_wait_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 static void task_wai_sem_to(void);
 static void task_dly_to(void);
@@ -81,6 +87,12 @@ static void task_tick_current(void);
 static void task_api_current(void);
 static void task_api_created(void);
 static void task_api_high(void);
+static void task_sleep_current(void);
+static void task_sleep_next(void);
+static void task_sleep_waker(void);
+static void task_sleep_sem_wait(void);
+static void task_sleep_delay_wait(void);
+static void task_sleep_twai_wait(void);
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -1270,6 +1282,145 @@ static void kernel_run_create_start_task_api_smoke(void)
 }
 
 /**
+ * @brief 14.2 slp_tsk/wup_tsk API smokeを実行する。
+ *
+ * @details
+ * RUNNING current taskが `slp_tsk()` でWAITING(sleep)へ入り、scheduler READY候補から外れて
+ * 次READY taskへ切り替わることを観測する。その後、`wup_tsk()` がsleep待ちtaskだけを
+ * READYへ戻し、高優先度wakeup時にtask-wakeup由来のdispatch pendingへ接続することを確認する。
+ * READY、semaphore待ち、delay待ち、timeout付きsemaphore待ちへの `wup_tsk()` は失敗させる。
+ */
+static void kernel_run_sleep_wakeup_task_api_smoke(void)
+{
+    int sleep_current_id;
+    int sleep_next_id;
+    int sleep_waker_id;
+    int sem_wait_id;
+    int delay_wait_id;
+    int twai_wait_id;
+
+    hal_console_write("[sleep-wakeup-smoke] begin\n");
+    dispatch_pending_clear_for_test_or_later_boundary();
+
+    /*
+     * 高優先度currentと低優先度nextを用意する。
+     * currentがsleepへ入った後、nextがRUNNINGになり、wup_tsk()でcurrentを起こすと
+     * 高優先度READY復帰としてpreemption pendingを観測できる。
+     */
+    sleep_current_id = task_register(
+        "task_sleep_current",
+        task_sleep_current,
+        -2,
+        task_sleep_current_stack,
+        sizeof(task_sleep_current_stack)
+    );
+    kernel_log_task_register_result("task_sleep_current", sleep_current_id);
+
+    sleep_next_id = task_register(
+        "task_sleep_next",
+        task_sleep_next,
+        -1,
+        task_sleep_next_stack,
+        sizeof(task_sleep_next_stack)
+    );
+    kernel_log_task_register_result("task_sleep_next", sleep_next_id);
+
+    if (sleep_current_id <= 0 || sleep_next_id <= 0 ||
+        dispatcher_commit_current(task_get_by_id(sleep_current_id)) != DISPATCHER_OK) {
+        hal_console_write("[sleep-wakeup-smoke] stop: reason=current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * slp_tsk()でRUNNING currentをWAITING(sleep)へ落とし、次READY taskへ進める。
+     */
+    (void)slp_tsk();
+    task_dump();
+
+    /*
+     * dispatcher_switch_to() smokeでは選ばれたentryがreturnしてDORMANT化されるため、
+     * wup_tsk()のpreemption比較用に低優先度currentを改めてRUNNINGへ確定する。
+     */
+    sleep_waker_id = task_register(
+        "task_sleep_waker",
+        task_sleep_waker,
+        10,
+        task_sleep_waker_stack,
+        sizeof(task_sleep_waker_stack)
+    );
+    kernel_log_task_register_result("task_sleep_waker", sleep_waker_id);
+    if (sleep_waker_id <= 0 ||
+        dispatcher_commit_current(task_get_by_id(sleep_waker_id)) != DISPATCHER_OK) {
+        hal_console_write("[sleep-wakeup-smoke] stop: reason=waker-commit-failed\n");
+        return;
+    }
+
+    /*
+     * sleep待ちtaskだけをwup_tsk()でREADYへ戻す。
+     * currentより高優先度なのでtask-wakeup pendingが設定される。
+     */
+    (void)wup_tsk(sleep_current_id);
+    dispatch_pending_log_state_from_irq(NULL);
+
+    /*
+     * READY化済みtaskを再度wup_tsk()して、sleep待ち以外への失敗を観測する。
+     */
+    (void)wup_tsk(sleep_current_id);
+
+    /*
+     * semaphore待ちtaskはsleep待ちではないため、wup_tsk()でREADYへ戻してはいけない。
+     */
+    sem_wait_id = task_register(
+        "task_sleep_sem_wait",
+        task_sleep_sem_wait,
+        8,
+        task_sleep_sem_wait_stack,
+        sizeof(task_sleep_sem_wait_stack)
+    );
+    kernel_log_task_register_result("task_sleep_sem_wait", sem_wait_id);
+    if (sem_wait_id > 0 && task_mark_waiting_on_sem(sem_wait_id, 99) == 0) {
+        (void)wup_tsk(sem_wait_id);
+    }
+
+    /*
+     * delay待ちtaskもsleep待ちではないため、wup_tsk()でREADYへ戻してはいけない。
+     */
+    delay_wait_id = task_register(
+        "task_sleep_delay_wait",
+        task_sleep_delay_wait,
+        8,
+        task_sleep_delay_wait_stack,
+        sizeof(task_sleep_delay_wait_stack)
+    );
+    kernel_log_task_register_result("task_sleep_delay_wait", delay_wait_id);
+    if (delay_wait_id > 0 &&
+        dispatcher_commit_current(task_get_by_id(delay_wait_id)) == DISPATCHER_OK &&
+        task_mark_waiting_on_delay(delay_wait_id, 5U) == 0) {
+        (void)wup_tsk(delay_wait_id);
+    }
+
+    /*
+     * timeout付きsemaphore待ちtaskもsleep待ちではないため、wup_tsk()でREADYへ戻してはいけない。
+     */
+    twai_wait_id = task_register(
+        "task_sleep_twai_wait",
+        task_sleep_twai_wait,
+        8,
+        task_sleep_twai_wait_stack,
+        sizeof(task_sleep_twai_wait_stack)
+    );
+    kernel_log_task_register_result("task_sleep_twai_wait", twai_wait_id);
+    if (twai_wait_id > 0 &&
+        dispatcher_commit_current(task_get_by_id(twai_wait_id)) == DISPATCHER_OK &&
+        task_mark_waiting_on_sem_timeout(twai_wait_id, 100, 5U) == 0) {
+        (void)wup_tsk(twai_wait_id);
+    }
+
+    task_dump();
+    hal_console_write("[sleep-wakeup-smoke] end\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -1530,6 +1681,60 @@ static void task_api_created(void)
 static void task_api_high(void)
 {
     hal_console_write("[task_api_high] executed\n");
+}
+
+/**
+ * @brief 14.2 slp_tsk() smokeでsleep待ちへ入る高優先度task entry。
+ */
+static void task_sleep_current(void)
+{
+    /* 14.2 smokeでentry到達時のtask識別子を残す。 */
+    hal_console_write("[task_sleep_current] executed\n");
+}
+
+/**
+ * @brief 14.2 slp_tsk() smokeでsleep後に選ばれる低優先度task entry。
+ */
+static void task_sleep_next(void)
+{
+    /* 14.2 smokeでsleep後に選ばれたtaskのentry到達を残す。 */
+    hal_console_write("[task_sleep_next] executed\n");
+}
+
+/**
+ * @brief 14.2 wup_tsk() smokeで起床要求を出す低優先度current task entry。
+ */
+static void task_sleep_waker(void)
+{
+    /* 14.2 smokeでwakeup要求側taskのentry到達を残す。 */
+    hal_console_write("[task_sleep_waker] executed\n");
+}
+
+/**
+ * @brief 14.2 wup_tsk() invalid-state確認用のsemaphore待ちtask entry。
+ */
+static void task_sleep_sem_wait(void)
+{
+    /* 14.2 smokeでsemaphore待ちinvalid-state確認用taskのentry到達を残す。 */
+    hal_console_write("[task_sleep_sem_wait] executed\n");
+}
+
+/**
+ * @brief 14.2 wup_tsk() invalid-state確認用のdelay待ちtask entry。
+ */
+static void task_sleep_delay_wait(void)
+{
+    /* 14.2 smokeでdelay待ちinvalid-state確認用taskのentry到達を残す。 */
+    hal_console_write("[task_sleep_delay_wait] executed\n");
+}
+
+/**
+ * @brief 14.2 wup_tsk() invalid-state確認用のtimeout付きsemaphore待ちtask entry。
+ */
+static void task_sleep_twai_wait(void)
+{
+    /* 14.2 smokeでtimeout付きsemaphore待ちinvalid-state確認用taskのentry到達を残す。 */
+    hal_console_write("[task_sleep_twai_wait] executed\n");
 }
 
 void kernel_main(void)
@@ -1895,6 +2100,12 @@ void kernel_main(void)
      * timer IRQ handler本体からは呼ばず、task文脈APIとして生成と起動の分離を確認する。
      */
     kernel_run_create_start_task_api_smoke();
+
+    /*
+     * 第14章14.2では、slp_tsk()/wup_tsk()によるsleep待ちと起床を観測する。
+     * timer IRQ handler本体からは呼ばず、task文脈APIとしてREADY候補化とpending接続を確認する。
+     */
+    kernel_run_sleep_wakeup_task_api_smoke();
 
     for (;;) {
         __asm__ volatile ("hlt");

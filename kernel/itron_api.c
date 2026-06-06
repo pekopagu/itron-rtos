@@ -183,6 +183,34 @@ static void itron_api_log_next_candidate(const tcb_t *task)
 }
 
 /**
+ * @brief APIログ用にwait reasonを固定文字列へ変換する。
+ *
+ * @details
+ * `wup_tsk()` のinvalid-stateログで、対象taskがsleep待ちではない理由を観測する。
+ * 表示専用であり、TCB状態やwait metadataは変更しない。
+ *
+ * @param reason 変換対象のwait reason。
+ * @return HAL consoleへ渡す静的文字列。
+ */
+static const char *itron_api_wait_reason_name(task_wait_reason_t reason)
+{
+    switch (reason) {
+    case TASK_WAIT_REASON_NONE:
+        return "none";
+    case TASK_WAIT_REASON_SEMAPHORE:
+        return "semaphore";
+    case TASK_WAIT_REASON_DELAY:
+        return "delay";
+    case TASK_WAIT_REASON_SEMAPHORE_TIMEOUT:
+        return "semaphore-timeout";
+    case TASK_WAIT_REASON_SLEEP:
+        return "sleep";
+    default:
+        return "unknown";
+    }
+}
+
+/**
  * @brief μITRON風のtask生成API。
  *
  * @details
@@ -359,6 +387,253 @@ int sta_tsk(int tskid)
 
     hal_console_write("[sta-tsk] completed: result=0 action=started\n");
     return STA_TSK_OK;
+}
+
+/**
+ * @brief μITRON風のsleep待ちAPI。
+ *
+ * @details
+ * RUNNING current taskだけをsleep理由のWAITINGへ遷移させる。WAITING化後は既存schedulerで
+ * 次READY taskを選び、存在する場合だけ既存dispatcher境界へ進む。
+ *
+ * @return 成功時はSLP_TSK_OK、失敗時はSLP_TSK_ERR_*。
+ */
+int slp_tsk(void)
+{
+    /*
+     * sleep対象はdispatcherが確定済みのcurrent taskに限定する。
+     * API層ではTCBを直接変更せず、まず現在の呼び出し文脈だけを取得する。
+     */
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *next;
+    tcb_t *current_mutable;
+    tcb_t *next_mutable;
+    int wait_result;
+    int switch_result;
+
+    if (current == NULL) {
+        /*
+         * current未設定ではsleep対象を決められないため、task moduleへ状態変更を依頼しない。
+         */
+        hal_console_write("[slp-tsk] called: current=none\n");
+        hal_console_write("[slp-tsk] completed: result=");
+        itron_api_write_int(SLP_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return SLP_TSK_ERR_INVALID_CURRENT_STATE;
+    }
+
+    /*
+     * 状態変更前のcurrent情報を固定して出力し、RUNNINGからsleep待ちへ入る入力条件を残す。
+     */
+    hal_console_write("[slp-tsk] called: current");
+    itron_api_log_next_candidate(current);
+    hal_console_write("\n");
+
+    if (current->state != TASK_STATE_RUNNING) {
+        /*
+         * slp_tsk()はRUNNING current task専用のAPIとして扱う。
+         * READY/DORMANT/WAITINGをsleep待ちへ補正しない。
+         */
+        hal_console_write("[slp-tsk] rejected: reason=invalid-current-state current");
+        itron_api_log_task_identity(current);
+        hal_console_write("\n");
+        hal_console_write("[slp-tsk] completed: result=");
+        itron_api_write_int(SLP_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
+        return SLP_TSK_ERR_INVALID_CURRENT_STATE;
+    }
+
+    /*
+     * sleep WAITINGへの状態遷移はtask moduleに委譲し、API層でTCBを直接書き換えない。
+     */
+    wait_result = task_mark_waiting_on_sleep(current->id);
+    if (wait_result != 0) {
+        hal_console_write("[slp-tsk] rejected: reason=sleep-transition-failed err=");
+        itron_api_write_int(wait_result);
+        hal_console_write("\n");
+        hal_console_write("[slp-tsk] completed: result=");
+        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        hal_console_write(" action=sleep-transition-failed\n");
+        return SLP_TSK_ERR_DISPATCH;
+    }
+
+    /*
+     * sleep待ちへ入ったcurrentはREADY候補から外れるため、既存schedulerで次READY taskを選ぶ。
+     */
+    next = scheduler_select_next();
+    if (next == NULL) {
+        hal_console_write("[slp-tsk] no next task: reason=no-ready-task action=unsupported-stop\n");
+        hal_console_write("[slp-tsk] completed: result=0 action=sleep\n");
+        return SLP_TSK_OK;
+    }
+
+    /*
+     * sleep後に選ばれたREADY候補をswitch前に記録する。
+     */
+    hal_console_write("[scheduler] selected:");
+    itron_api_log_next_candidate(next);
+    hal_console_write("\n");
+
+    /*
+     * dispatcher境界へ渡す直前に更新可能TCBを取り直す。
+     * sleep WAITING化済みfromとREADY nextだけを既存switch境界へ渡す。
+     */
+    current_mutable = task_get_mutable_by_id(current->id);
+    next_mutable = task_get_mutable_by_id(next->id);
+    if (current_mutable == NULL || next_mutable == NULL) {
+        hal_console_write("[slp-tsk] rejected: reason=switch-task-not-found\n");
+        hal_console_write("[slp-tsk] completed: result=");
+        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        hal_console_write(" action=sleep-switch-failed\n");
+        return SLP_TSK_ERR_DISPATCH;
+    }
+
+    /*
+     * dispatcher境界へ渡すfrom/toをログへ残し、sleepしたtaskがWAITINGのまま候補外になることを示す。
+     */
+    hal_console_write("[dispatcher] switch requested: prev");
+    itron_api_log_task_identity(current_mutable);
+    hal_console_write(" next");
+    itron_api_log_task_identity(next_mutable);
+    hal_console_write("\n");
+
+    /*
+     * sleep後の切替は既存dispatcher境界へ委譲する。
+     * timer IRQ handler本体やdispatch pending境界から直接呼ぶ経路ではない。
+     */
+    switch_result = dispatcher_switch_to(current_mutable, next_mutable);
+    if (switch_result != DISPATCHER_OK) {
+        hal_console_write("[slp-tsk] completed: result=");
+        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        hal_console_write(" action=sleep-switch-failed\n");
+        return SLP_TSK_ERR_DISPATCH;
+    }
+
+    hal_console_write("[slp-tsk] completed: result=0 action=sleep\n");
+    return SLP_TSK_OK;
+}
+
+/**
+ * @brief μITRON風のsleep待ちtask起床API。
+ *
+ * @details
+ * 対象taskがWAITINGかつsleep理由の場合だけREADYへ戻す。READY化後、current RUNNING taskより
+ * 高優先度であればwakeup由来のdispatch pendingを記録する。
+ *
+ * @param tskid 起床対象task ID。
+ * @return 成功時はWUP_TSK_OK、失敗時はWUP_TSK_ERR_*。
+ */
+int wup_tsk(int tskid)
+{
+    /*
+     * wakeup後のpreemption比較に使うため、呼び出し時点のcurrentを先に観測する。
+     * currentがない場合でもwakeup対象の状態検証自体は実行できる。
+     */
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *target;
+    const tcb_t *ready_task;
+    int wake_result;
+
+    /*
+     * API呼び出しログには対象IDとcurrent文脈を含め、後続の状態遷移ログと対応付ける。
+     */
+    hal_console_write("[wup-tsk] called: tskid=");
+    itron_api_write_int(tskid);
+    if (current == NULL) {
+        hal_console_write(" current=none\n");
+    } else {
+        hal_console_write(" current");
+        itron_api_log_next_candidate(current);
+        hal_console_write("\n");
+    }
+
+    if (tskid <= 0) {
+        hal_console_write("[wup-tsk] rejected: reason=invalid-task-id\n");
+        hal_console_write("[wup-tsk] completed: result=");
+        itron_api_write_int(WUP_TSK_ERR_INVAL);
+        hal_console_write(" action=invalid-task-id\n");
+        return WUP_TSK_ERR_INVAL;
+    }
+
+    /*
+     * 状態を変更する前に対象taskを読み取り専用で取得し、sleep待ちだけかどうかを検証する。
+     */
+    target = task_get_by_id(tskid);
+    if (target == NULL) {
+        hal_console_write("[wup-tsk] rejected: reason=task-not-found tskid=");
+        itron_api_write_int(tskid);
+        hal_console_write("\n");
+        hal_console_write("[wup-tsk] completed: result=");
+        itron_api_write_int(WUP_TSK_ERR_NOT_FOUND);
+        hal_console_write(" action=not-found\n");
+        return WUP_TSK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * wup_tsk()はsleep待ちだけを起床対象にする。
+     * semaphore/delay/timeout待ちや非WAITING状態は状態変更前に拒否する。
+     */
+    if (target->state != TASK_STATE_WAITING ||
+        target->wait_reason != TASK_WAIT_REASON_SLEEP) {
+        hal_console_write("[wup-tsk] invalid state: tskid=");
+        itron_api_write_int(tskid);
+        hal_console_write(" state=");
+        hal_console_write(itron_api_task_state_name(target->state));
+        hal_console_write(" reason=");
+        hal_console_write(itron_api_wait_reason_name(target->wait_reason));
+        hal_console_write(" expected=WAITING reason=sleep\n");
+        hal_console_write("[wup-tsk] completed: result=");
+        itron_api_write_int(WUP_TSK_ERR_BAD_STATE);
+        hal_console_write(" action=invalid-state\n");
+        return WUP_TSK_ERR_BAD_STATE;
+    }
+
+    /*
+     * sleep WAITINGからREADYへの復帰はtask moduleに委譲する。
+     */
+    wake_result = task_wake_waiting_on_sleep_by_id(tskid);
+    if (wake_result != 0) {
+        hal_console_write("[wup-tsk] rejected: reason=wakeup-failed err=");
+        itron_api_write_int(wake_result);
+        hal_console_write("\n");
+        hal_console_write("[wup-tsk] completed: result=");
+        itron_api_write_int(WUP_TSK_ERR_BAD_STATE);
+        hal_console_write(" action=wakeup-failed\n");
+        return WUP_TSK_ERR_BAD_STATE;
+    }
+
+    /*
+     * READY復帰後のTCBを読み直し、scheduler候補として見える状態をログへ出す。
+     */
+    ready_task = task_get_by_id(tskid);
+    hal_console_write("[wup-tsk] ready:");
+    itron_api_log_next_candidate(ready_task);
+    hal_console_write("\n");
+
+    /*
+     * READY化したtask自身をpreemption比較対象にする。
+     * wup_tsk()が今回起こしたtask以外を理由に新しいpendingを作らないようにする。
+     */
+    if (current != NULL && current->state == TASK_STATE_RUNNING && ready_task != NULL) {
+        hal_console_write("[preempt] evaluate: current");
+        itron_api_log_next_candidate(current);
+        hal_console_write(" ready");
+        itron_api_log_next_candidate(ready_task);
+        hal_console_write("\n");
+
+        if (ready_task->priority < current->priority) {
+            /*
+             * task-wakeup由来のpendingとして保存するだけで、wup_tsk()から直接switchしない。
+             */
+            dispatch_request_from_task_wakeup(current, ready_task);
+            hal_console_write("[preempt] pending set: reason=task-wakeup\n");
+            hal_console_write("[wup-tsk] completed: result=0 action=wakeup-preempt-pending\n");
+            return WUP_TSK_OK;
+        }
+    }
+
+    hal_console_write("[wup-tsk] completed: result=0 action=wakeup\n");
+    return WUP_TSK_OK;
 }
 
 /**

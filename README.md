@@ -87,6 +87,7 @@ The current implementation covers the following milestones:
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
+| 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1377,7 +1378,8 @@ The following features are intentionally not implemented yet:
 * Event flag
 * `TASK_STATE_EXITED`
 * Task restart
-* Full ITRON-like task lifecycle APIs such as `sta_tsk`, `ext_tsk`, and `exd_tsk`
+* Full ITRON-like task lifecycle APIs such as `ext_tsk`, `exd_tsk`, `ter_tsk`, and `del_tsk`
+* `tslp_tsk`, `rel_wai`, wakeup request counting, and sleep timeout handling
 * Interrupt-driven task management
 * Interrupt nesting control
 * SMP scheduling
@@ -1504,6 +1506,12 @@ For Chapter 14 Section 14.1, comments document that `cre_tsk()` registers a
 task as DORMANT, `sta_tsk()` starts only DORMANT tasks by moving them to READY,
 and task-start preemption is recorded as dispatch pending instead of switching
 directly from the API or timer IRQ handler.
+For Chapter 14 Section 14.2, comments document that `slp_tsk()` moves only the
+RUNNING current task to WAITING with `wait_reason=sleep`, and that `wup_tsk()`
+returns only WAITING(sleep) tasks to READY. They also state that READY wakeup is
+connected to the existing preemption pending boundary, while semaphore waits,
+delay waits, timeout semaphore waits, wakeup request counting, sleep timeout,
+and timer IRQ handler calls to `slp_tsk()` / `wup_tsk()` remain out of scope.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1732,6 +1740,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
+| 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 
 ---
 

@@ -32,7 +32,8 @@
 typedef enum {
     DISPATCH_PENDING_NONE = 0, /**< dispatch要求は保留されていない。 */
     DISPATCH_PENDING_FROM_IRQ, /**< timer IRQ由来のpreemption decisionがdispatchを要求した。 */
-    DISPATCH_PENDING_TASK_START /**< `sta_tsk()` によるREADY化後のdispatch要求。 */
+    DISPATCH_PENDING_TASK_START, /**< `sta_tsk()` によるREADY化後のdispatch要求。 */
+    DISPATCH_PENDING_TASK_WAKEUP /**< `wup_tsk()` によるREADY復帰後のdispatch要求。 */
 } dispatch_pending_reason_t;
 
 /**
@@ -76,6 +77,18 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate);
  * @param candidate 起動によりREADY候補になった高優先度task。
  */
 void dispatch_request_from_task_start(const tcb_t *current, const tcb_t *candidate);
+
+/**
+ * @brief `wup_tsk()` 起点のdispatch pending要求を記録する。
+ *
+ * @details
+ * sleep待ちtaskをREADYへ戻した後、高優先度READY候補が生まれた事実を後段dispatch境界へ
+ * 渡すためのAPIである。ここではdispatcherを呼ばず、task状態も変更しない。
+ *
+ * @param current dispatch要求元として観測する現在RUNNING task。
+ * @param candidate wakeupによりREADY候補になった高優先度task。
+ */
+void dispatch_request_from_task_wakeup(const tcb_t *current, const tcb_t *candidate);
 
 /**
  * @brief dispatch要求が現在保留されているかを返す。

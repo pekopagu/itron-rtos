@@ -400,6 +400,8 @@ static const char *task_wait_reason_to_string(task_wait_reason_t reason)
         return "delay";
     case TASK_WAIT_REASON_SEMAPHORE_TIMEOUT:
         return "semaphore-timeout";
+    case TASK_WAIT_REASON_SLEEP:
+        return "sleep";
     default:
         return "unknown";
     }
@@ -1223,6 +1225,65 @@ int task_mark_waiting_on_sem_timeout(int task_id, int sem_id, uint32_t timeout_t
 }
 
 /**
+ * @brief `slp_tsk()` 用にRUNNING taskをsleep WAITINGへ遷移させる。
+ *
+ * @details
+ * sleep待ちはsemaphore IDやremaining tickを持たない単純なWAITING理由として扱う。
+ * `wup_tsk()` だけがこの理由のtaskをREADYへ戻せる。
+ *
+ * @param task_id sleep待ちへ入るtask ID。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_sleep(int task_id)
+{
+    /*
+     * sleep遷移対象のTCBをtask tableから取得する。
+     * 不正IDや未登録IDでは後続の状態変更へ進まない。
+     */
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /* 不正なtask IDではTCBを探さず、task tableの状態を変更しない。 */
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    /* 登録済みtaskだけをsleep待ち遷移の対象にする。 */
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * slp_tsk()は現在RUNNING中のtaskだけをsleep待ちへ落とすAPIである。
+     * READY/DORMANT/既存WAITING taskをsleepへ再分類しない。
+     */
+    if (task->state != TASK_STATE_RUNNING) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * sleep待ちはsemaphore queueやdelay queueに属さないため、待ちmetadataを
+     * sleep理由だけに固定し、既存のsemaphore/delay経路と混同しないようにする。
+     */
+    task->state = TASK_STATE_WAITING;
+    task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_SLEEP;
+    task->delay_ticks_remaining = 0;
+
+    /*
+     * RUNNINGからWAITING(sleep)へ落ちたことを、task module所有の状態遷移ログとして出力する。
+     */
+    hal_console_write("[task] sleep: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" RUNNING->WAITING reason=");
+    hal_console_write(task_wait_reason_to_string(task->wait_reason));
+    hal_console_write("\n");
+
+    return 0;
+}
+
+/**
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
  *
  * @details
@@ -1505,6 +1566,64 @@ int task_wake_waiting_on_sem_timeout_by_id(int task_id, int sem_id)
     hal_console_write(" sem id=");
     task_write_int(sem_id);
     hal_console_write(" WAITING->READY\n");
+
+    return 0;
+}
+
+/**
+ * @brief sleep待ちtaskをWAITINGからREADYへ戻す。
+ *
+ * @details
+ * 14.2の `wup_tsk()` から呼ばれる。対象taskがsleep待ちとしてWAITING中であることを
+ * 確認し、READY復帰後にwait reason、wait semaphore id、remaining tickを未待ち状態へ戻す。
+ *
+ * @param task_id READYへ戻すsleep待ちtask ID。
+ * @return 成功時は0。入力不正、taskなし、状態不整合ではTASK_ERR_*。
+ */
+int task_wake_waiting_on_sleep_by_id(int task_id)
+{
+    /*
+     * wakeup対象のTCBをtask tableから取得する。
+     * wup_tsk()側の事前確認後でも、task module内で再検証して境界を守る。
+     */
+    tcb_t *task = task_get_mutable_by_id(task_id);
+
+    /* 不正なtask IDではTCBを探さず、task tableの状態を変更しない。 */
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    /* task tableに存在しないIDはwakeup対象にできない。 */
+    if (task == NULL) {
+        return TASK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * wup_tsk()で起こせるのはsleep理由でWAITING中のtaskだけである。
+     * semaphore/delay/timeout待ちやREADY/RUNNING/DORMANTは補正しない。
+     */
+    if (task->state != TASK_STATE_WAITING ||
+        task->wait_reason != TASK_WAIT_REASON_SLEEP) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /*
+     * sleep待ちを完了させ、schedulerが選べるREADY候補へ戻す。
+     * READY復帰後は古い待ちmetadataを残さない。
+     */
+    task->state = TASK_STATE_READY;
+    task->wait_sem_id = 0;
+    task->wait_reason = TASK_WAIT_REASON_NONE;
+    task->delay_ticks_remaining = 0;
+
+    /*
+     * WAITING(sleep)からREADYへ戻ったことを、task module所有の状態遷移ログとして出力する。
+     */
+    hal_console_write("[task] wakeup: id=");
+    task_write_int(task->id);
+    hal_console_write(" name=");
+    hal_console_write(task->name);
+    hal_console_write(" WAITING->READY reason=sleep\n");
 
     return 0;
 }

@@ -40,13 +40,14 @@ typedef void (*task_entry_t)(void);
  * 第13章13.1では、同じ `TASK_STATE_WAITING` でもsemaphore待ちとdelay待ちを
  * 区別できるようにする。第13章13.3ではtimeout付きsemaphore待ちも別理由として
  * 観測できるようにする。13.4ではtick到達時のREADY復帰とtimeout時のqueue削除を
- * delay queue tick処理へ接続する。
+ * delay queue tick処理へ接続する。14.2では `slp_tsk()` 用のsleep待ち理由を追加する。
  */
 typedef enum {
     TASK_WAIT_REASON_NONE = 0,      /**< 待ちなし。READY/RUNNING/DORMANT/UNUSEDで使う。 */
     TASK_WAIT_REASON_SEMAPHORE,     /**< `wai_sem()` によるsemaphore待ち。 */
     TASK_WAIT_REASON_DELAY,         /**< `dly_tsk()` によるdelay待ち。 */
     TASK_WAIT_REASON_SEMAPHORE_TIMEOUT, /**< `twai_sem()` によるtimeout付きsemaphore待ち。 */
+    TASK_WAIT_REASON_SLEEP,         /**< `slp_tsk()` によるsleep待ち。 */
 } task_wait_reason_t;
 
 /**
@@ -415,6 +416,21 @@ int task_mark_waiting_on_delay(int task_id, uint32_t delay_ticks);
 int task_mark_waiting_on_sem_timeout(int task_id, int sem_id, uint32_t timeout_ticks);
 
 /**
+ * @brief `slp_tsk()` 用にRUNNING taskをsleep WAITINGへ遷移させる。
+ *
+ * @details
+ * 第14章14.2のsleep待ち入口で使う状態遷移である。対象taskはRUNNINGである必要があり、
+ * 遷移後は `wait_reason=TASK_WAIT_REASON_SLEEP`、`wait_sem_id=0`、
+ * `delay_ticks_remaining=0` として観測できる。
+ *
+ * この関数はscheduler選択、dispatcher switch、wakeup要求蓄積、timeout処理を行わない。
+ *
+ * @param task_id sleep待ちへ入れるtask ID。
+ * @return 成功時は0、失敗時はTASK_ERR_*。
+ */
+int task_mark_waiting_on_sleep(int task_id);
+
+/**
  * @brief 指定セマフォを待つtaskを読み取り専用で1件探す。
  *
  * @details
@@ -485,5 +501,19 @@ int task_wake_waiting_on_delay_by_id(int task_id);
  * @return 成功時は0。失敗時はTASK_ERR_*。
  */
 int task_wake_waiting_on_sem_timeout_by_id(int task_id, int sem_id);
+
+/**
+ * @brief 指定taskをsleep待ちからREADYへ戻す。
+ *
+ * @details
+ * 第14章14.2の `wup_tsk()` から呼ばれる。対象taskは
+ * `TASK_STATE_WAITING` かつ `TASK_WAIT_REASON_SLEEP` である必要がある。
+ * READY復帰後はwait reason、wait semaphore id、remaining tickを未待ち状態へ戻す。
+ * semaphore待ち、delay待ち、timeout付きsemaphore待ちはREADYへ戻さない。
+ *
+ * @param task_id READYへ戻すsleep待ちtask ID。
+ * @return 成功時は0。失敗時はTASK_ERR_*。
+ */
+int task_wake_waiting_on_sleep_by_id(int task_id);
 
 #endif

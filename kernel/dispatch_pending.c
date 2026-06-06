@@ -91,6 +91,11 @@ static const char *dispatch_pending_reason_name(dispatch_pending_reason_t reason
         return "task-start";
     }
 
+    /* `wup_tsk()` 起点のREADY復帰はtask-wakeupとして観測する。 */
+    if (reason == DISPATCH_PENDING_TASK_WAKEUP) {
+        return "task-wakeup";
+    }
+
     return "none";
 }
 
@@ -229,6 +234,40 @@ void dispatch_request_from_task_start(const tcb_t *current, const tcb_t *candida
     dispatch_pending_state.requested = true;
     dispatch_pending_state.request_logged = false;
     dispatch_pending_state.reason = DISPATCH_PENDING_TASK_START;
+    dispatch_pending_state.current = current;
+    dispatch_pending_state.candidate = candidate;
+    dispatch_pending_state.current_id = current->id;
+    dispatch_pending_state.candidate_id = candidate->id;
+}
+
+/**
+ * @brief `wup_tsk()` 起点のdispatch pending要求を記録する。
+ *
+ * @details
+ * sleep待ちtaskをREADYへ復帰した結果、高優先度READY候補が生まれたことを後段境界へ渡す。
+ * ここではdispatcherやcontext switchを直接呼ばない。
+ *
+ * @param current dispatch要求元として観測する現在RUNNING task。
+ * @param candidate wakeupによりREADY候補になった高優先度task。
+ */
+void dispatch_request_from_task_wakeup(const tcb_t *current, const tcb_t *candidate)
+{
+    if (current == NULL || candidate == NULL) {
+        /*
+         * wup_tsk()後のpreemption比較に必要なfrom/toが欠ける場合は、古いpendingを残さない。
+         * dispatcherへfallbackせず、次の観測で誤った切替要求が消費されることを防ぐ。
+         */
+        dispatch_pending_clear_for_test_or_later_boundary();
+        return;
+    }
+
+    /*
+     * task文脈API由来のwakeup pending requestとして保存する。
+     * 実際のdispatchは既存の後段境界がfrom RUNNING / to READYを再確認してから扱う。
+     */
+    dispatch_pending_state.requested = true;
+    dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.reason = DISPATCH_PENDING_TASK_WAKEUP;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
     dispatch_pending_state.current_id = current->id;

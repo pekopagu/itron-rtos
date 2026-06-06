@@ -169,6 +169,27 @@
 /** @brief `sta_tsk()` の対象task状態不正を示す戻り値。 */
 #define STA_TSK_ERR_BAD_STATE (-3)
 
+/** @brief `slp_tsk()` の成功を示す戻り値。 */
+#define SLP_TSK_OK 0
+
+/** @brief `slp_tsk()` のcurrent task不正状態を示す戻り値。 */
+#define SLP_TSK_ERR_INVALID_CURRENT_STATE (-1)
+
+/** @brief `slp_tsk()` の状態遷移またはswitch失敗を示す戻り値。 */
+#define SLP_TSK_ERR_DISPATCH (-2)
+
+/** @brief `wup_tsk()` の成功を示す戻り値。 */
+#define WUP_TSK_OK 0
+
+/** @brief `wup_tsk()` の不正task IDを示す戻り値。 */
+#define WUP_TSK_ERR_INVAL (-1)
+
+/** @brief `wup_tsk()` の対象task未検出を示す戻り値。 */
+#define WUP_TSK_ERR_NOT_FOUND (-2)
+
+/** @brief `wup_tsk()` の対象task状態不正を示す戻り値。 */
+#define WUP_TSK_ERR_BAD_STATE (-3)
+
 /**
  * @struct itron_task_create_param_t
  * @brief `cre_tsk()` へ渡す学習用task生成属性。
@@ -225,6 +246,35 @@ int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk);
  * @return 成功時はSTA_TSK_OK、失敗時はSTA_TSK_ERR_*。
  */
 int sta_tsk(int tskid);
+
+/**
+ * @brief μITRON風のsleep待ちAPI。
+ *
+ * @details
+ * dispatcherが保持するcurrent taskを読み取り、RUNNING current taskだけをsleep理由の
+ * WAITINGへ遷移させる。sleep待ちへ入ったtaskはscheduler READY候補から外れ、
+ * 次READY taskが存在する場合は既存の `dispatcher_switch_to()` 境界へ進む。
+ *
+ * timeout付きsleep、wakeup要求カウント、timer IRQ handlerからの呼び出しは扱わない。
+ *
+ * @return 成功時はSLP_TSK_OK、失敗時はSLP_TSK_ERR_*。
+ */
+int slp_tsk(void);
+
+/**
+ * @brief μITRON風のsleep待ちtask起床API。
+ *
+ * @details
+ * 指定taskがWAITINGかつsleep理由の場合だけREADYへ戻す。DORMANT、READY、RUNNING、
+ * semaphore待ち、delay待ち、timeout付きsemaphore待ちは状態を変更せずエラーにする。
+ * READY化したtaskがcurrentより高優先度の場合は、既存のdispatch pending境界へ接続する。
+ *
+ * wakeup要求蓄積、timeout付きsleep、timer IRQ handlerからの呼び出しは扱わない。
+ *
+ * @param tskid 起床対象task ID。
+ * @return 成功時はWUP_TSK_OK、失敗時はWUP_TSK_ERR_*。
+ */
+int wup_tsk(int tskid);
 
 /**
  * @brief μITRON風のsemaphore待ちAPI入口。
