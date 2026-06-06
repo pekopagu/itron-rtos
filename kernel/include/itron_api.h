@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#include "task.h"
+
 /**
  * @brief `yield_tsk()` の観測成功を示す戻り値。
  *
@@ -146,6 +148,43 @@
  */
 #define TWAI_SEM_ERR_DISPATCH (-5)
 
+/** @brief `cre_tsk()` の成功を示す戻り値。 */
+#define CRE_TSK_OK 0
+
+/** @brief `cre_tsk()` の不正引数を示す戻り値。 */
+#define CRE_TSK_ERR_INVAL (-1)
+
+/** @brief `cre_tsk()` のtask登録失敗を示す戻り値。 */
+#define CRE_TSK_ERR_TASK (-2)
+
+/** @brief `sta_tsk()` の成功を示す戻り値。 */
+#define STA_TSK_OK 0
+
+/** @brief `sta_tsk()` の不正task IDを示す戻り値。 */
+#define STA_TSK_ERR_INVAL (-1)
+
+/** @brief `sta_tsk()` の対象task未検出を示す戻り値。 */
+#define STA_TSK_ERR_NOT_FOUND (-2)
+
+/** @brief `sta_tsk()` の対象task状態不正を示す戻り値。 */
+#define STA_TSK_ERR_BAD_STATE (-3)
+
+/**
+ * @struct itron_task_create_param_t
+ * @brief `cre_tsk()` へ渡す学習用task生成属性。
+ *
+ * @details
+ * 14.1ではtask生成に必要な最小属性だけを扱う。`tskatr` や `stacd`、動的stack確保は
+ * 本章の対象外であり、呼び出し側が用意したentry/priority/stack/nameをTCBへ登録する。
+ */
+typedef struct {
+    task_entry_t entry;       /**< task入口関数。 */
+    int priority;             /**< scheduler比較用優先度。数値が小さいほど高優先度。 */
+    void *stack_base;         /**< 呼び出し側が用意したstack基底アドレス。 */
+    unsigned long stack_size; /**< stack領域サイズ。 */
+    const char *name;         /**< task名。 */
+} itron_task_create_param_t;
+
 /**
  * @brief μITRON風の自発的yield要求入口。
  *
@@ -160,6 +199,32 @@
  *         負値はcurrent task未設定または非RUNNINGの不正状態。
  */
 int yield_tsk(void);
+
+/**
+ * @brief μITRON風のtask生成API。
+ *
+ * @details
+ * 指定IDのtask定義をTCBへ登録し、初期状態をDORMANTにする。生成直後のtaskは
+ * scheduler READY候補に入らない。task起動は `sta_tsk()` が担当する。
+ *
+ * @param tskid 生成対象task ID。0以下は不正。
+ * @param pk_ctsk task生成属性。NULLや必須field欠落は不正。
+ * @return 成功時はCRE_TSK_OK、失敗時はCRE_TSK_ERR_*。
+ */
+int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk);
+
+/**
+ * @brief μITRON風のtask起動API。
+ *
+ * @details
+ * DORMANT taskだけをREADYへ遷移させる。READY化後、現在RUNNING taskより高優先度の
+ * READY候補になった場合は既存のdispatch pending境界へ接続する。DORMANT以外の状態は
+ * 変更せずエラーにする。
+ *
+ * @param tskid 起動対象task ID。
+ * @return 成功時はSTA_TSK_OK、失敗時はSTA_TSK_ERR_*。
+ */
+int sta_tsk(int tskid);
 
 /**
  * @brief μITRON風のsemaphore待ちAPI入口。

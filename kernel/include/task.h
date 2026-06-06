@@ -203,6 +203,30 @@ int task_register(
 );
 
 /**
+ * @brief 指定IDのtaskをDORMANT状態で生成する。
+ *
+ * @details
+ * 第14章14.1の `cre_tsk()` 用の登録APIである。既存の `task_register()` は登録直後READY
+ * という検証契約を維持するため、DORMANT初期化はこの専用helperに分離する。
+ *
+ * @param task_id 生成するtask ID。0以下は不正で、既存IDとの重複も拒否する。
+ * @param name task名。NULLは不正。
+ * @param entry task入口関数。NULLは不正。
+ * @param priority scheduler比較用優先度。
+ * @param stack_base stack基底アドレス。NULLは不正。
+ * @param stack_size stackサイズ。0は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*。
+ */
+int task_create_dormant(
+    int task_id,
+    const char *name,
+    task_entry_t entry,
+    int priority,
+    void *stack_base,
+    unsigned long stack_size
+);
+
+/**
  * @brief 登録済みタスクの一覧をHAL consoleへ出力する。
  *
  * @details
@@ -304,6 +328,19 @@ int task_mark_running(int task_id);
  * @return 成功時は0、失敗時は負のTASK_ERR_*値。
  */
 int task_mark_ready_from_running(int task_id);
+
+/**
+ * @brief DORMANT taskをREADY状態へ起動する。
+ *
+ * @details
+ * 第14章14.1の `sta_tsk()` 用の状態変更APIである。対象taskがDORMANTである場合だけ
+ * READYへ遷移させ、scheduler候補に入る状態にする。READY/RUNNING/WAITINGは拒否し、
+ * 既存状態を変更しない。
+ *
+ * @param task_id 起動対象task ID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*。
+ */
+int task_start_dormant(int task_id);
 
 /**
  * @brief entry returnしたtaskをDORMANTへ最終化する。

@@ -31,7 +31,8 @@
  */
 typedef enum {
     DISPATCH_PENDING_NONE = 0, /**< dispatch要求は保留されていない。 */
-    DISPATCH_PENDING_FROM_IRQ  /**< timer IRQ由来のpreemption decisionがdispatchを要求した。 */
+    DISPATCH_PENDING_FROM_IRQ, /**< timer IRQ由来のpreemption decisionがdispatchを要求した。 */
+    DISPATCH_PENDING_TASK_START /**< `sta_tsk()` によるREADY化後のdispatch要求。 */
 } dispatch_pending_reason_t;
 
 /**
@@ -63,6 +64,18 @@ typedef struct {
  * @param candidate preemption decision が選んだ読み取り専用の候補task。
  */
 void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate);
+
+/**
+ * @brief `sta_tsk()` 起点のdispatch pending要求を記録する。
+ *
+ * @details
+ * task文脈APIでDORMANT taskをREADYへ起動した後、高優先度READY taskが見つかった事実を
+ * 後段dispatch境界へ渡すためのAPIである。ここではdispatcherを呼ばず、task状態も変更しない。
+ *
+ * @param current dispatch要求元として観測する現在RUNNING task。
+ * @param candidate 起動によりREADY候補になった高優先度task。
+ */
+void dispatch_request_from_task_start(const tcb_t *current, const tcb_t *candidate);
 
 /**
  * @brief dispatch要求が現在保留されているかを返す。

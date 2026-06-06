@@ -15,6 +15,7 @@
 
 #include <stddef.h>
 
+#include "dispatch_pending.h"
 #include "dispatcher.h"
 #include "delay_queue.h"
 #include "hal/console.h"
@@ -179,6 +180,185 @@ static void itron_api_log_next_candidate(const tcb_t *task)
     itron_api_write_int(task->priority);
     hal_console_write(" state=");
     hal_console_write(itron_api_task_state_name(task->state));
+}
+
+/**
+ * @brief μITRON風のtask生成API。
+ *
+ * @details
+ * 指定IDのtask定義をTCBへ登録し、初期状態をDORMANTにする。生成直後のtaskは
+ * scheduler READY候補に入らない。task起動は `sta_tsk()` が担当する。
+ *
+ * @param tskid 生成対象task ID。
+ * @param pk_ctsk task生成属性。
+ * @return 成功時はCRE_TSK_OK、失敗時はCRE_TSK_ERR_*。
+ */
+int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk)
+{
+    int result;
+    const char *task_name = "(invalid)";
+    int priority = 0;
+
+    if (pk_ctsk != NULL && pk_ctsk->name != NULL) {
+        task_name = pk_ctsk->name;
+        priority = pk_ctsk->priority;
+    }
+
+    hal_console_write("[cre-tsk] called: tskid=");
+    itron_api_write_int(tskid);
+    hal_console_write(" name=");
+    hal_console_write(task_name);
+    hal_console_write(" prio=");
+    itron_api_write_int(priority);
+    hal_console_write("\n");
+
+    /*
+     * 必須属性が欠けている場合はtask moduleへ渡さず、部分的なTCB登録を防ぐ。
+     * 14.1ではtskatrや動的stack確保を扱わないため、呼び出し側が全属性を用意する。
+     */
+    if (tskid <= 0 || pk_ctsk == NULL || pk_ctsk->entry == NULL ||
+        pk_ctsk->stack_base == NULL || pk_ctsk->stack_size == 0 ||
+        pk_ctsk->name == NULL) {
+        hal_console_write("[cre-tsk] rejected: reason=invalid-parameter\n");
+        hal_console_write("[cre-tsk] completed: result=");
+        itron_api_write_int(CRE_TSK_ERR_INVAL);
+        hal_console_write(" action=invalid-parameter\n");
+        return CRE_TSK_ERR_INVAL;
+    }
+
+    /*
+     * cre_tsk()は生成だけを担当するため、task moduleのDORMANT登録helperへ委譲する。
+     * 既存のtask_register()はREADY登録のまま残し、既存smokeを退行させない。
+     */
+    result = task_create_dormant(
+        tskid,
+        pk_ctsk->name,
+        pk_ctsk->entry,
+        pk_ctsk->priority,
+        pk_ctsk->stack_base,
+        pk_ctsk->stack_size
+    );
+    if (result != 0) {
+        hal_console_write("[cre-tsk] rejected: reason=task-create-failed err=");
+        itron_api_write_int(result);
+        hal_console_write("\n");
+        hal_console_write("[cre-tsk] completed: result=");
+        itron_api_write_int(CRE_TSK_ERR_TASK);
+        hal_console_write(" action=create-failed\n");
+        return CRE_TSK_ERR_TASK;
+    }
+
+    hal_console_write("[cre-tsk] completed: result=0 action=created\n");
+    return CRE_TSK_OK;
+}
+
+/**
+ * @brief μITRON風のtask起動API。
+ *
+ * @details
+ * DORMANT taskだけをREADYへ遷移させる。READY化後、現在RUNNING taskより高優先度の
+ * READY候補になった場合は既存のdispatch pending境界へ接続する。
+ *
+ * @param tskid 起動対象task ID。
+ * @return 成功時はSTA_TSK_OK、失敗時はSTA_TSK_ERR_*。
+ */
+int sta_tsk(int tskid)
+{
+    const tcb_t *current = dispatcher_get_current();
+    const tcb_t *target;
+    const tcb_t *ready_task;
+    int result;
+
+    hal_console_write("[sta-tsk] called: tskid=");
+    itron_api_write_int(tskid);
+    if (current == NULL) {
+        hal_console_write(" current=none\n");
+    } else {
+        hal_console_write(" current");
+        itron_api_log_next_candidate(current);
+        hal_console_write("\n");
+    }
+
+    if (tskid <= 0) {
+        hal_console_write("[sta-tsk] rejected: reason=invalid-task-id\n");
+        hal_console_write("[sta-tsk] completed: result=");
+        itron_api_write_int(STA_TSK_ERR_INVAL);
+        hal_console_write(" action=invalid-task-id\n");
+        return STA_TSK_ERR_INVAL;
+    }
+
+    target = task_get_by_id(tskid);
+    if (target == NULL) {
+        hal_console_write("[sta-tsk] rejected: reason=task-not-found tskid=");
+        itron_api_write_int(tskid);
+        hal_console_write("\n");
+        hal_console_write("[sta-tsk] completed: result=");
+        itron_api_write_int(STA_TSK_ERR_NOT_FOUND);
+        hal_console_write(" action=not-found\n");
+        return STA_TSK_ERR_NOT_FOUND;
+    }
+
+    /*
+     * sta_tsk()はDORMANT taskだけを起動する。READY/RUNNING/WAITINGを対象にした場合は
+     * task moduleへ状態変更を依頼せず、観測した状態をログに残して失敗する。
+     */
+    if (target->state != TASK_STATE_DORMANT) {
+        hal_console_write("[sta-tsk] invalid state: tskid=");
+        itron_api_write_int(tskid);
+        hal_console_write(" state=");
+        hal_console_write(itron_api_task_state_name(target->state));
+        hal_console_write(" expected=DORMANT\n");
+        hal_console_write("[sta-tsk] completed: result=");
+        itron_api_write_int(STA_TSK_ERR_BAD_STATE);
+        hal_console_write(" action=invalid-state\n");
+        return STA_TSK_ERR_BAD_STATE;
+    }
+
+    /*
+     * DORMANT->READYの所有権はtask moduleへ委譲する。sta_tsk()側ではcurrentの差し替えや
+     * dispatcher呼び出しを行わない。
+     */
+    result = task_start_dormant(tskid);
+    if (result != 0) {
+        hal_console_write("[sta-tsk] rejected: reason=start-failed err=");
+        itron_api_write_int(result);
+        hal_console_write("\n");
+        hal_console_write("[sta-tsk] completed: result=");
+        itron_api_write_int(STA_TSK_ERR_BAD_STATE);
+        hal_console_write(" action=start-failed\n");
+        return STA_TSK_ERR_BAD_STATE;
+    }
+
+    ready_task = task_get_by_id(tskid);
+    hal_console_write("[sta-tsk] ready:");
+    itron_api_log_next_candidate(ready_task);
+    hal_console_write("\n");
+
+    /*
+     * READY化したtask自身をpreemption比較対象にする。既存READY taskが残っていても、
+     * sta_tsk()が今回起動したtask以外を理由に新しいpendingを作らないようにする。
+     */
+    if (current != NULL && current->state == TASK_STATE_RUNNING && ready_task != NULL) {
+        hal_console_write("[preempt] evaluate: current");
+        itron_api_log_next_candidate(current);
+        hal_console_write(" ready");
+        itron_api_log_next_candidate(ready_task);
+        hal_console_write("\n");
+
+        if (ready_task->priority < current->priority) {
+            /*
+             * task-start由来のpendingとして保存するだけで、timer IRQ handler本体やsta_tsk()から
+             * dispatcher_switch_to()を直接呼ばない。
+             */
+            dispatch_request_from_task_start(current, ready_task);
+            hal_console_write("[preempt] pending set: reason=task-start\n");
+            hal_console_write("[sta-tsk] completed: result=0 action=started-preempt-pending\n");
+            return STA_TSK_OK;
+        }
+    }
+
+    hal_console_write("[sta-tsk] completed: result=0 action=started\n");
+    return STA_TSK_OK;
 }
 
 /**

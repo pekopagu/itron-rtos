@@ -80,7 +80,7 @@ $(SCHEDULER_OBJ): kernel/scheduler.c kernel/include/scheduler.h kernel/include/t
 $(DISPATCHER_OBJ): kernel/dispatcher.c kernel/include/dispatcher.h kernel/include/task.h kernel/include/task_context.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/dispatcher.c -o $(DISPATCHER_OBJ)
 
-$(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/semaphore.h kernel/include/task.h kernel/include/delay_queue.h kernel/include/hal/console.h | dirs
+$(ITRON_API_OBJ): kernel/itron_api.c kernel/include/itron_api.h kernel/include/dispatcher.h kernel/include/scheduler.h kernel/include/semaphore.h kernel/include/task.h kernel/include/delay_queue.h kernel/include/dispatch_pending.h kernel/include/hal/console.h | dirs
 	$(CLANG) $(CFLAGS) -c kernel/itron_api.c -o $(ITRON_API_OBJ)
 
 $(DELAY_QUEUE_OBJ): kernel/delay_queue.c kernel/include/delay_queue.h kernel/include/semaphore.h kernel/include/task.h kernel/include/hal/console.h | dirs

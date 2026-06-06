@@ -86,6 +86,7 @@ The current implementation covers the following milestones:
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue | Completed |
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
+| 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1499,6 +1500,10 @@ WAITING to READY when remaining tick reaches zero, and that timeout semaphore
 waiters are removed from the semaphore wait queue on timeout. They also state
 that timer IRQ handler bodies still do not directly call task APIs or
 `dispatcher_switch_to()`.
+For Chapter 14 Section 14.1, comments document that `cre_tsk()` registers a
+task as DORMANT, `sta_tsk()` starts only DORMANT tasks by moving them to READY,
+and task-start preemption is recorded as dispatch pending instead of switching
+directly from the API or timer IRQ handler.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1726,6 +1731,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 13      | 13.2    | sleep/delay queue                          | v13.2-sleep-delay-queue     | Completed |
 | 13      | 13.3    | twai_sem timeout semaphore wait            | v13.3-twai-sem-timeout-wait | Completed |
 | 13      | 13.4    | tick ready wakeup                          | v13.4-tick-ready-wakeup | Completed |
+| 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 
 ---
 

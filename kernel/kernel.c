@@ -68,6 +68,9 @@ static unsigned char task_twai_to_stack[TASK_STACK_SIZE] __attribute__((aligned(
 static unsigned char task_tick_delay_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_tick_twai_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 static unsigned char task_tick_current_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_api_current_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_api_created_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
+static unsigned char task_api_high_stack[TASK_STACK_SIZE] __attribute__((aligned(TASK_STACK_ALIGNMENT)));
 
 static void task_wai_sem_to(void);
 static void task_dly_to(void);
@@ -75,6 +78,9 @@ static void task_twai_to(void);
 static void task_tick_delay(void);
 static void task_tick_twai(void);
 static void task_tick_current(void);
+static void task_api_current(void);
+static void task_api_created(void);
+static void task_api_high(void);
 
 /**
  * @brief 符号なし整数をHAL consoleへ10進出力する。
@@ -1186,6 +1192,84 @@ static void kernel_run_tick_ready_wakeup_smoke(
 }
 
 /**
+ * @brief 14.1 cre_tsk/sta_tsk API smokeを実行する。
+ *
+ * @details
+ * `cre_tsk()` 直後のDORMANT taskがscheduler候補に入らないこと、`sta_tsk()` 後に
+ * READY候補へ入ること、DORMANTでないtaskの再起動が失敗すること、高優先度task起動で
+ * task-start由来のdispatch pendingが設定されることをQEMU serial logで観測する。
+ */
+static void kernel_run_create_start_task_api_smoke(void)
+{
+    int current_task_id;
+    itron_task_create_param_t created_param;
+    itron_task_create_param_t high_param;
+
+    hal_console_write("[create-start-smoke] begin\n");
+    dispatch_pending_clear_for_test_or_later_boundary();
+
+    /*
+     * sta_tsk()後のpreemption比較基準を作るため、低優先度current taskを確定する。
+     * ここでは既存dispatcher境界を使い、sta_tsk()自身からcurrentを書き換えない。
+     */
+    current_task_id = task_register(
+        "task_api_current",
+        task_api_current,
+        5,
+        task_api_current_stack,
+        sizeof(task_api_current_stack)
+    );
+    kernel_log_task_register_result("task_api_current", current_task_id);
+    if (current_task_id <= 0 ||
+        dispatcher_commit_current(task_get_by_id(current_task_id)) != DISPATCHER_OK) {
+        hal_console_write("[create-start-smoke] stop: reason=current-commit-failed\n");
+        return;
+    }
+
+    /*
+     * 低優先度taskをcre_tsk()で生成し、直後はDORMANTとしてscheduler候補に入らないことを
+     * schedulerログとtask dumpで確認する。
+     */
+    created_param.entry = task_api_created;
+    created_param.priority = 6;
+    created_param.stack_base = task_api_created_stack;
+    created_param.stack_size = sizeof(task_api_created_stack);
+    created_param.name = "task_api_created";
+    (void)cre_tsk(20, &created_param);
+    kernel_log_scheduler_selection("after_cre_tsk_dormant", scheduler_select_next());
+    task_dump();
+
+    /*
+     * DORMANT taskをREADYへ起動する。currentより低優先度なのでpendingは作られないが、
+     * scheduler READY候補には入る。
+     */
+    (void)sta_tsk(20);
+    kernel_log_scheduler_selection("after_sta_tsk_ready", scheduler_select_next());
+
+    /*
+     * READY化済みtaskを再度sta_tsk()して、DORMANTでない状態が拒否されることを確認する。
+     */
+    (void)sta_tsk(20);
+
+    /*
+     * 高優先度taskをDORMANT生成してから起動し、既存preemption判定経由で
+     * task-start pendingが設定されることを確認する。
+     */
+    high_param.entry = task_api_high;
+    high_param.priority = 1;
+    high_param.stack_base = task_api_high_stack;
+    high_param.stack_size = sizeof(task_api_high_stack);
+    high_param.name = "task_high";
+    (void)cre_tsk(21, &high_param);
+    (void)sta_tsk(21);
+    dispatch_pending_log_state_from_irq(NULL);
+    (void)dispatch_pending_consume_at_deferred_boundary();
+
+    task_dump();
+    hal_console_write("[create-start-smoke] end\n");
+}
+
+/**
  * @brief サンプルタスクAのentry関数。
  *
  * @details
@@ -1412,6 +1496,42 @@ static void task_tick_current(void)
  * @return なし。
  * @note task_start、割り込み駆動のタイマ、プリエンプション、time sliceは追加しない。
  */
+/**
+ * @brief 14.1 sta_tsk() smokeでcurrentとして使う低優先度task entry。
+ *
+ * @details
+ * entry本体から `cre_tsk()` / `sta_tsk()` は呼ばない。kernel smoke側でtask文脈APIを
+ * 明示的に呼び、生成と起動の分離を観測する。
+ */
+static void task_api_current(void)
+{
+    hal_console_write("[task_api_current] executed\n");
+}
+
+/**
+ * @brief 14.1 cre_tsk()でDORMANT生成される通常task entry。
+ *
+ * @details
+ * `cre_tsk()` 直後はDORMANTであり、このentryは呼ばれない。`sta_tsk()` 後にREADY候補へ
+ * 入ることだけを観測する。
+ */
+static void task_api_created(void)
+{
+    hal_console_write("[task_api_created] executed\n");
+}
+
+/**
+ * @brief 14.1 sta_tsk()後のpreemption pending確認に使う高優先度task entry。
+ *
+ * @details
+ * currentより高優先度のDORMANT taskとして生成し、`sta_tsk()` によりREADY化された時点で
+ * task-start pendingへ接続されることを観測する。
+ */
+static void task_api_high(void)
+{
+    hal_console_write("[task_api_high] executed\n");
+}
+
 void kernel_main(void)
 {
     int task_a_id;
@@ -1769,6 +1889,12 @@ void kernel_main(void)
             task_tick_current_id
         );
     }
+
+    /*
+     * 第14章14.1では、μITRON風API層としてcre_tsk()/sta_tsk()を観測する。
+     * timer IRQ handler本体からは呼ばず、task文脈APIとして生成と起動の分離を確認する。
+     */
+    kernel_run_create_start_task_api_smoke();
 
     for (;;) {
         __asm__ volatile ("hlt");

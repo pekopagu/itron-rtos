@@ -87,6 +87,10 @@ static const char *dispatch_pending_reason_name(dispatch_pending_reason_t reason
         return "higher-priority-ready";
     }
 
+    if (reason == DISPATCH_PENDING_TASK_START) {
+        return "task-start";
+    }
+
     return "none";
 }
 
@@ -191,6 +195,40 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate)
     dispatch_pending_state.requested = true;
     dispatch_pending_state.request_logged = false;
     dispatch_pending_state.reason = DISPATCH_PENDING_FROM_IRQ;
+    dispatch_pending_state.current = current;
+    dispatch_pending_state.candidate = candidate;
+    dispatch_pending_state.current_id = current->id;
+    dispatch_pending_state.candidate_id = candidate->id;
+}
+
+/**
+ * @brief `sta_tsk()` 起点のdispatch pending要求を記録する。
+ *
+ * @details
+ * DORMANT taskをREADYへ起動した結果、高優先度READY候補が生まれたことを後段境界へ渡す。
+ * ここではdispatcherやcontext switchを直接呼ばない。
+ *
+ * @param current dispatch要求元として観測する現在RUNNING task。
+ * @param candidate 起動によりREADY候補になった高優先度task。
+ */
+void dispatch_request_from_task_start(const tcb_t *current, const tcb_t *candidate)
+{
+    if (current == NULL || candidate == NULL) {
+        /*
+         * sta_tsk()後のpreemption比較に必要なfrom/toが欠ける場合は、古いpendingを残さない。
+         * dispatcherへfallbackせず、次の観測で誤った切替要求が消費されることを防ぐ。
+         */
+        dispatch_pending_clear_for_test_or_later_boundary();
+        return;
+    }
+
+    /*
+     * task文脈API由来のpending requestとして保存する。実際のdispatchは既存の後段境界が
+     * from RUNNING / to READY を再確認してから扱う。
+     */
+    dispatch_pending_state.requested = true;
+    dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.reason = DISPATCH_PENDING_TASK_START;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
     dispatch_pending_state.current_id = current->id;

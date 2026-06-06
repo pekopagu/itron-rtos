@@ -261,6 +261,96 @@ static int allocate_task_id(void)
 }
 
 /**
+ * @brief 指定task IDが既存TCBで使われているか確認する。
+ *
+ * @details
+ * `cre_tsk()` では呼び出し側がtask IDを指定するため、既存IDと衝突しないことを
+ * TCB所有者であるtask module内で確認する。UNUSED slotは未登録として無視する。
+ *
+ * @param task_id 確認対象のtask ID。
+ * @return 使用中なら1、未使用なら0。
+ */
+static int task_id_is_in_use(int task_id)
+{
+    int index;
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        const tcb_t *task = &task_table[index];
+
+        /* UNUSED slotは登録済みtaskではないため、ID重複判定の対象にしない。 */
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        /* 同じIDの登録済みtaskがあれば、cre_tsk()の指定IDは使えない。 */
+        if (task->id == task_id) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 登録済みTCBの共通fieldを初期化する。
+ *
+ * @details
+ * `task_register()` のREADY登録と `cre_tsk()` 用のDORMANT登録で、entry/stack/context
+ * metadataの設定を共有する。初期stateだけを呼び出し側から渡し、既存API契約を分離する。
+ *
+ * @param slot 初期化対象TCB。NULLは呼び出し側で除外済み。
+ * @param task_id 設定するtask ID。
+ * @param name task名。
+ * @param entry task入口関数。
+ * @param priority scheduler比較用優先度。
+ * @param stack_base stack基底アドレス。
+ * @param stack_size stackサイズ。
+ * @param initial_state READYまたはDORMANTの初期状態。
+ */
+static void task_configure_slot(
+    tcb_t *slot,
+    int task_id,
+    const char *name,
+    task_entry_t entry,
+    int priority,
+    void *stack_base,
+    unsigned long stack_size,
+    task_state_t initial_state
+)
+{
+    /*
+     * 呼び出し元が決めたIDと初期状態をTCBへ反映し、READY登録とDORMANT登録の差分を
+     * initial_stateだけに閉じ込める。
+     */
+    slot->id = task_id;
+    slot->name = name;
+    slot->entry = entry;
+    slot->priority = priority;
+    slot->state = initial_state;
+
+    /*
+     * 新規登録時点ではsemaphore待ちやdelay待ちは発生していないため、待ち関連metadataを
+     * 未待ち状態へ揃える。
+     */
+    slot->wait_sem_id = 0;
+    slot->wait_reason = TASK_WAIT_REASON_NONE;
+    slot->delay_ticks_remaining = 0;
+
+    /*
+     * 呼び出し側が用意したstack情報を保存し、context初期化が復帰先stackを参照できるようにする。
+     */
+    slot->stack_base = stack_base;
+    slot->stack_size = stack_size;
+    slot->stack_top = task_calculate_stack_top(stack_base, stack_size);
+
+    /*
+     * taskが初めてdispatch対象になったときにentryへ入れるよう、保存contextを初期化する。
+     */
+    task_initialize_context(slot);
+
+}
+
+/**
  * @brief タスク状態をログ表示用の文字列に変換する。
  *
  * @details
@@ -453,6 +543,94 @@ int task_register(
  * @return なし。
  * @note dumpは表示専用で、タスク状態やID採番状態を変更しない。
  */
+/**
+ * @brief 指定IDのtaskをDORMANT状態で生成する。
+ *
+ * @details
+ * 第14章14.1の `cre_tsk()` から呼ばれる登録helperである。既存の `task_register()` は
+ * READY登録のまま維持し、この関数だけが生成直後DORMANTのTCBを作る。
+ *
+ * @param task_id 生成するtask ID。
+ * @param name task名。
+ * @param entry task入口関数。
+ * @param priority scheduler比較用優先度。
+ * @param stack_base stack基底アドレス。
+ * @param stack_size stackサイズ。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*。
+ */
+int task_create_dormant(
+    int task_id,
+    const char *name,
+    task_entry_t entry,
+    int priority,
+    void *stack_base,
+    unsigned long stack_size
+)
+{
+    tcb_t *slot;
+
+    /* 必須属性が欠けたTCBを作らないよう、slot探索より先に入力を拒否する。 */
+    if (task_id <= 0 || name == NULL || entry == NULL ||
+        stack_base == NULL || stack_size == 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    /* cre_tsk()の指定IDは既存taskと重複させない。 */
+    if (task_id_is_in_use(task_id)) {
+        return TASK_ERR_BAD_STATE;
+    }
+
+    /* DORMANT taskもUNUSED slotだけへ登録し、既存TCBを上書きしない。 */
+    slot = find_free_slot();
+    if (slot == NULL) {
+        return TASK_ERR_FULL;
+    }
+
+    /*
+     * 生成直後はDORMANTに固定する。schedulerはREADYだけを候補にするため、
+     * cre_tsk()直後のtaskは実行候補に入らない。
+     */
+    task_configure_slot(
+        slot,
+        task_id,
+        name,
+        entry,
+        priority,
+        stack_base,
+        stack_size,
+        TASK_STATE_DORMANT
+    );
+
+    /*
+     * 固定ID登録後に自動採番が同じIDを再利用しないよう、次の採番候補を前へ進める。
+     * 高度なID管理は14.1の対象外だが、単調増加の安全性は保つ。
+     */
+    if (next_task_id <= task_id) {
+        next_task_id = task_id + 1;
+    }
+
+    hal_console_write("[task] created: id=");
+    task_write_int(slot->id);
+    hal_console_write(" name=");
+    hal_console_write(slot->name);
+    hal_console_write(" prio=");
+    task_write_int(slot->priority);
+    hal_console_write(" state=");
+    hal_console_write(task_state_to_string(slot->state));
+    hal_console_write(" entry=");
+    task_write_hex((unsigned long)slot->entry);
+    hal_console_write(" stack_base=");
+    task_write_hex((unsigned long)slot->stack_base);
+    hal_console_write(" stack_size=");
+    task_write_uint(slot->stack_size);
+    hal_console_write(" stack_top=");
+    task_write_hex((unsigned long)slot->stack_top);
+    task_write_context(&slot->context);
+    hal_console_write("\n");
+
+    return 0;
+}
+
 void task_dump(void)
 {
     int index;
@@ -711,6 +889,67 @@ int task_mark_ready_from_running(int task_id)
         task->wait_reason = TASK_WAIT_REASON_NONE;
         task->wait_sem_id = 0;
         task->delay_ticks_remaining = 0;
+        return 0;
+    }
+
+    return TASK_ERR_NOT_FOUND;
+}
+
+/**
+ * @brief DORMANT taskをREADY状態へ起動する。
+ *
+ * @details
+ * 第14章14.1の `sta_tsk()` 用の状態変更APIである。対象taskがDORMANTである場合だけ
+ * READYへ遷移させ、scheduler候補に入る状態にする。READY/RUNNING/WAITINGは拒否し、
+ * 既存状態を変更しない。
+ *
+ * @param task_id 起動対象task ID。0以下は不正。
+ * @return 成功時は0、失敗時は負のTASK_ERR_*。
+ */
+int task_start_dormant(int task_id)
+{
+    int index;
+
+    if (task_id <= 0) {
+        return TASK_ERR_INVAL;
+    }
+
+    for (index = 0; index < MAX_TASKS; index++) {
+        tcb_t *task = &task_table[index];
+
+        /* UNUSED slotは生成済みtaskではないため、起動対象にしない。 */
+        if (task->state == TASK_STATE_UNUSED) {
+            continue;
+        }
+
+        /* 指定IDと一致するtaskだけを起動対象にする。 */
+        if (task->id != task_id) {
+            continue;
+        }
+
+        /*
+         * sta_tsk()はDORMANT taskを起動するAPIであり、READY/RUNNING/WAITINGを
+         * 再起動したり待ち状態から引き抜いたりしない。
+         */
+        if (task->state != TASK_STATE_DORMANT) {
+            return TASK_ERR_BAD_STATE;
+        }
+
+        /*
+         * READY化と同時に待ち観測値を未待ち状態へ揃える。生成直後DORMANT taskに
+         * 待ち情報はないが、TCB再利用時の古い値をscheduler候補へ持ち込まない。
+         */
+        task->state = TASK_STATE_READY;
+        task->wait_reason = TASK_WAIT_REASON_NONE;
+        task->wait_sem_id = 0;
+        task->delay_ticks_remaining = 0;
+
+        hal_console_write("[task] start: id=");
+        task_write_int(task->id);
+        hal_console_write(" name=");
+        hal_console_write(task->name);
+        hal_console_write(" DORMANT->READY\n");
+
         return 0;
     }
 
