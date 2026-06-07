@@ -997,6 +997,7 @@ static void kernel_run_semaphore_smoke(int current_task_id)
     (void)pol_sem(sem_pol_id);
     (void)pol_sem(sem_pol_id);
     (void)pol_sem(-1);
+    (void)wai_sem(-1);
     (void)wai_sem(sem_a_id);
     (void)wai_sem(sem_a_id);
 
@@ -1258,6 +1259,7 @@ static void kernel_run_create_start_task_api_smoke(void)
     created_param.stack_base = task_api_created_stack;
     created_param.stack_size = sizeof(task_api_created_stack);
     created_param.name = "task_api_created";
+    (void)cre_tsk(22, NULL);
     (void)cre_tsk(20, &created_param);
     kernel_log_scheduler_selection("after_cre_tsk_dormant", scheduler_select_next());
     task_dump();
@@ -1266,6 +1268,7 @@ static void kernel_run_create_start_task_api_smoke(void)
      * DORMANT taskをREADYへ起動する。currentより低優先度なのでpendingは作られないが、
      * scheduler READY候補には入る。
      */
+    (void)sta_tsk(999);
     (void)sta_tsk(20);
     kernel_log_scheduler_selection("after_sta_tsk_ready", scheduler_select_next());
 
@@ -1370,6 +1373,7 @@ static void kernel_run_sleep_wakeup_task_api_smoke(void)
      * sleep待ちtaskだけをwup_tsk()でREADYへ戻す。
      * currentより高優先度なのでtask-wakeup pendingが設定される。
      */
+    (void)wup_tsk(999);
     (void)wup_tsk(sleep_current_id);
     dispatch_pending_log_state_from_irq(NULL);
 

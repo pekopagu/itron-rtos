@@ -89,6 +89,7 @@ The current implementation covers the following milestones:
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
+| 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1519,6 +1520,14 @@ For Chapter 14 Section 14.3, comments document that `wai_sem()` / `sig_sem()` /
 semaphore waiters in both semaphore and delay queues, and `sig_sem()` restores
 normal or timeout semaphore waiters to READY while connecting higher-priority
 wakeups to the existing preemption pending boundary.
+For Chapter 14 Section 14.4, comments document that the μITRON-like API layer now
+uses a common `ER` return type and shared error codes. `E_OK` means success,
+`E_ID` means an invalid or missing task/semaphore ID, `E_PAR` means invalid
+parameters, `E_CTX` means an invalid task context in the range this learning RTOS
+can currently detect, `E_OBJ` means an object state mismatch, `E_TMOUT` means
+poll failure or timeout, and `E_QOVR` means a queue/count overflow. Existing
+task, semaphore, delay queue, dispatcher, and preemption transitions are kept
+unchanged while API completion logs report `result=<error-name>`.
 
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
@@ -1749,6 +1758,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 14      | 14.1    | cre_tsk / sta_tsk create-start task API    | v14.1-create-start-task-api | Completed |
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
+| 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 
 ---
 

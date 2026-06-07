@@ -21,16 +21,16 @@ kernel_main reached
 [timer-smoke] current tick=3
 [timer-smoke] end
 [scheduler] before_register selected: none
-[task] registered: id=1 name=task_a state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x119400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=1 name=task_a state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_a returned 1
-[task] registered: id=2 name=task_b state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x119800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=2 name=task_b state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_b returned 2
-[task] registered: id=3 name=task_c state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=3 name=task_c state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_c returned 3
 [task] dump start
-[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x119400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x119800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [preempt-smoke] begin
 [timer] tick: count=4
@@ -56,28 +56,29 @@ kernel_main reached
 [dispatcher] switch boundary begin: from id=2 name=task_b to id=3 name=task_c
 [dispatcher] state transition: from id=2 name=task_b RUNNING->READY
 [dispatcher] state transition: to id=3 name=task_c READY->RUNNING
-[context] prepared initial frame: task id=2 name=task_b context.rsp=0x1197f8
-[context] prepared initial frame: task id=3 name=task_c context.rsp=0x119bf8
-[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x1197f8
-[context] entered task stack: task id=2 name=task_b current.rsp=0x1197f8
+[context] prepared initial frame: task id=2 name=task_b context.rsp=0x11b7f8
+[context] prepared initial frame: task id=3 name=task_c context.rsp=0x11bbf8
+[context] switch begin: from=boot to id=2 name=task_b boot.rsp.before=0x0 to.rsp.restore=0x11b7f8
+[context] entered task stack: task id=2 name=task_b current.rsp=0x11b7f8
 [task_b] executed
 [context] task entry returned: task id=2 name=task_b
 [context] task entry finalized: task id=2 name=task_b READY->DORMANT
-[context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x1197f8 to.rsp.restore=0x119bf8
-[context] entered task stack: task id=3 name=task_c current.rsp=0x119bf8
+[context] task-to-task switch begin: from id=2 name=task_b to id=3 name=task_c from.rsp.before=0x11b7f8 to.rsp.restore=0x11bbf8
+[context] entered task stack: task id=3 name=task_c current.rsp=0x11bbf8
 [task_c] executed
 [context] task entry returned: task id=3 name=task_c
 [context] task entry finalized: task id=3 name=task_c RUNNING->DORMANT
-[context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x119bf8 boot.rsp.restore=0x118ed8
-[context] switch resumed: task=boot boot.rsp.after=0x118ed8 from id=3 name=task_c from.rsp.saved=0x119bc8
+[context] switch back: from id=3 name=task_c to=boot from.rsp.before=0x11bbf8 boot.rsp.restore=0x11aed8
+[context] switch resumed: task=boot boot.rsp.after=0x11aed8 from id=3 name=task_c from.rsp.saved=0x11bbc8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [context-smoke] end
 [yield] called: current id=3 name=task_c state=DORMANT
 [yield] rejected: reason=invalid-current-state current id=3 name=task_c state=DORMANT
-[task] registered: id=4 name=task_yield_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x11a000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[yield] completed: result=E_CTX action=invalid-current-state
+[task] registered: id=4 name=task_yield_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_yield_from returned 4
-[task] registered: id=5 name=task_yield_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=5 name=task_yield_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_yield_to returned 5
 [yield-smoke] begin
 [dispatcher] committed current: id=4 name=task_yield_from prio=5 state=RUNNING
@@ -87,23 +88,24 @@ kernel_main reached
 [yield] switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to
 [dispatcher] switch boundary begin: from id=4 name=task_yield_from to id=5 name=task_yield_to
 [dispatcher] state transition: to id=5 name=task_yield_to READY->RUNNING
-[context] prepared initial frame: task id=4 name=task_yield_from context.rsp=0x119ff8
-[context] prepared initial frame: task id=5 name=task_yield_to context.rsp=0x11a3f8
-[context] switch begin: from=boot to id=4 name=task_yield_from boot.rsp.before=0x118ed8 to.rsp.restore=0x119ff8
-[context] entered task stack: task id=4 name=task_yield_from current.rsp=0x119ff8
+[context] prepared initial frame: task id=4 name=task_yield_from context.rsp=0x11bff8
+[context] prepared initial frame: task id=5 name=task_yield_to context.rsp=0x11c3f8
+[context] switch begin: from=boot to id=4 name=task_yield_from boot.rsp.before=0x11aed8 to.rsp.restore=0x11bff8
+[context] entered task stack: task id=4 name=task_yield_from current.rsp=0x11bff8
 [task_yield_from] executed
 [context] task entry returned: task id=4 name=task_yield_from
 [context] task entry finalized: task id=4 name=task_yield_from READY->DORMANT
-[context] task-to-task switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to from.rsp.before=0x119ff8 to.rsp.restore=0x11a3f8
-[context] entered task stack: task id=5 name=task_yield_to current.rsp=0x11a3f8
+[context] task-to-task switch begin: from id=4 name=task_yield_from to id=5 name=task_yield_to from.rsp.before=0x11bff8 to.rsp.restore=0x11c3f8
+[context] entered task stack: task id=5 name=task_yield_to current.rsp=0x11c3f8
 [task_yield_to] executed
 [context] task entry returned: task id=5 name=task_yield_to
 [context] task entry finalized: task id=5 name=task_yield_to RUNNING->DORMANT
-[context] switch back: from id=5 name=task_yield_to to=boot from.rsp.before=0x11a3f8 boot.rsp.restore=0x118ea8
-[context] switch resumed: task=boot boot.rsp.after=0x118ea8 from id=5 name=task_yield_to from.rsp.saved=0x11a3c8
+[context] switch back: from id=5 name=task_yield_to to=boot from.rsp.before=0x11c3f8 boot.rsp.restore=0x11aea8
+[context] switch resumed: task=boot boot.rsp.after=0x11aea8 from id=5 name=task_yield_to from.rsp.saved=0x11c3c8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [yield] switch end: result=0
+[yield] completed: result=E_OK action=switched
 [yield-smoke] end
 [yield-smoke] begin
 [dispatcher] committed current: id=1 name=task_a prio=5 state=RUNNING
@@ -111,6 +113,7 @@ kernel_main reached
 [yield] state transition: current id=1 name=task_a RUNNING->READY
 [yield] no next task: reason=no-ready-task
 [yield] deferred: reason=no-next-task
+[yield] completed: result=E_OK action=no-next-task
 [yield-smoke] end
 [cooperative] iteration=1 begin
 [scheduler] cooperative selected: id=1 name=task_a prio=5 state=READY
@@ -137,7 +140,7 @@ kernel_main reached
 [cooperative] returned current: id=1 name=task_a prio=5 state=RUNNING
 [cooperative] ready again: result=ok id=1 name=task_a state=READY
 [cooperative] stop: reason=limit-reached
-[task] registered: id=6 name=task_wai_sem_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=6 name=task_wai_sem_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_wai_sem_from returned 6
 [sem-smoke] begin
 [sem] table initialized
@@ -145,16 +148,19 @@ kernel_main reached
 [sem] initialized: id=2 name=sem_pol count=1 max_count=1
 [pol-sem] called: semid=2 current id=6 name=task_wai_sem_from prio=1 state=RUNNING
 [sem] acquire: semid=2 count 1->0
-[pol-sem] completed: result=0 action=acquired
+[pol-sem] completed: result=E_OK action=acquired
 [pol-sem] called: semid=2 current id=6 name=task_wai_sem_from prio=1 state=RUNNING
 [sem] poll failed: semid=2 count=0
-[pol-sem] completed: result=-1 action=would-block
+[pol-sem] completed: result=E_TMOUT action=would-block
 [pol-sem] called: semid=-1 current id=6 name=task_wai_sem_from prio=1 state=RUNNING
 [pol-sem] rejected: reason=invalid-semaphore semid=-1
-[pol-sem] completed: result=-3 action=invalid-semaphore
+[pol-sem] completed: result=E_ID action=invalid-semaphore
+[wai-sem] called: sem_id=-1 current id=6 name=task_wai_sem_from state=RUNNING
+[wai-sem] rejected: reason=invalid-semaphore sem_id=-1
+[wai-sem] completed: result=E_ID action=invalid-id
 [wai-sem] called: sem_id=1 current id=6 name=task_wai_sem_from state=RUNNING
 [wai-sem] acquired: sem_id=1 count 1->0
-[wai-sem] completed: result=0 action=no-switch
+[wai-sem] completed: result=E_OK action=no-switch
 [wai-sem] called: sem_id=1 current id=6 name=task_wai_sem_from state=RUNNING
 [wai-sem] wait required: sem_id=1 count=0
 [task] waiting: id=6 name=task_wai_sem_from wait_sem_id=1 wait_reason=semaphore delay_ticks_remaining=0 state=WAITING
@@ -164,17 +170,18 @@ kernel_main reached
 [wai-sem] switch begin: from id=6 name=task_wai_sem_from to id=1 name=task_a
 [dispatcher] switch boundary begin: from id=6 name=task_wai_sem_from to id=1 name=task_a
 [dispatcher] state transition: to id=1 name=task_a READY->RUNNING
-[context] prepared initial frame: task id=1 name=task_a context.rsp=0x1193f8
-[context] switch begin: from=boot to id=1 name=task_a boot.rsp.before=0x118ea8 to.rsp.restore=0x1193f8
-[context] entered task stack: task id=1 name=task_a current.rsp=0x1193f8
+[context] prepared initial frame: task id=1 name=task_a context.rsp=0x11b3f8
+[context] switch begin: from=boot to id=1 name=task_a boot.rsp.before=0x11aea8 to.rsp.restore=0x11b3f8
+[context] entered task stack: task id=1 name=task_a current.rsp=0x11b3f8
 [task_a] executed
 [context] task entry returned: task id=1 name=task_a
 [context] task entry finalized: task id=1 name=task_a RUNNING->DORMANT
-[context] switch back: from id=1 name=task_a to=boot from.rsp.before=0x1193f8 boot.rsp.restore=0x118ec8
-[context] switch resumed: task=boot boot.rsp.after=0x118ec8 from id=1 name=task_a from.rsp.saved=0x1193c8
+[context] switch back: from id=1 name=task_a to=boot from.rsp.before=0x11b3f8 boot.rsp.restore=0x11aec8
+[context] switch resumed: task=boot boot.rsp.after=0x11aec8 from id=1 name=task_a from.rsp.saved=0x11b3c8
 [dispatcher] switch boundary end: result=0
 [wai-sem] switch end: result=0
-[task] registered: id=7 name=task_wai_sem_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[wai-sem] completed: result=E_OK action=wait-switch
+[task] registered: id=7 name=task_wai_sem_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_wai_sem_to returned 7
 [sig-sem] called: semid=1 current id=7 name=task_wai_sem_to prio=5 state=RUNNING
 [sem-wq] dequeue: sem_id=1 task id=6 name=task_wai_sem_from queue_count=0
@@ -184,33 +191,33 @@ kernel_main reached
 [sig-sem] ready: id=6 name=task_wai_sem_from prio=1 state=READY
 [preempt] evaluate: current id=7 name=task_wai_sem_to prio=5 state=RUNNING ready id=6 name=task_wai_sem_from prio=1 state=READY
 [preempt] pending set: reason=semaphore-wakeup
-[sig-sem] completed: result=0 action=wakeup-preempt-pending
+[sig-sem] completed: result=E_OK action=wakeup-preempt-pending
 [sig-sem] called: semid=1 current id=7 name=task_wai_sem_to prio=5 state=RUNNING
 [sem-wq] empty: sem_id=1
 [sem] signal: semid=1 no-waiter count 0->1
-[sig-sem] completed: result=0 action=count-increment
+[sig-sem] completed: result=E_OK action=count-increment
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
 [sem] id=1 name=sem_a count=1 max_count=1 wait_queue_count=0
 [sem] id=2 name=sem_pol count=0 max_count=1 wait_queue_count=0
 [sem] dump end
 [sem-smoke] end
-[task] registered: id=8 name=task_dly_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=8 name=task_dly_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_dly_from returned 8
-[task] registered: id=9 name=task_dly_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=9 name=task_dly_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_dly_to returned 9
 [dly-smoke] begin
 [dly-tsk] called: delay_ticks=0 current id=8 name=task_dly_from state=RUNNING
 [dly-tsk] invalid delay: delay_ticks=0
-[dly-tsk] completed: result=-1 action=invalid-delay
+[dly-tsk] completed: result=E_PAR action=invalid-delay
 [dly-tsk] called: delay_ticks=10 current id=8 name=task_dly_from state=RUNNING
 [task] delay waiting: id=8 name=task_dly_from delay_ticks=10 wait_reason=delay wait_sem_id=none state=WAITING
 [dly-tsk] state transition: current id=8 name=task_dly_from RUNNING->WAITING reason=delay
@@ -222,42 +229,42 @@ kernel_main reached
 [dly-tsk] switch begin: from id=8 name=task_dly_from to id=6 name=task_wai_sem_from
 [dispatcher] switch boundary begin: from id=8 name=task_dly_from to id=6 name=task_wai_sem_from
 [dispatcher] state transition: to id=6 name=task_wai_sem_from READY->RUNNING
-[context] prepared initial frame: task id=6 name=task_wai_sem_from context.rsp=0x11a7f8
-[context] switch begin: from=boot to id=6 name=task_wai_sem_from boot.rsp.before=0x118ec8 to.rsp.restore=0x11a7f8
-[context] entered task stack: task id=6 name=task_wai_sem_from current.rsp=0x11a7f8
+[context] prepared initial frame: task id=6 name=task_wai_sem_from context.rsp=0x11c7f8
+[context] switch begin: from=boot to id=6 name=task_wai_sem_from boot.rsp.before=0x11aec8 to.rsp.restore=0x11c7f8
+[context] entered task stack: task id=6 name=task_wai_sem_from current.rsp=0x11c7f8
 [task_wai_sem_from] executed
 [context] task entry returned: task id=6 name=task_wai_sem_from
 [context] task entry finalized: task id=6 name=task_wai_sem_from RUNNING->DORMANT
-[context] switch back: from id=6 name=task_wai_sem_from to=boot from.rsp.before=0x11a7f8 boot.rsp.restore=0x118ed8
-[context] switch resumed: task=boot boot.rsp.after=0x118ed8 from id=6 name=task_wai_sem_from from.rsp.saved=0x11a7c8
+[context] switch back: from id=6 name=task_wai_sem_from to=boot from.rsp.before=0x11c7f8 boot.rsp.restore=0x11aed8
+[context] switch resumed: task=boot boot.rsp.after=0x11aed8 from id=6 name=task_wai_sem_from from.rsp.saved=0x11c7c8
 [dispatcher] switch boundary end: result=0
 [dly-tsk] switch end: result=0
-[dly-tsk] completed: result=0 action=delay-queued-switch
+[dly-tsk] completed: result=E_OK action=delay-queued-switch
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=10 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=10 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [dly-smoke] end
-[task] registered: id=10 name=task_twai_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=10 name=task_twai_from state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_twai_from returned 10
-[task] registered: id=11 name=task_twai_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=11 name=task_twai_to state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_twai_to returned 11
 [twai-smoke] begin
 [sem] table initialized
 [sem] initialized: id=1 name=sem_twai count=1 max_count=1
 [twai-sem] called: sem id=1 timeout_ticks=0 current id=10 name=task_twai_from state=RUNNING
 [twai-sem] invalid timeout: timeout_ticks=0
-[twai-sem] completed: result=-1 action=invalid-timeout
+[twai-sem] completed: result=E_PAR action=invalid-timeout
 [twai-sem] called: sem id=1 timeout_ticks=10 current id=10 name=task_twai_from state=RUNNING
 [twai-sem] acquired immediately: sem id=1 count=0
-[twai-sem] completed: result=0 action=acquired
+[twai-sem] completed: result=E_OK action=acquired
 [twai-sem] called: sem id=1 timeout_ticks=10 current id=10 name=task_twai_from state=RUNNING
 [twai-sem] wait begin: sem id=1 current id=10 name=task_twai_from timeout_ticks=10
 [task] semaphore timeout waiting: id=10 name=task_twai_from sem id=1 timeout_ticks=10 wait_reason=semaphore-timeout state=WAITING
@@ -272,17 +279,17 @@ kernel_main reached
 [twai-sem] switch begin: from id=10 name=task_twai_from to id=11 name=task_twai_to
 [dispatcher] switch boundary begin: from id=10 name=task_twai_from to id=11 name=task_twai_to
 [dispatcher] state transition: to id=11 name=task_twai_to READY->RUNNING
-[context] prepared initial frame: task id=11 name=task_twai_to context.rsp=0x11b7f8
-[context] switch begin: from=boot to id=11 name=task_twai_to boot.rsp.before=0x118ed8 to.rsp.restore=0x11b7f8
-[context] entered task stack: task id=11 name=task_twai_to current.rsp=0x11b7f8
+[context] prepared initial frame: task id=11 name=task_twai_to context.rsp=0x11d7f8
+[context] switch begin: from=boot to id=11 name=task_twai_to boot.rsp.before=0x11aed8 to.rsp.restore=0x11d7f8
+[context] entered task stack: task id=11 name=task_twai_to current.rsp=0x11d7f8
 [task_twai_to] executed
 [context] task entry returned: task id=11 name=task_twai_to
 [context] task entry finalized: task id=11 name=task_twai_to RUNNING->DORMANT
-[context] switch back: from id=11 name=task_twai_to to=boot from.rsp.before=0x11b7f8 boot.rsp.restore=0x118ea8
-[context] switch resumed: task=boot boot.rsp.after=0x118ea8 from id=11 name=task_twai_to from.rsp.saved=0x11b7c8
+[context] switch back: from id=11 name=task_twai_to to=boot from.rsp.before=0x11d7f8 boot.rsp.restore=0x11aea8
+[context] switch resumed: task=boot boot.rsp.after=0x11aea8 from id=11 name=task_twai_to from.rsp.saved=0x11d7c8
 [dispatcher] switch boundary end: result=0
 [twai-sem] switch end: result=0
-[twai-sem] completed: result=0 action=timeout-wait-queued-switch
+[twai-sem] completed: result=E_OK action=timeout-wait-queued-switch
 [sig-sem] called: semid=1 current id=11 name=task_twai_to prio=0 state=DORMANT
 [sem-wq] dequeue: sem_id=1 task id=10 name=task_twai_from queue_count=0
 [sem] wakeup: semid=1 task id=10 name=task_twai_from reason=semaphore-timeout
@@ -290,29 +297,29 @@ kernel_main reached
 [task] semaphore timeout wakeup: id=10 name=task_twai_from sem id=1 WAITING->READY
 [task] wakeup: id=10 name=task_twai_from WAITING->READY reason=semaphore-timeout
 [sig-sem] ready: id=10 name=task_twai_from prio=5 state=READY
-[sig-sem] completed: result=0 action=wakeup-timeout-waiter
+[sig-sem] completed: result=E_OK action=wakeup-timeout-waiter
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=10 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=10 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
 [sem] id=1 name=sem_twai count=0 max_count=1 wait_queue_count=0
 [sem] dump end
 [twai-smoke] end
-[task] registered: id=12 name=task_tick_delay state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=12 name=task_tick_delay state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=1 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_tick_delay returned 12
-[task] registered: id=13 name=task_tick_twai state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=13 name=task_tick_twai state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_tick_twai returned 13
-[task] registered: id=14 name=task_tick_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=14 name=task_tick_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_tick_current returned 14
 [tick-ready-smoke] begin
 [sem] initialized: id=2 name=sem_tick_timeout count=0 max_count=1
@@ -331,7 +338,9 @@ kernel_main reached
 [delay-q] tick entry: task id=13 name=task_tick_twai remaining 1->0 reason=semaphore-timeout state=WAITING
 [delay-q] timeout reached: task id=13 name=task_tick_twai reason=semaphore-timeout sem id=2
 [sem-wq] remove: sem id=2 task id=13 name=task_tick_twai reason=timeout queue_count=0
+[twai-sem] timeout: semid=2 task id=13 name=task_tick_twai
 [task] semaphore timeout wakeup: id=13 name=task_tick_twai sem id=2 WAITING->READY
+[twai-sem] completed: result=E_TMOUT action=timeout
 [delay-q] remove: task id=13 name=task_tick_twai reason=semaphore-timeout queue_count=1
 [delay-q] tick end: expired=2 count=1
 [preempt-irq] current: id=14 name=task_tick_current prio=5 state=RUNNING
@@ -342,20 +351,20 @@ kernel_main reached
 [delay-q] entry: index=0 task id=8 name=task_dly_from remaining=9 reason=delay state=WAITING
 [delay-q] dump end
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sem] dump start
 [sem] id=1 name=sem_twai count=0 max_count=1 wait_queue_count=0
@@ -363,94 +372,100 @@ kernel_main reached
 [sem] dump end
 [tick-ready-smoke] end
 [create-start-smoke] begin
-[task] registered: id=15 name=task_api_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x103310 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=15 name=task_api_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=5 entry=0x103330 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_api_current returned 15
+[cre-tsk] called: tskid=22 name=(invalid) prio=0
+[cre-tsk] invalid param: pk_ctsk=NULL
+[cre-tsk] completed: result=E_PAR action=invalid-parameter
 [cre-tsk] called: tskid=20 name=task_api_created prio=6
-[task] created: id=20 name=task_api_created prio=6 state=DORMANT entry=0x103330 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[cre-tsk] completed: result=0 action=created
+[task] created: id=20 name=task_api_created prio=6 state=DORMANT entry=0x103350 stack_base=0x11ec00 stack_size=1024 stack_top=0x11f000 context.rsp=0x11f000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[cre-tsk] completed: result=E_OK action=created
 [scheduler] after_cre_tsk_dormant selected: id=13 name=task_tick_twai prio=0 state=READY
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=15 name=task_api_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=20 name=task_api_created prio=6 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=15 name=task_api_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=20 name=task_api_created prio=6 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11ec00 stack_size=1024 stack_top=0x11f000 context.rsp=0x11f000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
+[sta-tsk] called: tskid=999 current id=15 name=task_api_current prio=5 state=RUNNING
+[sta-tsk] rejected: reason=task-not-found tskid=999
+[sta-tsk] completed: result=E_ID action=invalid-id
 [sta-tsk] called: tskid=20 current id=15 name=task_api_current prio=5 state=RUNNING
 [task] start: id=20 name=task_api_created DORMANT->READY
 [sta-tsk] ready: id=20 name=task_api_created prio=6 state=READY
 [preempt] evaluate: current id=15 name=task_api_current prio=5 state=RUNNING ready id=20 name=task_api_created prio=6 state=READY
-[sta-tsk] completed: result=0 action=started
+[sta-tsk] completed: result=E_OK action=started
 [scheduler] after_sta_tsk_ready selected: id=13 name=task_tick_twai prio=0 state=READY
 [sta-tsk] called: tskid=20 current id=15 name=task_api_current prio=5 state=RUNNING
 [sta-tsk] invalid state: tskid=20 state=READY expected=DORMANT
-[sta-tsk] completed: result=-3 action=invalid-state
+[sta-tsk] completed: result=E_OBJ action=invalid-state
 [cre-tsk] called: tskid=21 name=task_high prio=1
-[task] created: id=21 name=task_high prio=1 state=DORMANT entry=0x103350 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[cre-tsk] completed: result=0 action=created
+[task] created: id=21 name=task_high prio=1 state=DORMANT entry=0x103370 stack_base=0x11f000 stack_size=1024 stack_top=0x11f400 context.rsp=0x11f400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[cre-tsk] completed: result=E_OK action=created
 [sta-tsk] called: tskid=21 current id=15 name=task_api_current prio=5 state=RUNNING
 [task] start: id=21 name=task_high DORMANT->READY
 [sta-tsk] ready: id=21 name=task_high prio=1 state=READY
 [preempt] evaluate: current id=15 name=task_api_current prio=5 state=RUNNING ready id=21 name=task_high prio=1 state=READY
 [preempt] pending set: reason=task-start
-[sta-tsk] completed: result=0 action=started-preempt-pending
+[sta-tsk] completed: result=E_OK action=started-preempt-pending
 [dispatch-pending] requested: reason=task-start from id=15 name=task_api_current to id=21 name=task_high
 [dispatch-pending] consumed: reason=task-start from id=15 name=task_api_current to id=21 name=task_high
 [dispatcher] switch boundary begin: from id=15 name=task_api_current to id=21 name=task_high
 [dispatcher] state transition: from id=15 name=task_api_current RUNNING->READY
 [dispatcher] state transition: to id=21 name=task_high READY->RUNNING
-[context] prepared initial frame: task id=15 name=task_api_current context.rsp=0x11cbf8
-[context] prepared initial frame: task id=21 name=task_high context.rsp=0x11d3f8
-[context] switch begin: from=boot to id=15 name=task_api_current boot.rsp.before=0x118ea8 to.rsp.restore=0x11cbf8
-[context] entered task stack: task id=15 name=task_api_current current.rsp=0x11cbf8
+[context] prepared initial frame: task id=15 name=task_api_current context.rsp=0x11ebf8
+[context] prepared initial frame: task id=21 name=task_high context.rsp=0x11f3f8
+[context] switch begin: from=boot to id=15 name=task_api_current boot.rsp.before=0x11aea8 to.rsp.restore=0x11ebf8
+[context] entered task stack: task id=15 name=task_api_current current.rsp=0x11ebf8
 [task_api_current] executed
 [context] task entry returned: task id=15 name=task_api_current
 [context] task entry finalized: task id=15 name=task_api_current READY->DORMANT
-[context] task-to-task switch begin: from id=15 name=task_api_current to id=21 name=task_high from.rsp.before=0x11cbf8 to.rsp.restore=0x11d3f8
-[context] entered task stack: task id=21 name=task_high current.rsp=0x11d3f8
+[context] task-to-task switch begin: from id=15 name=task_api_current to id=21 name=task_high from.rsp.before=0x11ebf8 to.rsp.restore=0x11f3f8
+[context] entered task stack: task id=21 name=task_high current.rsp=0x11f3f8
 [task_api_high] executed
 [context] task entry returned: task id=21 name=task_high
 [context] task entry finalized: task id=21 name=task_high RUNNING->DORMANT
-[context] switch back: from id=21 name=task_high to=boot from.rsp.before=0x11d3f8 boot.rsp.restore=0x118e68
-[context] switch resumed: task=boot boot.rsp.after=0x118e68 from id=21 name=task_high from.rsp.saved=0x11d3c8
+[context] switch back: from id=21 name=task_high to=boot from.rsp.before=0x11f3f8 boot.rsp.restore=0x11ae68
+[context] switch resumed: task=boot boot.rsp.after=0x11ae68 from id=21 name=task_high from.rsp.saved=0x11f3c8
 [context] task-to-task switch end
 [dispatcher] switch boundary end: result=0
 [dispatch-pending] cleared: reason=dispatch-completed
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cbc8 context.rbp=0x11cbf0 context.rbx=0x0 context.r12=0x11f300 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d3c8 context.rbp=0x11d3f0 context.rbx=0x0 context.r12=0x11f400 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ebc8 context.rbp=0x11ebf0 context.rbx=0x0 context.r12=0x121300 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11ec00 stack_size=1024 stack_top=0x11f000 context.rsp=0x11f000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103370 stack_base=0x11f000 stack_size=1024 stack_top=0x11f400 context.rsp=0x11f3c8 context.rbp=0x11f3f0 context.rbx=0x0 context.r12=0x121400 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [create-start-smoke] end
 [sleep-wakeup-smoke] begin
-[task] registered: id=22 name=task_sleep_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=-2 entry=0x103370 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=22 name=task_sleep_current state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=-2 entry=0x103390 stack_base=0x11f400 stack_size=1024 stack_top=0x11f800 context.rsp=0x11f800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_current returned 22
-[task] registered: id=23 name=task_sleep_next state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=-1 entry=0x103390 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=23 name=task_sleep_next state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=-1 entry=0x1033b0 stack_base=0x11f800 stack_size=1024 stack_top=0x11fc00 context.rsp=0x11fc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_next returned 23
 [slp-tsk] called: current id=22 name=task_sleep_current prio=-2 state=RUNNING
 [task] sleep: id=22 name=task_sleep_current RUNNING->WAITING reason=sleep
@@ -458,90 +473,93 @@ kernel_main reached
 [dispatcher] switch requested: prev id=22 name=task_sleep_current state=WAITING next id=23 name=task_sleep_next state=READY
 [dispatcher] switch boundary begin: from id=22 name=task_sleep_current to id=23 name=task_sleep_next
 [dispatcher] state transition: to id=23 name=task_sleep_next READY->RUNNING
-[context] prepared initial frame: task id=23 name=task_sleep_next context.rsp=0x11dbf8
-[context] switch begin: from=boot to id=23 name=task_sleep_next boot.rsp.before=0x118e68 to.rsp.restore=0x11dbf8
-[context] entered task stack: task id=23 name=task_sleep_next current.rsp=0x11dbf8
+[context] prepared initial frame: task id=23 name=task_sleep_next context.rsp=0x11fbf8
+[context] switch begin: from=boot to id=23 name=task_sleep_next boot.rsp.before=0x11ae68 to.rsp.restore=0x11fbf8
+[context] entered task stack: task id=23 name=task_sleep_next current.rsp=0x11fbf8
 [task_sleep_next] executed
 [context] task entry returned: task id=23 name=task_sleep_next
 [context] task entry finalized: task id=23 name=task_sleep_next RUNNING->DORMANT
-[context] switch back: from id=23 name=task_sleep_next to=boot from.rsp.before=0x11dbf8 boot.rsp.restore=0x118ed8
-[context] switch resumed: task=boot boot.rsp.after=0x118ed8 from id=23 name=task_sleep_next from.rsp.saved=0x11dbc8
+[context] switch back: from id=23 name=task_sleep_next to=boot from.rsp.before=0x11fbf8 boot.rsp.restore=0x11aed8
+[context] switch resumed: task=boot boot.rsp.after=0x11aed8 from id=23 name=task_sleep_next from.rsp.saved=0x11fbc8
 [dispatcher] switch boundary end: result=0
-[slp-tsk] completed: result=0 action=sleep
+[slp-tsk] completed: result=E_OK action=sleep
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cbc8 context.rbp=0x11cbf0 context.rbx=0x0 context.r12=0x11f300 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d3c8 context.rbp=0x11d3f0 context.rbx=0x0 context.r12=0x11f400 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=22 name=task_sleep_current prio=-2 state=WAITING wait_sem_id=0 wait_reason=sleep delay_ticks_remaining=0 entry=0x103370 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=23 name=task_sleep_next prio=-1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103390 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dbc8 context.rbp=0x11dbf0 context.rbx=0x0 context.r12=0x11f500 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ebc8 context.rbp=0x11ebf0 context.rbx=0x0 context.r12=0x121300 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11ec00 stack_size=1024 stack_top=0x11f000 context.rsp=0x11f000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103370 stack_base=0x11f000 stack_size=1024 stack_top=0x11f400 context.rsp=0x11f3c8 context.rbp=0x11f3f0 context.rbx=0x0 context.r12=0x121400 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=22 name=task_sleep_current prio=-2 state=WAITING wait_sem_id=0 wait_reason=sleep delay_ticks_remaining=0 entry=0x103390 stack_base=0x11f400 stack_size=1024 stack_top=0x11f800 context.rsp=0x11f800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=23 name=task_sleep_next prio=-1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1033b0 stack_base=0x11f800 stack_size=1024 stack_top=0x11fc00 context.rsp=0x11fbc8 context.rbp=0x11fbf0 context.rbx=0x0 context.r12=0x121500 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
-[task] registered: id=24 name=task_sleep_waker state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=10 entry=0x1033b0 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] registered: id=24 name=task_sleep_waker state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=10 entry=0x1033d0 stack_base=0x11fc00 stack_size=1024 stack_top=0x120000 context.rsp=0x120000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_waker returned 24
+[wup-tsk] called: tskid=999 current id=24 name=task_sleep_waker prio=10 state=RUNNING
+[wup-tsk] rejected: reason=task-not-found tskid=999
+[wup-tsk] completed: result=E_ID action=invalid-id
 [wup-tsk] called: tskid=22 current id=24 name=task_sleep_waker prio=10 state=RUNNING
 [task] wakeup: id=22 name=task_sleep_current WAITING->READY reason=sleep
 [wup-tsk] ready: id=22 name=task_sleep_current prio=-2 state=READY
 [preempt] evaluate: current id=24 name=task_sleep_waker prio=10 state=RUNNING ready id=22 name=task_sleep_current prio=-2 state=READY
 [preempt] pending set: reason=task-wakeup
-[wup-tsk] completed: result=0 action=wakeup-preempt-pending
+[wup-tsk] completed: result=E_OK action=wakeup-preempt-pending
 [dispatch-pending] requested: reason=task-wakeup from id=24 name=task_sleep_waker to id=22 name=task_sleep_current
 [wup-tsk] called: tskid=22 current id=24 name=task_sleep_waker prio=10 state=RUNNING
 [wup-tsk] invalid state: tskid=22 state=READY reason=none expected=WAITING reason=sleep
-[wup-tsk] completed: result=-3 action=invalid-state
-[task] registered: id=25 name=task_sleep_sem_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x1033d0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[wup-tsk] completed: result=E_OBJ action=invalid-state
+[task] registered: id=25 name=task_sleep_sem_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x1033f0 stack_base=0x120000 stack_size=1024 stack_top=0x120400 context.rsp=0x120400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_sem_wait returned 25
 [task] waiting: id=25 name=task_sleep_sem_wait wait_sem_id=99 wait_reason=semaphore delay_ticks_remaining=0 state=WAITING
 [wup-tsk] called: tskid=25 current id=24 name=task_sleep_waker prio=10 state=RUNNING
 [wup-tsk] invalid state: tskid=25 state=WAITING reason=semaphore expected=WAITING reason=sleep
-[wup-tsk] completed: result=-3 action=invalid-state
-[task] registered: id=26 name=task_sleep_delay_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x1033f0 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[wup-tsk] completed: result=E_OBJ action=invalid-state
+[task] registered: id=26 name=task_sleep_delay_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x103410 stack_base=0x120400 stack_size=1024 stack_top=0x120800 context.rsp=0x120800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_delay_wait returned 26
 [task] delay waiting: id=26 name=task_sleep_delay_wait delay_ticks=5 wait_reason=delay wait_sem_id=none state=WAITING
 [wup-tsk] called: tskid=26 current id=26 name=task_sleep_delay_wait prio=8 state=WAITING
 [wup-tsk] invalid state: tskid=26 state=WAITING reason=delay expected=WAITING reason=sleep
-[wup-tsk] completed: result=-3 action=invalid-state
-[task] registered: id=27 name=task_sleep_twai_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x103410 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[wup-tsk] completed: result=E_OBJ action=invalid-state
+[task] registered: id=27 name=task_sleep_twai_wait state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 prio=8 entry=0x103430 stack_base=0x120800 stack_size=1024 stack_top=0x120c00 context.rsp=0x120c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [kernel] task_register task_sleep_twai_wait returned 27
 [task] semaphore timeout waiting: id=27 name=task_sleep_twai_wait sem id=100 timeout_ticks=5 wait_reason=semaphore-timeout state=WAITING
 [wup-tsk] called: tskid=27 current id=27 name=task_sleep_twai_wait prio=8 state=WAITING
 [wup-tsk] invalid state: tskid=27 state=WAITING reason=semaphore-timeout expected=WAITING reason=sleep
-[wup-tsk] completed: result=-3 action=invalid-state
+[wup-tsk] completed: result=E_OBJ action=invalid-state
 [task] dump start
-[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x119000 stack_size=1024 stack_top=0x119400 context.rsp=0x1193c8 context.rbp=0x1193f0 context.rbx=0x0 context.r12=0x11ec00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x119400 stack_size=1024 stack_top=0x119800 context.rsp=0x1197c8 context.rbp=0x1197f0 context.rbx=0x0 context.r12=0x11ec80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x119800 stack_size=1024 stack_top=0x119c00 context.rsp=0x119bc8 context.rbp=0x119bf0 context.rbx=0x0 context.r12=0x11ed00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x119c00 stack_size=1024 stack_top=0x11a000 context.rsp=0x119fc8 context.rbp=0x119ff0 context.rbx=0x0 context.r12=0x11ed80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11a000 stack_size=1024 stack_top=0x11a400 context.rsp=0x11a3c8 context.rbp=0x11a3f0 context.rbx=0x0 context.r12=0x11ee00 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11a400 stack_size=1024 stack_top=0x11a800 context.rsp=0x11a7c8 context.rbp=0x11a7f0 context.rbx=0x0 context.r12=0x11ee80 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1032f0 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11a800 stack_size=1024 stack_top=0x11ac00 context.rsp=0x11ac00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11ac00 stack_size=1024 stack_top=0x11b000 context.rsp=0x11b000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x11f100 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11c000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cbc8 context.rbp=0x11cbf0 context.rbx=0x0 context.r12=0x11f300 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d3c8 context.rbp=0x11d3f0 context.rbx=0x0 context.r12=0x11f400 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=22 name=task_sleep_current prio=-2 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103370 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=23 name=task_sleep_next prio=-1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103390 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dbc8 context.rbp=0x11dbf0 context.rbx=0x0 context.r12=0x11f500 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=24 name=task_sleep_waker prio=10 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1033b0 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=25 name=task_sleep_sem_wait prio=8 state=WAITING wait_sem_id=99 wait_reason=semaphore delay_ticks_remaining=0 entry=0x1033d0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=26 name=task_sleep_delay_wait prio=8 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=5 entry=0x1033f0 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
-[task] id=27 name=task_sleep_twai_wait prio=8 state=WAITING wait_sem_id=100 wait_reason=semaphore-timeout delay_ticks_remaining=5 entry=0x103410 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ec00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=1 name=task_a prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101750 stack_base=0x11b000 stack_size=1024 stack_top=0x11b400 context.rsp=0x11b3c8 context.rbp=0x11b3f0 context.rbx=0x0 context.r12=0x120c00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=2 name=task_b prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017d0 stack_base=0x11b400 stack_size=1024 stack_top=0x11b800 context.rsp=0x11b7c8 context.rbp=0x11b7f0 context.rbx=0x0 context.r12=0x120c80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=3 name=task_c prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1017f0 stack_base=0x11b800 stack_size=1024 stack_top=0x11bc00 context.rsp=0x11bbc8 context.rbp=0x11bbf0 context.rbx=0x0 context.r12=0x120d00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=4 name=task_yield_from prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101a80 stack_base=0x11bc00 stack_size=1024 stack_top=0x11c000 context.rsp=0x11bfc8 context.rbp=0x11bff0 context.rbx=0x0 context.r12=0x120d80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=5 name=task_yield_to prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101aa0 stack_base=0x11c000 stack_size=1024 stack_top=0x11c400 context.rsp=0x11c3c8 context.rbp=0x11c3f0 context.rbx=0x0 context.r12=0x120e00 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=6 name=task_wai_sem_from prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101d30 stack_base=0x11c400 stack_size=1024 stack_top=0x11c800 context.rsp=0x11c7c8 context.rbp=0x11c7f0 context.rbx=0x0 context.r12=0x120e80 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=7 name=task_wai_sem_to prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103310 stack_base=0x11e400 stack_size=1024 stack_top=0x11e800 context.rsp=0x11e800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=8 name=task_dly_from prio=5 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=9 entry=0x101ec0 stack_base=0x11c800 stack_size=1024 stack_top=0x11cc00 context.rsp=0x11cc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=9 name=task_dly_to prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101ee0 stack_base=0x11cc00 stack_size=1024 stack_top=0x11d000 context.rsp=0x11d000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=10 name=task_twai_from prio=5 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f70 stack_base=0x11d000 stack_size=1024 stack_top=0x11d400 context.rsp=0x11d400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=11 name=task_twai_to prio=0 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x101f90 stack_base=0x11d400 stack_size=1024 stack_top=0x11d800 context.rsp=0x11d7c8 context.rbp=0x11d7f0 context.rbx=0x0 context.r12=0x121100 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=12 name=task_tick_delay prio=1 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102070 stack_base=0x11d800 stack_size=1024 stack_top=0x11dc00 context.rsp=0x11dc00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=13 name=task_tick_twai prio=0 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x102090 stack_base=0x11dc00 stack_size=1024 stack_top=0x11e000 context.rsp=0x11e000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=14 name=task_tick_current prio=5 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1020b0 stack_base=0x11e000 stack_size=1024 stack_top=0x11e400 context.rsp=0x11e400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=15 name=task_api_current prio=5 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103330 stack_base=0x11e800 stack_size=1024 stack_top=0x11ec00 context.rsp=0x11ebc8 context.rbp=0x11ebf0 context.rbx=0x0 context.r12=0x121300 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=20 name=task_api_created prio=6 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103350 stack_base=0x11ec00 stack_size=1024 stack_top=0x11f000 context.rsp=0x11f000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=21 name=task_high prio=1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103370 stack_base=0x11f000 stack_size=1024 stack_top=0x11f400 context.rsp=0x11f3c8 context.rbp=0x11f3f0 context.rbx=0x0 context.r12=0x121400 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=22 name=task_sleep_current prio=-2 state=READY wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x103390 stack_base=0x11f400 stack_size=1024 stack_top=0x11f800 context.rsp=0x11f800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=23 name=task_sleep_next prio=-1 state=DORMANT wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1033b0 stack_base=0x11f800 stack_size=1024 stack_top=0x11fc00 context.rsp=0x11fbc8 context.rbp=0x11fbf0 context.rbx=0x0 context.r12=0x121500 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=24 name=task_sleep_waker prio=10 state=RUNNING wait_sem_id=0 wait_reason=none delay_ticks_remaining=0 entry=0x1033d0 stack_base=0x11fc00 stack_size=1024 stack_top=0x120000 context.rsp=0x120000 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=25 name=task_sleep_sem_wait prio=8 state=WAITING wait_sem_id=99 wait_reason=semaphore delay_ticks_remaining=0 entry=0x1033f0 stack_base=0x120000 stack_size=1024 stack_top=0x120400 context.rsp=0x120400 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=26 name=task_sleep_delay_wait prio=8 state=WAITING wait_sem_id=0 wait_reason=delay delay_ticks_remaining=5 entry=0x103410 stack_base=0x120400 stack_size=1024 stack_top=0x120800 context.rsp=0x120800 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
+[task] id=27 name=task_sleep_twai_wait prio=8 state=WAITING wait_sem_id=100 wait_reason=semaphore-timeout delay_ticks_remaining=5 entry=0x103430 stack_base=0x120800 stack_size=1024 stack_top=0x120c00 context.rsp=0x120c00 context.rbp=0x0 context.rbx=0x0 context.r12=0x0 context.r13=0x0 context.r14=0x0 context.r15=0x0
 [task] dump end
 [sleep-wakeup-smoke] end

@@ -493,7 +493,19 @@ int delay_queue_tick(void)
         if (task != NULL && reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
             int sem_remove_result = sem_remove_waiter(task->wait_sem_id, task->id);
             if (sem_remove_result == SEM_OK) {
+                /*
+                 * timeout付きsemaphore待ちの完了はAPI呼び出し時ではなくtick到達時に観測する。
+                 * `twai_sem()` の待ち登録成功ログと区別するため、ここで `E_TMOUT` を明示する。
+                 */
+                hal_console_write("[twai-sem] timeout: semid=");
+                delay_queue_write_int(task->wait_sem_id);
+                hal_console_write(" task id=");
+                delay_queue_write_int(task->id);
+                hal_console_write(" name=");
+                hal_console_write(task_name);
+                hal_console_write("\n");
                 (void)task_wake_waiting_on_sem_timeout_by_id(task->id, task->wait_sem_id);
+                hal_console_write("[twai-sem] completed: result=E_TMOUT action=timeout\n");
             } else {
                 hal_console_write("[delay-q] semaphore timeout cleanup failed: task id=");
                 delay_queue_write_int(task->id);

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SPDX-License-Identifier: MIT
  */
 
@@ -7,10 +7,9 @@
  * @brief μITRON風API層の最小実装。
  *
  * @details
- * このファイルは `yield_tsk()` の観測入口を提供する。
- * dispatcherからcurrent taskを読み取り、RUNNING current taskだけをtask管理層へ委譲して
- * READYへ戻す。READY化後はschedulerによる次タスク候補選択を観測し、
- * 第10章10.4では協調API経由でdispatcher/context switch境界へ接続する。
+ * このファイルはtask/semaphore/delay APIの観測入口を提供する。
+ * 第14章14.4では公開APIの戻り値を共通エラーコードへ寄せ、
+ * API完了ログでも `E_OK` / `E_ID` / `E_OBJ` などの名前を出す。
  */
 
 #include <stddef.h>
@@ -23,6 +22,58 @@
 #include "scheduler.h"
 #include "semaphore.h"
 #include "task.h"
+
+/**
+ * @brief 共通エラーコードをログ用の固定文字列へ変換する。
+ * @details
+ * 第14章14.4ではAPI完了ログで整数値ではなく `E_OK` などの名前を出す。
+ * 未知の値は公開コードとして増やさず、ログ上だけ `E_UNKNOWN` として区別する。
+ *
+ * @param ercd 変換対象の戻り値。
+ * @return 共通エラーコード名。
+ */
+const char *itron_error_name(ER ercd)
+{
+    /*
+     * 公開エラーコードだけをログ名へ固定変換する。
+     * 未定義値はAPI仕様へ追加せず、観測ログ上のUNKNOWNとして扱う。
+     */
+    switch (ercd) {
+    case E_OK:
+        return "E_OK";
+    case E_ID:
+        return "E_ID";
+    case E_PAR:
+        return "E_PAR";
+    case E_CTX:
+        return "E_CTX";
+    case E_OBJ:
+        return "E_OBJ";
+    case E_TMOUT:
+        return "E_TMOUT";
+    case E_RLWAI:
+        return "E_RLWAI";
+    case E_QOVR:
+        return "E_QOVR";
+    default:
+        return "E_UNKNOWN";
+    }
+}
+
+/**
+ * @brief API完了ログの `result=` 値を共通エラー名で出力する。
+ * @details
+ * 数値IDやtick値の出力とは分離し、完了結果だけを `itron_error_name()` に通す。
+ *
+ * @param ercd 出力対象の戻り値。
+ */
+static void itron_api_write_er(ER ercd)
+{
+    /*
+     * 完了ログのresult値は必ず共通エラー名へ変換してから出力する。
+     */
+    hal_console_write(itron_error_name(ercd));
+}
 
 /**
  * @brief APIログ用に符号付き整数を10進数で出力する。
@@ -219,9 +270,9 @@ static const char *itron_api_wait_reason_name(task_wait_reason_t reason)
  *
  * @param tskid 生成対象task ID。
  * @param pk_ctsk task生成属性。
- * @return 成功時はCRE_TSK_OK、失敗時はCRE_TSK_ERR_*。
+ * @return 成功時は `E_OK`。不正IDは `E_ID`、不正引数は `E_PAR`、不正状態は `E_OBJ`。
  */
-int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk)
+ER cre_tsk(ID tskid, const itron_task_create_param_t *pk_ctsk)
 {
     int result;
     const char *task_name = "(invalid)";
@@ -240,16 +291,40 @@ int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk)
     itron_api_write_int(priority);
     hal_console_write("\n");
 
+    if (tskid <= 0) {
+        /*
+         * 生成対象IDがμITRON風APIのIDとして不正な場合は、task tableを参照しない。
+         */
+        hal_console_write("[cre-tsk] invalid id: tskid=");
+        itron_api_write_int(tskid);
+        hal_console_write("\n");
+        hal_console_write("[cre-tsk] completed: result=");
+        itron_api_write_er(E_ID);
+        hal_console_write(" action=invalid-id\n");
+        return E_ID;
+    }
+
     /*
-     * 必須属性が欠けている場合はtask moduleへ渡さず、部分的なTCB登録を防ぐ。
-     * 14.1ではtskatrや動的stack確保を扱わないため、呼び出し側が全属性を用意する。
+     * 必須生成属性が欠けている場合は、task moduleへ渡す前に不正引数として拒否する。
      */
-    if (tskid <= 0 || pk_ctsk == NULL || pk_ctsk->entry == NULL ||
+    if (pk_ctsk == NULL || pk_ctsk->entry == NULL ||
         pk_ctsk->stack_base == NULL || pk_ctsk->stack_size == 0 ||
         pk_ctsk->name == NULL) {
-        hal_console_write("[cre-tsk] rejected: reason=invalid-parameter\n");
+        hal_console_write("[cre-tsk] invalid param: ");
+        if (pk_ctsk == NULL) {
+            hal_console_write("pk_ctsk=NULL");
+        } else if (pk_ctsk->entry == NULL) {
+            hal_console_write("entry=NULL");
+        } else if (pk_ctsk->stack_base == NULL) {
+            hal_console_write("stack_base=NULL");
+        } else if (pk_ctsk->stack_size == 0) {
+            hal_console_write("stack_size=0");
+        } else {
+            hal_console_write("name=NULL");
+        }
+        hal_console_write("\n");
         hal_console_write("[cre-tsk] completed: result=");
-        itron_api_write_int(CRE_TSK_ERR_INVAL);
+        itron_api_write_er(CRE_TSK_ERR_INVAL);
         hal_console_write(" action=invalid-parameter\n");
         return CRE_TSK_ERR_INVAL;
     }
@@ -271,12 +346,12 @@ int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk)
         itron_api_write_int(result);
         hal_console_write("\n");
         hal_console_write("[cre-tsk] completed: result=");
-        itron_api_write_int(CRE_TSK_ERR_TASK);
+        itron_api_write_er(CRE_TSK_ERR_TASK);
         hal_console_write(" action=create-failed\n");
         return CRE_TSK_ERR_TASK;
     }
 
-    hal_console_write("[cre-tsk] completed: result=0 action=created\n");
+    hal_console_write("[cre-tsk] completed: result=E_OK action=created\n");
     return CRE_TSK_OK;
 }
 
@@ -288,9 +363,9 @@ int cre_tsk(int tskid, const itron_task_create_param_t *pk_ctsk)
  * READY候補になった場合は既存のdispatch pending境界へ接続する。
  *
  * @param tskid 起動対象task ID。
- * @return 成功時はSTA_TSK_OK、失敗時はSTA_TSK_ERR_*。
+ * @return 成功時は `E_OK`。不正IDは `E_ID`、起動できない状態は `E_OBJ`。
  */
-int sta_tsk(int tskid)
+ER sta_tsk(ID tskid)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *target;
@@ -310,7 +385,7 @@ int sta_tsk(int tskid)
     if (tskid <= 0) {
         hal_console_write("[sta-tsk] rejected: reason=invalid-task-id\n");
         hal_console_write("[sta-tsk] completed: result=");
-        itron_api_write_int(STA_TSK_ERR_INVAL);
+        itron_api_write_er(STA_TSK_ERR_INVAL);
         hal_console_write(" action=invalid-task-id\n");
         return STA_TSK_ERR_INVAL;
     }
@@ -321,8 +396,8 @@ int sta_tsk(int tskid)
         itron_api_write_int(tskid);
         hal_console_write("\n");
         hal_console_write("[sta-tsk] completed: result=");
-        itron_api_write_int(STA_TSK_ERR_NOT_FOUND);
-        hal_console_write(" action=not-found\n");
+        itron_api_write_er(STA_TSK_ERR_NOT_FOUND);
+        hal_console_write(" action=invalid-id\n");
         return STA_TSK_ERR_NOT_FOUND;
     }
 
@@ -337,7 +412,7 @@ int sta_tsk(int tskid)
         hal_console_write(itron_api_task_state_name(target->state));
         hal_console_write(" expected=DORMANT\n");
         hal_console_write("[sta-tsk] completed: result=");
-        itron_api_write_int(STA_TSK_ERR_BAD_STATE);
+        itron_api_write_er(STA_TSK_ERR_BAD_STATE);
         hal_console_write(" action=invalid-state\n");
         return STA_TSK_ERR_BAD_STATE;
     }
@@ -352,7 +427,7 @@ int sta_tsk(int tskid)
         itron_api_write_int(result);
         hal_console_write("\n");
         hal_console_write("[sta-tsk] completed: result=");
-        itron_api_write_int(STA_TSK_ERR_BAD_STATE);
+        itron_api_write_er(STA_TSK_ERR_BAD_STATE);
         hal_console_write(" action=start-failed\n");
         return STA_TSK_ERR_BAD_STATE;
     }
@@ -380,12 +455,12 @@ int sta_tsk(int tskid)
              */
             dispatch_request_from_task_start(current, ready_task);
             hal_console_write("[preempt] pending set: reason=task-start\n");
-            hal_console_write("[sta-tsk] completed: result=0 action=started-preempt-pending\n");
+            hal_console_write("[sta-tsk] completed: result=E_OK action=started-preempt-pending\n");
             return STA_TSK_OK;
         }
     }
 
-    hal_console_write("[sta-tsk] completed: result=0 action=started\n");
+    hal_console_write("[sta-tsk] completed: result=E_OK action=started\n");
     return STA_TSK_OK;
 }
 
@@ -396,9 +471,9 @@ int sta_tsk(int tskid)
  * RUNNING current taskだけをsleep理由のWAITINGへ遷移させる。WAITING化後は既存schedulerで
  * 次READY taskを選び、存在する場合だけ既存dispatcher境界へ進む。
  *
- * @return 成功時はSLP_TSK_OK、失敗時はSLP_TSK_ERR_*。
+ * @return 成功時は `E_OK`。task文脈不成立は `E_CTX`、状態不一致は `E_OBJ`。
  */
-int slp_tsk(void)
+ER slp_tsk(void)
 {
     /*
      * sleep対象はdispatcherが確定済みのcurrent taskに限定する。
@@ -417,7 +492,7 @@ int slp_tsk(void)
          */
         hal_console_write("[slp-tsk] called: current=none\n");
         hal_console_write("[slp-tsk] completed: result=");
-        itron_api_write_int(SLP_TSK_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(SLP_TSK_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return SLP_TSK_ERR_INVALID_CURRENT_STATE;
     }
@@ -438,7 +513,7 @@ int slp_tsk(void)
         itron_api_log_task_identity(current);
         hal_console_write("\n");
         hal_console_write("[slp-tsk] completed: result=");
-        itron_api_write_int(SLP_TSK_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(SLP_TSK_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return SLP_TSK_ERR_INVALID_CURRENT_STATE;
     }
@@ -452,7 +527,7 @@ int slp_tsk(void)
         itron_api_write_int(wait_result);
         hal_console_write("\n");
         hal_console_write("[slp-tsk] completed: result=");
-        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        itron_api_write_er(SLP_TSK_ERR_DISPATCH);
         hal_console_write(" action=sleep-transition-failed\n");
         return SLP_TSK_ERR_DISPATCH;
     }
@@ -463,7 +538,7 @@ int slp_tsk(void)
     next = scheduler_select_next();
     if (next == NULL) {
         hal_console_write("[slp-tsk] no next task: reason=no-ready-task action=unsupported-stop\n");
-        hal_console_write("[slp-tsk] completed: result=0 action=sleep\n");
+        hal_console_write("[slp-tsk] completed: result=E_OK action=sleep\n");
         return SLP_TSK_OK;
     }
 
@@ -483,7 +558,7 @@ int slp_tsk(void)
     if (current_mutable == NULL || next_mutable == NULL) {
         hal_console_write("[slp-tsk] rejected: reason=switch-task-not-found\n");
         hal_console_write("[slp-tsk] completed: result=");
-        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        itron_api_write_er(SLP_TSK_ERR_DISPATCH);
         hal_console_write(" action=sleep-switch-failed\n");
         return SLP_TSK_ERR_DISPATCH;
     }
@@ -504,12 +579,12 @@ int slp_tsk(void)
     switch_result = dispatcher_switch_to(current_mutable, next_mutable);
     if (switch_result != DISPATCHER_OK) {
         hal_console_write("[slp-tsk] completed: result=");
-        itron_api_write_int(SLP_TSK_ERR_DISPATCH);
+        itron_api_write_er(SLP_TSK_ERR_DISPATCH);
         hal_console_write(" action=sleep-switch-failed\n");
         return SLP_TSK_ERR_DISPATCH;
     }
 
-    hal_console_write("[slp-tsk] completed: result=0 action=sleep\n");
+    hal_console_write("[slp-tsk] completed: result=E_OK action=sleep\n");
     return SLP_TSK_OK;
 }
 
@@ -521,9 +596,9 @@ int slp_tsk(void)
  * 高優先度であればwakeup由来のdispatch pendingを記録する。
  *
  * @param tskid 起床対象task ID。
- * @return 成功時はWUP_TSK_OK、失敗時はWUP_TSK_ERR_*。
+ * @return 成功時は `E_OK`。不正IDは `E_ID`、sleep待ち以外は `E_OBJ`。
  */
-int wup_tsk(int tskid)
+ER wup_tsk(ID tskid)
 {
     /*
      * wakeup後のpreemption比較に使うため、呼び出し時点のcurrentを先に観測する。
@@ -550,7 +625,7 @@ int wup_tsk(int tskid)
     if (tskid <= 0) {
         hal_console_write("[wup-tsk] rejected: reason=invalid-task-id\n");
         hal_console_write("[wup-tsk] completed: result=");
-        itron_api_write_int(WUP_TSK_ERR_INVAL);
+        itron_api_write_er(WUP_TSK_ERR_INVAL);
         hal_console_write(" action=invalid-task-id\n");
         return WUP_TSK_ERR_INVAL;
     }
@@ -564,8 +639,8 @@ int wup_tsk(int tskid)
         itron_api_write_int(tskid);
         hal_console_write("\n");
         hal_console_write("[wup-tsk] completed: result=");
-        itron_api_write_int(WUP_TSK_ERR_NOT_FOUND);
-        hal_console_write(" action=not-found\n");
+        itron_api_write_er(WUP_TSK_ERR_NOT_FOUND);
+        hal_console_write(" action=invalid-id\n");
         return WUP_TSK_ERR_NOT_FOUND;
     }
 
@@ -583,7 +658,7 @@ int wup_tsk(int tskid)
         hal_console_write(itron_api_wait_reason_name(target->wait_reason));
         hal_console_write(" expected=WAITING reason=sleep\n");
         hal_console_write("[wup-tsk] completed: result=");
-        itron_api_write_int(WUP_TSK_ERR_BAD_STATE);
+        itron_api_write_er(WUP_TSK_ERR_BAD_STATE);
         hal_console_write(" action=invalid-state\n");
         return WUP_TSK_ERR_BAD_STATE;
     }
@@ -597,7 +672,7 @@ int wup_tsk(int tskid)
         itron_api_write_int(wake_result);
         hal_console_write("\n");
         hal_console_write("[wup-tsk] completed: result=");
-        itron_api_write_int(WUP_TSK_ERR_BAD_STATE);
+        itron_api_write_er(WUP_TSK_ERR_BAD_STATE);
         hal_console_write(" action=wakeup-failed\n");
         return WUP_TSK_ERR_BAD_STATE;
     }
@@ -627,12 +702,12 @@ int wup_tsk(int tskid)
              */
             dispatch_request_from_task_wakeup(current, ready_task);
             hal_console_write("[preempt] pending set: reason=task-wakeup\n");
-            hal_console_write("[wup-tsk] completed: result=0 action=wakeup-preempt-pending\n");
+            hal_console_write("[wup-tsk] completed: result=E_OK action=wakeup-preempt-pending\n");
             return WUP_TSK_OK;
         }
     }
 
-    hal_console_write("[wup-tsk] completed: result=0 action=wakeup\n");
+    hal_console_write("[wup-tsk] completed: result=E_OK action=wakeup\n");
     return WUP_TSK_OK;
 }
 
@@ -650,10 +725,10 @@ int wup_tsk(int tskid)
  * DORMANT taskをREADYへ戻さない。timer IRQ、interrupt exit boundary、
  * dispatch pending、preemptive switchとは接続しない。
  *
- * @return `YIELD_TSK_OK` はRUNNING current taskのREADY化と候補選択境界到達。
- *         `YIELD_TSK_ERR_INVALID_CURRENT_STATE` はcurrent未設定または非RUNNING。
+ * @return `E_OK` はRUNNING current taskのREADY化と候補選択境界到達。
+ *         `E_CTX` または `E_OBJ` はcurrent未設定または非RUNNING。
  */
-int yield_tsk(void)
+ER yield_tsk(void)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *next;
@@ -674,6 +749,9 @@ int yield_tsk(void)
          */
         hal_console_write("[yield] called\n");
         hal_console_write("[yield] rejected: reason=invalid-current-state current=none\n");
+        hal_console_write("[yield] completed: result=");
+        itron_api_write_er(YIELD_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
         return YIELD_TSK_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -691,6 +769,9 @@ int yield_tsk(void)
         hal_console_write("[yield] rejected: reason=invalid-current-state current");
         itron_api_log_task_identity(current);
         hal_console_write("\n");
+        hal_console_write("[yield] completed: result=");
+        itron_api_write_er(YIELD_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
         return YIELD_TSK_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -717,6 +798,9 @@ int yield_tsk(void)
         hal_console_write(" err=");
         itron_api_write_int(ready_result);
         hal_console_write("\n");
+        hal_console_write("[yield] completed: result=");
+        itron_api_write_er(YIELD_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=ready-transition-failed\n");
         return YIELD_TSK_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -740,6 +824,7 @@ int yield_tsk(void)
          */
         hal_console_write("[yield] no next task: reason=no-ready-task\n");
         hal_console_write("[yield] deferred: reason=no-next-task\n");
+        hal_console_write("[yield] completed: result=E_OK action=no-next-task\n");
         return YIELD_TSK_OK;
     } else {
         hal_console_write("[yield] next selected:");
@@ -761,6 +846,9 @@ int yield_tsk(void)
     next_mutable = task_get_mutable_by_id(next->id);
     if (current_mutable == NULL || next_mutable == NULL) {
         hal_console_write("[yield] deferred: reason=switch-task-not-found\n");
+        hal_console_write("[yield] completed: result=");
+        itron_api_write_er(YIELD_TSK_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=switch-task-not-found\n");
         return YIELD_TSK_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -781,6 +869,7 @@ int yield_tsk(void)
     itron_api_write_int(switch_result);
     hal_console_write("\n");
 
+    hal_console_write("[yield] completed: result=E_OK action=switched\n");
     return YIELD_TSK_OK;
 }
 
@@ -798,9 +887,9 @@ int yield_tsk(void)
  * round-robinはここでは実装しない。またtimer IRQ handler本体から呼ばれるAPIではない。
  *
  * @param sem_id 対象semaphore ID。
- * @return 成功時はWAI_SEM_OK。失敗時はWAI_SEM_ERR_*。
+ * @return 成功時は `E_OK`。不正semaphore IDは `E_ID`、task文脈不成立は `E_CTX`。
  */
-int wai_sem(int sem_id)
+ER wai_sem(ID sem_id)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *next;
@@ -819,6 +908,9 @@ int wai_sem(int sem_id)
         itron_api_write_int(sem_id);
         hal_console_write(" current=none\n");
         hal_console_write("[wai-sem] rejected: reason=invalid-current-state current=none\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
         return WAI_SEM_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -832,6 +924,9 @@ int wai_sem(int sem_id)
         hal_console_write("[wai-sem] rejected: reason=invalid-current-state current");
         itron_api_log_task_identity(current);
         hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_INVALID_CURRENT_STATE);
+        hal_console_write(" action=invalid-current-state\n");
         return WAI_SEM_ERR_INVALID_CURRENT_STATE;
     }
 
@@ -840,6 +935,9 @@ int wai_sem(int sem_id)
         hal_console_write("[wai-sem] rejected: reason=invalid-semaphore sem_id=");
         itron_api_write_int(sem_id);
         hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=invalid-id\n");
         return WAI_SEM_ERR_SEMAPHORE;
     }
 
@@ -852,7 +950,7 @@ int wai_sem(int sem_id)
         hal_console_write("->");
         itron_api_write_int(count_after);
         hal_console_write("\n");
-        hal_console_write("[wai-sem] completed: result=0 action=no-switch\n");
+        hal_console_write("[wai-sem] completed: result=E_OK action=no-switch\n");
         return WAI_SEM_OK;
     }
 
@@ -860,6 +958,9 @@ int wai_sem(int sem_id)
         hal_console_write("[wai-sem] rejected: reason=semaphore-error err=");
         itron_api_write_int(take_result);
         hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_SEMAPHORE);
+        hal_console_write(" action=semaphore-error\n");
         return WAI_SEM_ERR_SEMAPHORE;
     }
 
@@ -879,6 +980,9 @@ int wai_sem(int sem_id)
         hal_console_write("[wai-sem] rejected: reason=waiting-transition-failed err=");
         itron_api_write_int(wait_result);
         hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=waiting-transition-failed\n");
         return WAI_SEM_ERR_DISPATCH;
     }
 
@@ -892,6 +996,9 @@ int wai_sem(int sem_id)
         hal_console_write("[wai-sem] rejected: reason=wait-queue-enqueue-failed err=");
         itron_api_write_int(enqueue_result);
         hal_console_write("\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=wait-queue-enqueue-failed\n");
         return WAI_SEM_ERR_DISPATCH;
     }
 
@@ -906,6 +1013,7 @@ int wai_sem(int sem_id)
     next = scheduler_select_next();
     if (next == NULL) {
         hal_console_write("[wai-sem] no next task: reason=no-ready-task action=unsupported-stop\n");
+        hal_console_write("[wai-sem] completed: result=E_OK action=no-ready-task\n");
         return WAI_SEM_OK;
     }
 
@@ -917,6 +1025,9 @@ int wai_sem(int sem_id)
     next_mutable = task_get_mutable_by_id(next->id);
     if (current_mutable == NULL || next_mutable == NULL) {
         hal_console_write("[wai-sem] rejected: reason=switch-task-not-found\n");
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=switch-task-not-found\n");
         return WAI_SEM_ERR_DISPATCH;
     }
 
@@ -933,9 +1044,13 @@ int wai_sem(int sem_id)
     hal_console_write("\n");
 
     if (switch_result != DISPATCHER_OK) {
+        hal_console_write("[wai-sem] completed: result=");
+        itron_api_write_er(WAI_SEM_ERR_DISPATCH);
+        hal_console_write(" action=wait-switch-failed\n");
         return WAI_SEM_ERR_DISPATCH;
     }
 
+    hal_console_write("[wai-sem] completed: result=E_OK action=wait-switch\n");
     return WAI_SEM_OK;
 }
 
@@ -947,9 +1062,9 @@ int wai_sem(int sem_id)
  * task状態、wait metadata、semaphore wait queue、delay queueを変更しない。
  *
  * @param sem_id 対象semaphore ID。
- * @return 成功時はPOL_SEM_OK。失敗時はPOL_SEM_ERR_*。
+ * @return 成功時は `E_OK`。不正semaphore IDは `E_ID`、即時取得失敗は `E_TMOUT`。
  */
-int pol_sem(int sem_id)
+ER pol_sem(ID sem_id)
 {
     const tcb_t *current = dispatcher_get_current();
     const semaphore_t *sem;
@@ -962,7 +1077,7 @@ int pol_sem(int sem_id)
         itron_api_write_int(sem_id);
         hal_console_write(" current=none\n");
         hal_console_write("[pol-sem] completed: result=");
-        itron_api_write_int(POL_SEM_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(POL_SEM_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return POL_SEM_ERR_INVALID_CURRENT_STATE;
     }
@@ -979,7 +1094,7 @@ int pol_sem(int sem_id)
         itron_api_log_task_identity(current);
         hal_console_write("\n");
         hal_console_write("[pol-sem] completed: result=");
-        itron_api_write_int(POL_SEM_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(POL_SEM_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return POL_SEM_ERR_INVALID_CURRENT_STATE;
     }
@@ -991,7 +1106,7 @@ int pol_sem(int sem_id)
         itron_api_write_int(sem_id);
         hal_console_write("\n");
         hal_console_write("[pol-sem] completed: result=");
-        itron_api_write_int(POL_SEM_ERR_SEMAPHORE);
+        itron_api_write_er(POL_SEM_ERR_SEMAPHORE);
         hal_console_write(" action=invalid-semaphore\n");
         return POL_SEM_ERR_SEMAPHORE;
     }
@@ -1006,7 +1121,7 @@ int pol_sem(int sem_id)
         hal_console_write("->");
         itron_api_write_int(count_after);
         hal_console_write("\n");
-        hal_console_write("[pol-sem] completed: result=0 action=acquired\n");
+        hal_console_write("[pol-sem] completed: result=E_OK action=acquired\n");
         return POL_SEM_OK;
     }
 
@@ -1018,7 +1133,7 @@ int pol_sem(int sem_id)
         itron_api_write_int(count_after);
         hal_console_write("\n");
         hal_console_write("[pol-sem] completed: result=");
-        itron_api_write_int(POL_SEM_ERR_WOULD_BLOCK);
+        itron_api_write_er(POL_SEM_ERR_WOULD_BLOCK);
         hal_console_write(" action=would-block\n");
         return POL_SEM_ERR_WOULD_BLOCK;
     }
@@ -1027,7 +1142,7 @@ int pol_sem(int sem_id)
     itron_api_write_int(take_result);
     hal_console_write("\n");
     hal_console_write("[pol-sem] completed: result=");
-    itron_api_write_int(POL_SEM_ERR_SEMAPHORE);
+    itron_api_write_er(POL_SEM_ERR_SEMAPHORE);
     hal_console_write(" action=semaphore-error\n");
     return POL_SEM_ERR_SEMAPHORE;
 }
@@ -1041,9 +1156,9 @@ int pol_sem(int sem_id)
  * dispatch pendingへ接続し、APIから直接dispatcher switchしない。
  *
  * @param sem_id 対象semaphore ID。
- * @return 成功時はSIG_SEM_OK。失敗時はSIG_SEM_ERR_*。
+ * @return 成功時は `E_OK`。不正semaphore IDは `E_ID`、上限超過は `E_QOVR`。
  */
-int sig_sem(int sem_id)
+ER sig_sem(ID sem_id)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *waiting_task;
@@ -1075,7 +1190,7 @@ int sig_sem(int sem_id)
         itron_api_write_int(sem_id);
         hal_console_write("\n");
         hal_console_write("[sig-sem] completed: result=");
-        itron_api_write_int(SIG_SEM_ERR_SEMAPHORE);
+        itron_api_write_er(SIG_SEM_ERR_SEMAPHORE);
         hal_console_write(" action=invalid-semaphore\n");
         return SIG_SEM_ERR_SEMAPHORE;
     }
@@ -1091,7 +1206,7 @@ int sig_sem(int sem_id)
             itron_api_write_int(count_before);
             hal_console_write("\n");
             hal_console_write("[sig-sem] completed: result=");
-            itron_api_write_int(SIG_SEM_ERR_OVERFLOW);
+            itron_api_write_er(SIG_SEM_ERR_OVERFLOW);
             hal_console_write(" action=count-overflow\n");
             return SIG_SEM_ERR_OVERFLOW;
         }
@@ -1103,7 +1218,7 @@ int sig_sem(int sem_id)
         hal_console_write("->");
         itron_api_write_int(count_after);
         hal_console_write("\n");
-        hal_console_write("[sig-sem] completed: result=0 action=count-increment\n");
+        hal_console_write("[sig-sem] completed: result=E_OK action=count-increment\n");
         return SIG_SEM_OK;
     }
 
@@ -1112,7 +1227,7 @@ int sig_sem(int sem_id)
         itron_api_write_int(dequeue_result);
         hal_console_write("\n");
         hal_console_write("[sig-sem] completed: result=");
-        itron_api_write_int(SIG_SEM_ERR_TASK);
+        itron_api_write_er(SIG_SEM_ERR_TASK);
         hal_console_write(" action=wait-queue-error\n");
         return SIG_SEM_ERR_TASK;
     }
@@ -1120,7 +1235,7 @@ int sig_sem(int sem_id)
     waiting_task = task_get_by_id(woken_task_id);
     if (waiting_task == NULL) {
         hal_console_write("[sig-sem] completed: result=");
-        itron_api_write_int(SIG_SEM_ERR_TASK);
+        itron_api_write_er(SIG_SEM_ERR_TASK);
         hal_console_write(" action=task-not-found\n");
         return SIG_SEM_ERR_TASK;
     }
@@ -1139,7 +1254,7 @@ int sig_sem(int sem_id)
         delay_remove_result = delay_queue_remove_sem_timeout_waiter(woken_task_id);
         if (delay_remove_result != DELAY_QUEUE_OK) {
             hal_console_write("[sig-sem] completed: result=");
-            itron_api_write_int(SIG_SEM_ERR_TASK);
+            itron_api_write_er(SIG_SEM_ERR_TASK);
             hal_console_write(" action=delay-queue-remove-failed\n");
             return SIG_SEM_ERR_TASK;
         }
@@ -1148,14 +1263,14 @@ int sig_sem(int sem_id)
         wake_result = task_wake_waiting_on_sem_by_id(woken_task_id, sem_id);
     } else {
         hal_console_write("[sig-sem] completed: result=");
-        itron_api_write_int(SIG_SEM_ERR_TASK);
+        itron_api_write_er(SIG_SEM_ERR_TASK);
         hal_console_write(" action=invalid-waiter-reason\n");
         return SIG_SEM_ERR_TASK;
     }
 
     if (wake_result != 0) {
         hal_console_write("[sig-sem] completed: result=");
-        itron_api_write_int(SIG_SEM_ERR_TASK);
+        itron_api_write_er(SIG_SEM_ERR_TASK);
         hal_console_write(" action=wakeup-failed\n");
         return SIG_SEM_ERR_TASK;
     }
@@ -1180,15 +1295,15 @@ int sig_sem(int sem_id)
         if (ready_task->priority < current->priority) {
             dispatch_request_from_task_wakeup(current, ready_task);
             hal_console_write("[preempt] pending set: reason=semaphore-wakeup\n");
-            hal_console_write("[sig-sem] completed: result=0 action=wakeup-preempt-pending\n");
+            hal_console_write("[sig-sem] completed: result=E_OK action=wakeup-preempt-pending\n");
             return SIG_SEM_OK;
         }
     }
 
     if (reason == TASK_WAIT_REASON_SEMAPHORE_TIMEOUT) {
-        hal_console_write("[sig-sem] completed: result=0 action=wakeup-timeout-waiter\n");
+        hal_console_write("[sig-sem] completed: result=E_OK action=wakeup-timeout-waiter\n");
     } else {
-        hal_console_write("[sig-sem] completed: result=0 action=wakeup\n");
+        hal_console_write("[sig-sem] completed: result=E_OK action=wakeup\n");
     }
     return SIG_SEM_OK;
 }
@@ -1208,9 +1323,9 @@ int sig_sem(int sem_id)
  *
  * @param sem_id 対象semaphore ID。
  * @param timeout_ticks timeout観測用tick数。0はinvalid timeout。
- * @return 成功時はTWAI_SEM_OK。失敗時はTWAI_SEM_ERR_*。
+ * @return 成功時は `E_OK`。不正引数は `E_PAR`、不正semaphore IDは `E_ID`、timeoutは `E_TMOUT`。
  */
-int twai_sem(int sem_id, uint32_t timeout_ticks)
+ER twai_sem(ID sem_id, uint32_t timeout_ticks)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *next;
@@ -1233,7 +1348,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         hal_console_write(" current=none\n");
         hal_console_write("[twai-sem] rejected: reason=invalid-current-state current=none\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return TWAI_SEM_ERR_INVALID_CURRENT_STATE;
     }
@@ -1257,7 +1372,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
          */
         hal_console_write("[twai-sem] invalid timeout: timeout_ticks=0\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_INVALID_TIMEOUT);
+        itron_api_write_er(TWAI_SEM_ERR_INVALID_TIMEOUT);
         hal_console_write(" action=invalid-timeout\n");
         return TWAI_SEM_ERR_INVALID_TIMEOUT;
     }
@@ -1271,7 +1386,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         itron_api_log_task_identity(current);
         hal_console_write("\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(TWAI_SEM_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return TWAI_SEM_ERR_INVALID_CURRENT_STATE;
     }
@@ -1286,7 +1401,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         itron_api_write_int(sem_id);
         hal_console_write("\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        itron_api_write_er(TWAI_SEM_ERR_SEMAPHORE);
         hal_console_write(" action=invalid-semaphore\n");
         return TWAI_SEM_ERR_SEMAPHORE;
     }
@@ -1306,7 +1421,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         hal_console_write(" count=");
         itron_api_write_int(count_after);
         hal_console_write("\n");
-        hal_console_write("[twai-sem] completed: result=0 action=acquired\n");
+        hal_console_write("[twai-sem] completed: result=E_OK action=acquired\n");
         return TWAI_SEM_OK;
     }
 
@@ -1319,7 +1434,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         itron_api_write_int(take_result);
         hal_console_write("\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        itron_api_write_er(TWAI_SEM_ERR_SEMAPHORE);
         hal_console_write(" action=semaphore-error\n");
         return TWAI_SEM_ERR_SEMAPHORE;
     }
@@ -1343,11 +1458,11 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
             hal_console_write((current->name != NULL) ? current->name : "(null)");
             hal_console_write("\n");
             hal_console_write("[twai-sem] completed: result=");
-            itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+            itron_api_write_er(TWAI_SEM_ERR_SEMAPHORE);
             hal_console_write(" action=sem-wait-queue-full\n");
         } else {
             hal_console_write("[twai-sem] completed: result=");
-            itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+            itron_api_write_er(TWAI_SEM_ERR_SEMAPHORE);
             hal_console_write(" action=sem-wait-queue-invalid\n");
         }
         return TWAI_SEM_ERR_SEMAPHORE;
@@ -1373,7 +1488,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         itron_api_write_uint32(timeout_ticks);
         hal_console_write("\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_DELAY_QUEUE);
+        itron_api_write_er(TWAI_SEM_ERR_DELAY_QUEUE);
         if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
             hal_console_write(" action=delay-queue-full\n");
         } else if (delay_queue_result == DELAY_QUEUE_ERR_DUPLICATE) {
@@ -1406,7 +1521,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
         itron_api_write_int(wait_result);
         hal_console_write("\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        itron_api_write_er(TWAI_SEM_ERR_DISPATCH);
         hal_console_write(" action=timeout-wait-transition-failed\n");
         return TWAI_SEM_ERR_DISPATCH;
     }
@@ -1418,7 +1533,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
     enqueue_result = sem_enqueue_waiter(sem_id, current->id);
     if (enqueue_result != SEM_OK) {
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_SEMAPHORE);
+        itron_api_write_er(TWAI_SEM_ERR_SEMAPHORE);
         hal_console_write(" action=sem-wait-queue-enqueue-failed\n");
         return TWAI_SEM_ERR_SEMAPHORE;
     }
@@ -1430,7 +1545,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
     delay_queue_result = delay_queue_enqueue(current->id, timeout_ticks);
     if (delay_queue_result != DELAY_QUEUE_OK) {
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_DELAY_QUEUE);
+        itron_api_write_er(TWAI_SEM_ERR_DELAY_QUEUE);
         hal_console_write(" action=delay-queue-enqueue-failed\n");
         return TWAI_SEM_ERR_DELAY_QUEUE;
     }
@@ -1452,7 +1567,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
     next = scheduler_select_next();
     if (next == NULL) {
         hal_console_write("[twai-sem] no next task: reason=no-ready-task action=unsupported-stop\n");
-        hal_console_write("[twai-sem] completed: result=0 action=no-ready-task\n");
+        hal_console_write("[twai-sem] completed: result=E_OK action=no-ready-task\n");
         return TWAI_SEM_OK;
     }
 
@@ -1473,7 +1588,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
     if (current_mutable == NULL || next_mutable == NULL) {
         hal_console_write("[twai-sem] rejected: reason=switch-task-not-found\n");
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        itron_api_write_er(TWAI_SEM_ERR_DISPATCH);
         hal_console_write(" action=timeout-wait-switch-failed\n");
         return TWAI_SEM_ERR_DISPATCH;
     }
@@ -1500,12 +1615,12 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
 
     if (switch_result != DISPATCHER_OK) {
         hal_console_write("[twai-sem] completed: result=");
-        itron_api_write_int(TWAI_SEM_ERR_DISPATCH);
+        itron_api_write_er(TWAI_SEM_ERR_DISPATCH);
         hal_console_write(" action=timeout-wait-switch-failed\n");
         return TWAI_SEM_ERR_DISPATCH;
     }
 
-    hal_console_write("[twai-sem] completed: result=0 action=timeout-wait-queued-switch\n");
+    hal_console_write("[twai-sem] completed: result=E_OK action=timeout-wait-queued-switch\n");
     return TWAI_SEM_OK;
 }
 
@@ -1522,7 +1637,7 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
  * timer IRQ handlerからの `dly_tsk()` 呼び出しは引き続き扱わない。
  *
  * @param delay_ticks delay待ちとして観測するtick数。0は不正。
- * @return 成功時はDLY_TSK_OK、失敗時はDLY_TSK_ERR_*。
+ * @return 成功時は `E_OK`。不正delay値は `E_PAR`、文脈不成立は `E_CTX`、queue満杯は `E_QOVR`。
  */
 /**
  * @brief 13.2時点のdelay queue接続済み `dly_tsk()`。
@@ -1542,10 +1657,10 @@ int twai_sem(int sem_id, uint32_t timeout_ticks)
  * tick到達時にREADY復帰する。timer IRQ handlerからのtask API呼び出しは行わない。
  *
  * @param delay_ticks delay queueへ観測用に登録するtick数。0はinvalid-delayとして扱う。
- * @return 成功時は `DLY_TSK_OK`。invalid delay、invalid current、dispatch失敗時は `DLY_TSK_ERR_*`。
+ * @return 成功時は `E_OK`。invalid delayは `E_PAR`、invalid currentは `E_CTX`、queue失敗は `E_QOVR`。
  * @note 13.4ではdelay queue登録後のtimer tickでwakeupが行われる。
  */
-int dly_tsk(uint32_t delay_ticks)
+ER dly_tsk(uint32_t delay_ticks)
 {
     const tcb_t *current = dispatcher_get_current();
     const tcb_t *next;
@@ -1565,7 +1680,7 @@ int dly_tsk(uint32_t delay_ticks)
         hal_console_write(" current=none\n");
         hal_console_write("[dly-tsk] rejected: reason=invalid-current-state current=none\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(DLY_TSK_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return DLY_TSK_ERR_INVALID_CURRENT_STATE;
     }
@@ -1583,7 +1698,7 @@ int dly_tsk(uint32_t delay_ticks)
          */
         hal_console_write("[dly-tsk] invalid delay: delay_ticks=0\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_INVALID_DELAY);
+        itron_api_write_er(DLY_TSK_ERR_INVALID_DELAY);
         hal_console_write(" action=invalid-delay\n");
         return DLY_TSK_ERR_INVALID_DELAY;
     }
@@ -1597,7 +1712,7 @@ int dly_tsk(uint32_t delay_ticks)
         itron_api_log_task_identity(current);
         hal_console_write("\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_INVALID_CURRENT_STATE);
+        itron_api_write_er(DLY_TSK_ERR_INVALID_CURRENT_STATE);
         hal_console_write(" action=invalid-current-state\n");
         return DLY_TSK_ERR_INVALID_CURRENT_STATE;
     }
@@ -1630,10 +1745,10 @@ int dly_tsk(uint32_t delay_ticks)
         itron_api_write_uint32(delay_ticks);
         hal_console_write("\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_INVALID_DELAY);
+        itron_api_write_er(E_QOVR);
         /*
-         * 13.2では戻り値を増やさず、action文字列でqueue失敗理由を区別する。
-         * 満杯時は仕様例に合わせて `delay-queue-full` を出す。
+         * 14.4ではqueue登録不能を共通エラー `E_QOVR` に寄せる。
+         * action文字列には満杯・重複・不正IDの具体理由を残す。
          */
         if (delay_queue_result == DELAY_QUEUE_ERR_FULL) {
             hal_console_write(" action=delay-queue-full\n");
@@ -1642,7 +1757,7 @@ int dly_tsk(uint32_t delay_ticks)
         } else {
             hal_console_write(" action=delay-queue-invalid\n");
         }
-        return DLY_TSK_ERR_INVALID_DELAY;
+        return E_QOVR;
     }
 
     wait_result = task_mark_waiting_on_delay(current->id, delay_ticks);
@@ -1655,7 +1770,7 @@ int dly_tsk(uint32_t delay_ticks)
         itron_api_write_int(wait_result);
         hal_console_write("\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        itron_api_write_er(DLY_TSK_ERR_DISPATCH);
         hal_console_write(" action=delay-transition-failed\n");
         return DLY_TSK_ERR_DISPATCH;
     }
@@ -1675,7 +1790,7 @@ int dly_tsk(uint32_t delay_ticks)
          * WAITING化後のqueue登録失敗は境界不整合として扱い、dispatch失敗として明示的に止める。
          */
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        itron_api_write_er(DLY_TSK_ERR_DISPATCH);
         hal_console_write(" action=delay-queue-enqueue-failed\n");
         return DLY_TSK_ERR_DISPATCH;
     }
@@ -1692,7 +1807,7 @@ int dly_tsk(uint32_t delay_ticks)
          * delay WAITING化は完了済みだが、無理にswitch先を作らない。
          */
         hal_console_write("[dly-tsk] no next task: reason=no-ready-task action=unsupported-stop\n");
-        hal_console_write("[dly-tsk] completed: result=0 action=no-ready-task\n");
+        hal_console_write("[dly-tsk] completed: result=E_OK action=no-ready-task\n");
         return DLY_TSK_OK;
     }
 
@@ -1713,7 +1828,7 @@ int dly_tsk(uint32_t delay_ticks)
     if (current_mutable == NULL || next_mutable == NULL) {
         hal_console_write("[dly-tsk] rejected: reason=switch-task-not-found\n");
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        itron_api_write_er(DLY_TSK_ERR_DISPATCH);
         hal_console_write(" action=delay-switch-failed\n");
         return DLY_TSK_ERR_DISPATCH;
     }
@@ -1743,11 +1858,11 @@ int dly_tsk(uint32_t delay_ticks)
          * 観測する。ここでdelay taskをREADYへ戻す復旧処理は13.1の範囲外に置く。
          */
         hal_console_write("[dly-tsk] completed: result=");
-        itron_api_write_int(DLY_TSK_ERR_DISPATCH);
+        itron_api_write_er(DLY_TSK_ERR_DISPATCH);
         hal_console_write(" action=delay-switch-failed\n");
         return DLY_TSK_ERR_DISPATCH;
     }
 
-    hal_console_write("[dly-tsk] completed: result=0 action=delay-queued-switch\n");
+    hal_console_write("[dly-tsk] completed: result=E_OK action=delay-queued-switch\n");
     return DLY_TSK_OK;
 }
