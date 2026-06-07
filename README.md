@@ -1710,14 +1710,14 @@ Articles and source code versions are linked by Git tags when tags are created.
 
 | Chapter | Section | Topic                                      | Git Tag                     | Status |
 | ------- | ------- | ------------------------------------------ | --------------------------- | ------ |
-| 1       | 1.1     | Project concept and target selection       | -                           | Draft  |
-| 1       | 1.2     | Development environment setup              | -                           | Draft  |
-| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     | Ready  |
-| 2       | 2.1     | Initial QEMU boot and `kernel_main`        | v2.1-qemu-boot              | Ready  |
-| 2       | 2.2     | Serial console API cleanup                 | v2.2-serial-console         | Ready  |
-| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Draft  |
-| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Draft  |
-| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Draft  |
+| 1       | 1.1     | Project concept and target selection       | -                           | Completed |
+| 1       | 1.2     | Development environment setup              | -                           | Completed |
+| 1       | 1.3     | Publication policy                         | v1.3-publication-policy     | Completed |
+| 2       | 2.1     | Initial QEMU boot and `kernel_main`        | v2.1-qemu-boot              | Completed |
+| 2       | 2.2     | Serial console API cleanup                 | v2.2-serial-console         | Completed |
+| 2       | 2.3     | HAL boundary for console output            | v2.3-hal-boundary           | Completed |
+| 3       | 3.1     | Initial task management                    | v3.1-task-tcb               | Completed |
+| 3       | 3.2     | Simple priority scheduler                  | v3.2-priority-scheduler     | Completed |
 | 3       | 3.3     | Current task and RUNNING state             | v3.3-current-running        | Completed |
 | 4       | 4.1     | Task entry handling                        | v4.1-task-entry-runner      | Completed |
 | 4       | 4.2     | Entry return observation                   | v4.2-task-entry-return      | Completed |
