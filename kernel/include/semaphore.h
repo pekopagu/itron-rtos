@@ -173,22 +173,17 @@ int sem_dequeue_waiter(int sem_id, int *task_id);
  */
 int sem_remove_waiter(int sem_id, int task_id);
 
-/**
- * @brief 12.2のsig_sem相当のセマフォ返却を行う。
+/*
+ * 12.2のsig_sem相当のセマフォ返却を行う。
  *
- * @details
  * 対象セマフォを待つtaskがあれば、最小実装として1 taskだけREADYへ戻し、
  * `wait_sem_id` を未待ち状態へ戻す。この場合countは増やさない。
  * WAITING taskがなければcountを1増やす。FIFO順や優先度順、wakeup後preemption、
  * timeout、同一優先度time slice、round-robinは保証せず、将来のwait queue導入で置き換える。
- *
- * @param sem_id 対象セマフォID。
- * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
-/**
- * @brief 12.4のsig_sem相当のセマフォ返却とwakeup後preemption判定を行う。
+/*
+ * 12.4のsig_sem相当のセマフォ返却とwakeup後preemption判定を行う。
  *
- * @details
  * 対象semaphoreのFIFO wait queueにWAITING taskがあれば、1 taskだけdequeueしてREADYへ戻す。
  * READY復帰時には `wait_sem_id` を必ずclearし、このwakeup経路ではsemaphore countを増やさない。
  * READYへ戻した後、task文脈のcurrent RUNNING taskとwoken READY taskのpriorityを比較し、
@@ -198,9 +193,6 @@ int sem_remove_waiter(int sem_id, int task_id);
  * wait queueが空の場合だけcountを1増やす。priority順wait queue、timeout付き `twai_sem`、
  * sleep/delay queue、round-robin、timer IRQ handlerからの呼び出し、dispatch pending経路との統合、
  * 完全な割り込み復帰フレーム切替はここでは扱わない。
- *
- * @param sem_id 対象semaphore ID。
- * @return 成功時はSEM_OK。失敗時はSEM_ERR_*。
  */
 /* sig_sem() は14.3以降、μITRON風API層の itron_api.c が所有する。 */
 

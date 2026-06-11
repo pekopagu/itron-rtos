@@ -173,8 +173,6 @@ typedef struct {
  * 全スロットをUNUSEDにし、次のタスクIDを1へ戻す。
  * 再起動直後と同じ管理状態にするためのAPIである。
  *
- * @param なし。
- * @return なし。
  * @note タスク実行、コンテキスト作成、スタック初期化、スケジューラ選択は行わない。
  */
 void task_init(void);
@@ -234,8 +232,6 @@ int task_create_dormant(
  * UNUSEDスロットを除外し、TCBの主要フィールドをdumpする。
  * HAL境界を守るため、出力はHAL console API経由で行われる。
  *
- * @param なし。
- * @return なし。
  * @note dumpは観測用であり、タスク状態を変更しない。
  */
 void task_dump(void);
@@ -247,7 +243,6 @@ void task_dump(void);
  * 第3章3.2ではschedulerがtask_tableを直接extern参照しないよう、この読み取りAPIを使う。
  * 戻り値は固定長テーブルの上限であるMAX_TASKSであり、動的メモリや可変長配列は使わない。
  *
- * @param なし。
  * @return 走査可能なタスクスロット数。
  * @note このAPIはtask_tableの内容を変更しない。
  */

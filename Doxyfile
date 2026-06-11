@@ -1,0 +1,13 @@
+PROJECT_NAME           = itron-rtos
+OUTPUT_DIRECTORY       = docs/doxygen
+INPUT                  = kernel/include
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# Keep the initial v1.0 documentation foundation focused on API references.
+HAVE_DOT               = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+UML_LOOK               = NO

@@ -25,6 +25,9 @@ docs/logs/*
 # Keep only the QEMU serial verification log
 !docs/logs/qemu-serial.log
 
+# Doxygen generated API reference
+docs/doxygen/
+
 # =========================
 # Temporary
 # =========================

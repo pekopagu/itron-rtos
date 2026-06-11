@@ -18,9 +18,9 @@ This project explores how far AI agents can assist in low-level system developme
 
 ## Current Milestone Before v1.0
 
-At Chapter 15 Section 15.1, this repository is still a learning-oriented
-μITRON-like RTOS, but the main kernel learning path can now be followed from
-boot to the public API layer:
+At Chapter 15 Section 15.2, this repository is still a learning-oriented
+μITRON-like RTOS. The main kernel learning path can now be followed from boot
+to the public API layer and the API reference generation entry.
 
 * x86_64 + QEMU boot path and `kernel_main`
 * serial output and the early HAL boundary
@@ -45,6 +45,10 @@ Chapter 14.4 made API results readable through shared error codes.
 Chapter 15 Section 15.1 does not add kernel behavior. It aligns this README,
 the articles under `articles/`, the Zenn Articles table, and the roadmap so the
 v1.0-before milestone is visible from documentation alone.
+
+Chapter 15 Section 15.2 also does not add kernel behavior. It adds the Doxygen
+generation path so readers can use source code, Zenn articles, and generated API
+reference pages together while preparing the repository for v1.0 documentation.
 
 ---
 
@@ -123,6 +127,7 @@ The current implementation covers the following milestones:
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 | 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
+| 15      | 15.2    | Doxygen documentation foundation           | v15.2-doxygen-documentation-foundation | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1462,7 +1467,7 @@ continue to keep next-task selection, dispatcher switch connection, context
 switch connection, dispatch pending consumption, interrupt-exit dispatch, and
 timer IRQ dispatch out of scope.
 For Chapter 10 Section 10.3, comments document that `yield_tsk()` now asks the
-scheduler for a READY candidate after READY化 and logs that candidate, while
+scheduler for a READY candidate after the READY transition and logs that candidate, while
 still leaving dispatcher switch connection, context switch connection,
 dispatcher current commit, dispatch pending consumption, interrupt-exit
 dispatch, and timer IRQ dispatch out of scope.
@@ -1569,8 +1574,35 @@ articles under `articles/`, the Zenn Articles table, and the roadmap so readers
 can trace the project from the boot foundation through the μITRON-like API layer
 and common error code system.
 
-Doxygen generation tooling and a `Doxyfile` are not included yet. They are
-planned for a future documentation step.
+For Chapter 15 Section 15.2, this repository includes a Doxygen generation path
+for API reference pages.
+
+This RTOS is a learning-oriented μITRON-like RTOS that runs on x86_64 + QEMU
+and is developed with Codex + cc-sdd. The generated API reference is a support
+entry point for reading the source code and Zenn articles.
+
+Generate the API reference with:
+
+```sh
+doxygen Doxyfile
+```
+
+Output:
+
+```text
+docs/doxygen/html/index.html
+```
+
+The generated `docs/doxygen/` directory is a local inspection artifact.
+This repository does not commit or publish the generated HTML files. Regenerate
+them locally with `doxygen Doxyfile` when needed.
+
+The Doxygen input is centered on `kernel/include`, with public API and
+kernel-facing header contracts as the first documentation target. Doxygen is an
+entry point into design information and API reference reading; it is not a
+replacement for the specs under `.kiro/specs/`, the README, or the Zenn
+articles. Future documentation steps will add Doxygen comments module by module
+without changing kernel behavior or API contracts just for documentation output.
 
 ---
 
@@ -1735,6 +1767,7 @@ See the LICENSE file for details.
 * [x] semaphore API layer
 * [x] μITRON-like common error code system
 * [x] README and Zenn milestone summary
+* [x] Doxygen documentation foundation
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1805,6 +1838,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 | 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
+| 15      | 15.2    | Doxygen documentation foundation           | v15.2-doxygen-documentation-foundation | Completed |
 
 ---
 
