@@ -16,6 +16,38 @@ This project explores how far AI agents can assist in low-level system developme
 
 ---
 
+## Current Milestone Before v1.0
+
+At Chapter 15 Section 15.1, this repository is still a learning-oriented
+μITRON-like RTOS, but the main kernel learning path can now be followed from
+boot to the public API layer:
+
+* x86_64 + QEMU boot path and `kernel_main`
+* serial output and the early HAL boundary
+* static task table, priority scheduler, and current RUNNING task model
+* `RUNNING` / `READY` / `WAITING` / `DORMANT` task states
+* task entry execution and task-entry return handling
+* task stack storage, register save area, and context switch boundary
+* timer tick, interrupt entry/exit responsibilities, and dispatch pending
+* higher-priority preemption decision points
+* semaphore wait queue and semaphore wakeup paths
+* delay queue, timeout semaphore wait, and tick-reached READY return
+* μITRON-like task, sleep/wakeup, semaphore, and delay API entries
+* common `ER` return type and `E_OK` / `E_ID` / `E_PAR` / `E_CTX` /
+  `E_OBJ` / `E_TMOUT` / `E_QOVR` error names
+
+Chapter 14 organized the public μITRON-like API layer: `cre_tsk()` and
+`sta_tsk()` separate task creation from task start; `slp_tsk()` and
+`wup_tsk()` move sleep waiters between WAITING and READY; `wai_sem()`,
+`sig_sem()`, `pol_sem()`, and `twai_sem()` provide the semaphore API layer; and
+Chapter 14.4 made API results readable through shared error codes.
+
+Chapter 15 Section 15.1 does not add kernel behavior. It aligns this README,
+the articles under `articles/`, the Zenn Articles table, and the roadmap so the
+v1.0-before milestone is visible from documentation alone.
+
+---
+
 ## Purpose
 
 This project is primarily intended to share development results and experiments.
@@ -90,6 +122,7 @@ The current implementation covers the following milestones:
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
+| 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1529,6 +1562,13 @@ poll failure or timeout, and `E_QOVR` means a queue/count overflow. Existing
 task, semaphore, delay queue, dispatcher, and preemption transitions are kept
 unchanged while API completion logs report `result=<error-name>`.
 
+For Chapter 15 Section 15.1, comments and documentation summarize the current
+milestone before v1.0. This step does not add a scheduler, dispatcher, task,
+semaphore, delay queue, or API behavior change. It aligns the README, the
+articles under `articles/`, the Zenn Articles table, and the roadmap so readers
+can trace the project from the boot foundation through the μITRON-like API layer
+and common error code system.
+
 Doxygen generation tooling and a `Doxyfile` are not included yet. They are
 planned for a future documentation step.
 
@@ -1690,6 +1730,11 @@ See the LICENSE file for details.
 * [x] dly_tsk delay task API foundation
 * [x] sleep/delay queue
 * [x] twai_sem timeout semaphore wait observation
+* [x] cre_tsk / sta_tsk create-start task API
+* [x] slp_tsk / wup_tsk sleep-wakeup task API
+* [x] semaphore API layer
+* [x] μITRON-like common error code system
+* [x] README and Zenn milestone summary
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1759,6 +1804,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 14      | 14.2    | slp_tsk / wup_tsk sleep-wakeup task API    | v14.2-sleep-wakeup-task-api | Completed |
 | 14      | 14.3    | semaphore API layer                        | v14.3-semaphore-api-layer | Completed |
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
+| 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
 
 ---
 

@@ -1,0 +1,44 @@
+# Implementation Plan
+
+- [x] 1. READMEの到達点説明と章構成を整理する
+- [x] 1.1 READMEにv1.0手前の到達点を追加する
+  - READMEの概要または進捗セクションに、学習用μITRON風RTOS、x86_64 + QEMU、Codex + cc-sddでspec-drivenに進めている前提を明記する
+  - 起動基盤からμITRON風API層・共通エラーコード体系までの段階的な到達点を短く整理する
+  - 第15章15.1が新機能追加ではなく、READMEとZenn記事一覧の到達点整理であることを読める状態にする
+  - _Requirements: 1, 4_
+  - _Boundary: README Milestone Summary_
+- [x] 1.2 READMEの第14章API層説明を明確にする
+  - `cre_tsk()` / `sta_tsk()`、`slp_tsk()` / `wup_tsk()`、`wai_sem()` / `sig_sem()` / `pol_sem()` / `twai_sem()`を第14章の到達点として整理する
+  - `E_OK` / `E_ID` / `E_PAR` / `E_OBJ` / `E_TMOUT`などの共通エラーコード体系が14.4時点の到達点であることを明記する
+  - kernel挙動やAPI仕様の変更を含まないREADME差分だけになっていることを確認する
+  - _Requirements: 1, 4_
+  - _Boundary: README Milestone Summary_
+
+- [x] 2. READMEとarticlesの一覧整合性を整理する
+- [x] 2.1 articles配下の第1章から第14章を照合してREADME表を補正する
+  - articles配下の実在ファイルとREADMEのDevelopment Progress表・Zenn Articles表の章/節/topic/tagを照合する
+  - 14.1から14.4のtag候補をREADMEに残し、文字化けや不整合があれば補正する
+  - README上で第1章から第14章の記事一覧と実ファイルに矛盾がない状態にする
+  - _Requirements: 2, 4_
+  - _Boundary: README Tables_
+- [x] 2.2 Roadmapと15.1のtag候補を更新する
+  - Roadmapに第14章API層と第15章15.1の整理到達点を反映する
+  - 15.1記事を追加する場合、READMEのZenn Articles表に`v15.1-readme-zenn-milestone-summary`を追加する
+  - READMEだけで第15章開始時点の開発状況を把握できることを確認する
+  - _Requirements: 1, 2_
+  - _Boundary: README Tables_
+
+- [x] 3. 15.1 Zenn記事を追加し、最終検証する
+- [x] 3.1 15.1のZenn記事を作成する
+  - `articles/ch15-1-readme-zenn-milestone-summary.md`を既存記事と同じfront matter・見出し構成で追加する
+  - はじめに、今回のゴール、14章まででできるようになったこと、READMEを整理する理由、Zenn Articles表を整理する理由、v1.0手前の到達点、実装概要、検証したこと、今回のまとめを含める
+  - 機能追加ではなく到達点整理であり、既存RTOSコードの参照・コピー・流用はしていないことを明記する
+  - _Requirements: 3, 4_
+  - _Boundary: Zenn Article 15.1_
+- [x] 3.2 文書整合性とbuild/smokeを検証する
+  - `articles/`の記事数とREADMEの一覧が整合していることを確認する
+  - `.kiro/specs/readme-zenn-milestone-summary/`を`requirements.md`、`design.md`、`tasks.md`の3ファイルだけにする
+  - `make`、`make run`、`make run VALIDATE_TIMER_IRQ_ENTRY=1`を実行して成功を確認する
+  - kernel/arch/boot/Makefileなどに不要な挙動差分がないことを確認する
+  - _Requirements: 2, 4_
+  - _Boundary: Validation_
