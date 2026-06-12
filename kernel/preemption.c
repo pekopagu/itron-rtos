@@ -210,7 +210,7 @@ const char *preemption_evaluate_from_irq(void)
      * dispatcher から current を読み取るだけに留める。ここで commit し直したり、
      * task state を補正したりしないため、8.2 の責務は decision 評価に限定される。
      */
-    dispatch_pending_clear_for_test_or_later_boundary();
+    dispatch_pending_clear_irq_for_evaluation();
     current = dispatcher_get_current();
     decision = scheduler_select_preemption_candidate(current);
 

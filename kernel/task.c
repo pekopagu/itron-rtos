@@ -1028,7 +1028,8 @@ int task_mark_dormant_from_entry_return(int task_id)
  * @brief セマフォ待ちによるWAITING遷移をtask module内で実行する。
  *
  * @details
- * 第6章6.1ではWAITINGを観測可能な最小状態として扱う。ここではTCBのstateと
+ * 第6章6.1ではWAITINGを観測可能な最小状態として扱う。第12章以降はtask文脈API
+ * から呼ばれるため、対象は実行中のRUNNING taskに限定する。ここではTCBのstateと
  * wait_sem_idだけを更新し、wait queue、timeout、timer、preemption、interrupt、
  * context switch連携は行わない。
  *
@@ -1053,10 +1054,11 @@ int task_mark_waiting_on_sem(int task_id, int sem_id)
     }
 
     /*
-     * 第6章6.1ではREADYまたはRUNNINGからの観測用待ち入りだけを許す。
-     * DORMANTや既にWAITINGのtaskを重ねて待たせる設計は、wait queue導入時に扱う。
+     * wai_sem()はtask文脈APIなので、実行中current taskだけをsemaphore WAITINGへ落とす。
+     * READY/DORMANT/既存WAITING taskをここで再分類すると、schedulerやdispatcherの
+     * current管理とwait queueの整合性を壊すため受け付けない。
      */
-    if (task->state != TASK_STATE_READY && task->state != TASK_STATE_RUNNING) {
+    if (task->state != TASK_STATE_RUNNING) {
         return TASK_ERR_BAD_STATE;
     }
 

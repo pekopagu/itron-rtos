@@ -362,9 +362,10 @@ int task_mark_dormant_from_entry_return(int task_id);
  * @brief 指定taskをセマフォ待ちのWAITING状態へ変更する。
  *
  * @details
- * 第6章6.1の観測用最小WAITING遷移である。wait queue、timeout、timer、
- * preemption、interruptとは接続しない。セマフォmoduleから呼ばれるが、
- * TCBの状態とwait_sem_idの所有権はtask moduleに残す。
+ * 第6章6.1の観測用最小WAITING遷移である。第12章以降は `wai_sem()` の
+ * task文脈API経路で使うため、対象taskはRUNNINGである必要がある。
+ * wait queue、timeout、timer、preemption、interruptとは接続しない。
+ * セマフォmoduleから呼ばれるが、TCBの状態とwait_sem_idの所有権はtask moduleに残す。
  *
  * @param task_id 対象task id。
  * @param sem_id 待ち対象セマフォID。

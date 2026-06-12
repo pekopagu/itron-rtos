@@ -1393,7 +1393,9 @@ static void kernel_run_sleep_wakeup_task_api_smoke(void)
         sizeof(task_sleep_sem_wait_stack)
     );
     kernel_log_task_register_result("task_sleep_sem_wait", sem_wait_id);
-    if (sem_wait_id > 0 && task_mark_waiting_on_sem(sem_wait_id, 99) == 0) {
+    if (sem_wait_id > 0 &&
+        dispatcher_commit_current(task_get_by_id(sem_wait_id)) == DISPATCHER_OK &&
+        task_mark_waiting_on_sem(sem_wait_id, 99) == 0) {
         (void)wup_tsk(sem_wait_id);
     }
 

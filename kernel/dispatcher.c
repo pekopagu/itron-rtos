@@ -256,7 +256,9 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
 
     /*
      * 第9章9.3では、dispatcherの実切替境界へRUNNING/READY状態遷移を
-     * 接続する。第10章10.4のyield経路では、API層がRUNNING currentをREADYへ
+     * 接続する。TCB stateの所有権はtask moduleに残すため、dispatcherは
+     * 直接stateを書き換えずtask層APIへ委譲する。
+     * 第10章10.4のyield経路では、API層がRUNNING currentをREADYへ
      * 戻してからここへ来るため、fromがすでにREADYの場合は再度READY化しない。
      * DORMANT最終化はtask_context層のlifecycle確定として分離する。
      * dispatch pending消費、interrupt exit接続、timer IRQからの実切替はまだ行わない。
@@ -265,13 +267,31 @@ int dispatcher_switch_to(tcb_t *from, tcb_t *to)
         hal_console_write("[dispatcher] state transition:");
         dispatcher_log_task(" from", from);
         hal_console_write(" RUNNING->READY\n");
-        from->state = TASK_STATE_READY;
+        result = task_mark_ready_from_running(from->id);
+        if (result == TASK_ERR_NOT_FOUND) {
+            return DISPATCHER_ERR_NOT_FOUND;
+        }
+        if (result == TASK_ERR_BAD_STATE) {
+            return DISPATCHER_ERR_BAD_STATE;
+        }
+        if (result != 0) {
+            return DISPATCHER_ERR_INVAL;
+        }
     }
 
     hal_console_write("[dispatcher] state transition:");
     dispatcher_log_task(" to", to);
     hal_console_write(" READY->RUNNING\n");
-    to->state = TASK_STATE_RUNNING;
+    result = task_mark_running(to->id);
+    if (result == TASK_ERR_NOT_FOUND) {
+        return DISPATCHER_ERR_NOT_FOUND;
+    }
+    if (result == TASK_ERR_BAD_STATE) {
+        return DISPATCHER_ERR_BAD_STATE;
+    }
+    if (result != 0) {
+        return DISPATCHER_ERR_INVAL;
+    }
     current_task = to;
 
     if (from->state == TASK_STATE_WAITING) {

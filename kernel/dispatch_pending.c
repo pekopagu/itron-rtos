@@ -23,9 +23,16 @@
 
 #include <stddef.h>
 
+typedef enum {
+    DISPATCH_PENDING_SOURCE_NONE = 0,
+    DISPATCH_PENDING_SOURCE_IRQ,
+    DISPATCH_PENDING_SOURCE_TASK
+} dispatch_pending_source_t;
+
 typedef struct {
     bool requested;
     bool request_logged;
+    dispatch_pending_source_t source;
     dispatch_pending_reason_t reason;
     const tcb_t *current;
     const tcb_t *candidate;
@@ -113,6 +120,7 @@ static void dispatch_pending_clear_with_reason(const char *log_reason)
 {
     dispatch_pending_state.requested = false;
     dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.source = DISPATCH_PENDING_SOURCE_NONE;
     dispatch_pending_state.reason = DISPATCH_PENDING_NONE;
     dispatch_pending_state.current = NULL;
     dispatch_pending_state.candidate = NULL;
@@ -185,7 +193,17 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate)
          * switch-targetとして扱える候補がない場合は、防御的にpendingを残さない。
          * ここでdispatcherへfallbackしたり、task状態を補正したりしない。
          */
-        dispatch_pending_clear_for_test_or_later_boundary();
+        dispatch_pending_clear_irq_for_evaluation();
+        return;
+    }
+
+    /*
+     * task文脈API由来のpendingは、IRQ評価が開始された事実だけで消費してはいけない。
+     * 単一pendingのv1.0モデルでは、未消費のtask pendingがある間はIRQ由来requestで
+     * 上書きせず、後段境界に既存requestを渡す。
+     */
+    if (dispatch_pending_state.requested &&
+        dispatch_pending_state.source == DISPATCH_PENDING_SOURCE_TASK) {
         return;
     }
 
@@ -199,6 +217,7 @@ void dispatch_request_from_irq(const tcb_t *current, const tcb_t *candidate)
      */
     dispatch_pending_state.requested = true;
     dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.source = DISPATCH_PENDING_SOURCE_IRQ;
     dispatch_pending_state.reason = DISPATCH_PENDING_FROM_IRQ;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
@@ -233,6 +252,7 @@ void dispatch_request_from_task_start(const tcb_t *current, const tcb_t *candida
      */
     dispatch_pending_state.requested = true;
     dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.source = DISPATCH_PENDING_SOURCE_TASK;
     dispatch_pending_state.reason = DISPATCH_PENDING_TASK_START;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
@@ -267,6 +287,7 @@ void dispatch_request_from_task_wakeup(const tcb_t *current, const tcb_t *candid
      */
     dispatch_pending_state.requested = true;
     dispatch_pending_state.request_logged = false;
+    dispatch_pending_state.source = DISPATCH_PENDING_SOURCE_TASK;
     dispatch_pending_state.reason = DISPATCH_PENDING_TASK_WAKEUP;
     dispatch_pending_state.current = current;
     dispatch_pending_state.candidate = candidate;
@@ -304,6 +325,20 @@ void dispatch_pending_clear_for_test_or_later_boundary(void)
      * これはdispatch完了通知ではなく、古い証跡を消すための初期化である。
      */
     dispatch_pending_clear_with_reason(NULL);
+}
+
+/**
+ * @brief IRQ評価開始時にIRQ由来pendingだけを初期化する。
+ *
+ * @details
+ * task文脈API由来のpendingはまだ後段境界で消費されていない可能性があるため、
+ * timer IRQのpreemption評価入口では保持する。
+ */
+void dispatch_pending_clear_irq_for_evaluation(void)
+{
+    if (dispatch_pending_state.source == DISPATCH_PENDING_SOURCE_IRQ) {
+        dispatch_pending_clear_with_reason(NULL);
+    }
 }
 
 /**

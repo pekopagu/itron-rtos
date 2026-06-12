@@ -108,6 +108,15 @@ bool dispatch_pending_is_requested(void);
 void dispatch_pending_clear_for_test_or_later_boundary(void);
 
 /**
+ * @brief IRQ評価開始時にIRQ由来のdispatch pendingだけをclearする。
+ *
+ * @details
+ * task文脈APIが設定したpendingは、timer IRQのpreemption評価開始で
+ * 消費済み扱いにしてはいけないため、このAPIでは保持する。
+ */
+void dispatch_pending_clear_irq_for_evaluation(void);
+
+/**
  * @brief timer IRQ経路から現在のdispatch pending状態をlogへ出力する。
  *
  * @details
