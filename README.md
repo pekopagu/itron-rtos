@@ -16,11 +16,13 @@ This project explores how far AI agents can assist in low-level system developme
 
 ---
 
-## Current Milestone Before v1.0
+## v1.0 Scope
 
-At Chapter 15 Section 15.2, this repository is still a learning-oriented
-μITRON-like RTOS. The main kernel learning path can now be followed from boot
-to the public API layer and the API reference generation entry.
+At Chapter 15 Section 15.3, this repository is tagged as `v1.0` for a
+learning-oriented μITRON-like RTOS. This does not mean full μITRON compliance,
+production readiness, or a complete preemptive RTOS. It means the main learning
+path can now be followed from boot to the public API layer, shared error codes,
+and the local API reference generation entry.
 
 * x86_64 + QEMU boot path and `kernel_main`
 * serial output and the early HAL boundary
@@ -49,6 +51,45 @@ v1.0-before milestone is visible from documentation alone.
 Chapter 15 Section 15.2 also does not add kernel behavior. It adds the Doxygen
 generation path so readers can use source code, Zenn articles, and generated API
 reference pages together while preparing the repository for v1.0 documentation.
+
+Chapter 15 Section 15.3 finalizes this point as `v1.0`. It is a release summary
+and documentation boundary only; it does not add scheduler, dispatcher, task,
+semaphore, delay queue, timer, interrupt, or API behavior.
+
+---
+
+## v1.0 Non-Goals
+
+The `v1.0` tag intentionally does not claim:
+
+* Full μITRON compatibility
+* Production-ready RTOS behavior
+* Complete interrupt-return-frame based preemptive context switching
+* Full timer interrupt subsystem
+* SMP, APIC/IOAPIC/LAPIC support, or production IRQ routing
+* Priority inheritance, mutexes, event flags, mailboxes, or full wait-object APIs
+* Formal conformance tests against an official μITRON specification
+* Public hosting of generated Doxygen HTML
+
+Generated Doxygen output remains local-only. The repository keeps `Doxyfile`
+and the source comments, but does not commit or publish `docs/doxygen/`.
+
+---
+
+## v1.0 Validation
+
+The `v1.0` boundary is validated with:
+
+```sh
+make
+make run
+make run VALIDATE_TIMER_IRQ_ENTRY=1
+doxygen Doxyfile
+```
+
+These checks confirm that the kernel still builds, the QEMU smoke path boots,
+the timer IRQ entry validation path reaches the expected observation flow, and
+the local Doxygen API reference can be regenerated.
 
 ---
 
@@ -128,6 +169,7 @@ The current implementation covers the following milestones:
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 | 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
 | 15      | 15.2    | Doxygen documentation foundation           | v15.2-doxygen-documentation-foundation | Completed |
+| 15      | 15.3    | v1.0 release summary                       | v1.0                       | Completed |
 
 Chapter 3 Section 3.1 adds the first task-management layer:
 
@@ -1604,6 +1646,11 @@ replacement for the specs under `.kiro/specs/`, the README, or the Zenn
 articles. Future documentation steps will add Doxygen comments module by module
 without changing kernel behavior or API contracts just for documentation output.
 
+For Chapter 15 Section 15.3, the documentation fixes the `v1.0` boundary as a
+learning-oriented μITRON-like RTOS release summary. It records the scope,
+non-goals, validation commands, and local-only Doxygen output policy without
+changing kernel behavior.
+
 ---
 
 ## Spec-Driven Development (SDD)
@@ -1768,6 +1815,7 @@ See the LICENSE file for details.
 * [x] μITRON-like common error code system
 * [x] README and Zenn milestone summary
 * [x] Doxygen documentation foundation
+* [x] v1.0 release summary
 * [ ] Full timer interrupt subsystem
 
 ---
@@ -1839,6 +1887,7 @@ Articles and source code versions are linked by Git tags when tags are created.
 | 14      | 14.4    | μITRON-like common error code system       | v14.4-itron-error-code-system | Completed |
 | 15      | 15.1    | README and Zenn milestone summary          | v15.1-readme-zenn-milestone-summary | Completed |
 | 15      | 15.2    | Doxygen documentation foundation           | v15.2-doxygen-documentation-foundation | Completed |
+| 15      | 15.3    | v1.0 release summary                       | v1.0                       | Completed |
 
 ---
 
